@@ -243,8 +243,10 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
   Einsatzort auf der Karte), sonst nur, was auch anonyme Arbeitsplätze sehen.
 - **Kiosk-Browser:** mit dauerhaftem Profil starten, nicht im Inkognito-Modus, sonst geht die Kopplung bei jedem
   Neustart verloren. Beispiel: `chromium --kiosk --noerrdialogs --disable-session-crashed-bubble http://<elvis>:8080/bildschirm`.
-- Geplant: Android-App (Vollbild-WebView mit Autostart) und ein NDI-Viewer. Browser können NDI nicht direkt abspielen,
-  dafür ist ein Umsetzer auf dem Server nötig, etwa nach WebRTC oder MJPEG.
+- **Smart-TV / Android:** Die App [ELVIS Bildschirm](https://github.com/tel-diepholz/elvis-tv) zeigt `/bildschirm` im
+  Vollbild, startet auf Wunsch nach dem Einschalten und fragt beim ersten Start nach der Adresse des Servers. Den
+  Download-Link der neuesten APK zeigt ELVIS unter *System → Bildschirme* beim Koppeln
+  (`https://github.com/tel-diepholz/elvis-tv/releases/latest/download/elvis-tv.apk`).
 
 ### Kameras (Axis über VAPIX)
 

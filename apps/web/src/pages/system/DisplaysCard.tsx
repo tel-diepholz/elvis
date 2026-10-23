@@ -7,6 +7,17 @@ import { fmtDateTime } from '../../lib/format';
 import { useToast } from '../../lib/toast';
 import { Badge, Card, Field, Loading, Modal } from '../../components/ui';
 
+/** Neueste Version der App „ELVIS Bildschirm“ für Smart-TVs (github.com/tel-diepholz/elvis-tv) */
+const TV_APP_URL = 'https://github.com/tel-diepholz/elvis-tv/releases/latest/download/elvis-tv.apk';
+
+function TvAppHint() {
+  return (
+    <p className="muted">
+      Smart-TV oder anderes Android-Gerät: App <a href={TV_APP_URL}>ELVIS Bildschirm (APK)</a> installieren und als Adresse <code>{location.origin}</code> eingeben.
+    </p>
+  );
+}
+
 function PairDialog({ onClose }: { onClose: () => void }) {
   const toast = useToast();
   const [code, setCode] = useState('');
@@ -22,6 +33,7 @@ function PairDialog({ onClose }: { onClose: () => void }) {
       <p className="muted">
         Auf dem Bildschirm <code>{`${location.origin}/bildschirm`}</code> öffnen (Kiosk-Browser oder App). Er zeigt einen 6-stelligen Code.
       </p>
+      <TvAppHint />
       <form
         className="form-grid"
         onSubmit={(e) => {
@@ -76,9 +88,12 @@ export function DisplaysCard() {
       {!displays ? (
         <Loading />
       ) : displays.length === 0 ? (
-        <p className="muted">
-          Noch keine Bildschirme. Auf dem Gerät <code>{`${location.origin}/bildschirm`}</code> öffnen und den angezeigten Code hier eintragen.
-        </p>
+        <>
+          <p className="muted">
+            Noch keine Bildschirme. Auf dem Gerät <code>{`${location.origin}/bildschirm`}</code> öffnen und den angezeigten Code hier eintragen.
+          </p>
+          <TvAppHint />
+        </>
       ) : (
         <div className="table-wrap">
           <table className="table">
