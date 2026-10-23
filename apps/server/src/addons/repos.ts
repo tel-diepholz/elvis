@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { addonManifestSchema, repositorySchema, type AddonManifest, type AddonRepository } from '@elvis/shared';
+import { addonManifestSchema, compareVersions, repositorySchema, type AddonManifest, type AddonRepository } from '@elvis/shared';
 import type { ElvisConfig } from '../config.js';
 import { HttpError } from '../errors.js';
 
@@ -87,14 +87,15 @@ export class RepoService {
     const builtin = findBuiltinDir(this.config.builtinDir);
     if (builtin) next.push(...this.loadLocal(builtin));
     for (const url of this.config.repositories) next.push(...(await this.loadRemote(url)));
-    // Bei doppelten IDs gewinnt das erste Repo (eingebautes zuerst).
-    const seen = new Set<string>();
-    this.entries = next.filter((e) => {
-      if (!e.manifest) return true;
-      if (seen.has(e.manifest.id)) return false;
-      seen.add(e.manifest.id);
-      return true;
-    });
+    // Doppelte IDs (z. B. eingebautes Repo als Submodul und dasselbe Repo online): die höhere Version gewinnt,
+    // bei gleicher Version die zuerst geladene – das eingebaute Repo, das auch ohne Internet funktioniert.
+    const best = new Map<string, RepoAddon>();
+    for (const e of next) {
+      if (!e.manifest) continue;
+      const current = best.get(e.manifest.id);
+      if (!current || compareVersions(e.manifest.version, current.manifest!.version) > 0) best.set(e.manifest.id, e);
+    }
+    this.entries = next.filter((e) => !e.manifest || best.get(e.manifest.id) === e);
   }
 
   private loadLocal(dir: string): RepoAddon[] {

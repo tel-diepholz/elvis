@@ -36,7 +36,7 @@
     "port": 2376
   },
   "addons": {
-    "repositories": []
+    "repositories": ["https://raw.githubusercontent.com/tel-diepholz/elvis-addons/main"]
   },
   "alerts": {
     "batteryWarnPercent": 40,

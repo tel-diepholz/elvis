@@ -99,7 +99,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ElvisConfig {
     ...(env.PORT && { port: env.PORT }),
     ...(env.ELVIS_DATA_DIR && { dataDir: env.ELVIS_DATA_DIR }),
     ...(env.ELVIS_WEB_DIST && { webDist: env.ELVIS_WEB_DIST }),
-    ...(env.ELVIS_ADDONS_DIR && { addons: { ...fromFile.addons, builtinDir: env.ELVIS_ADDONS_DIR } }),
+    ...((env.ELVIS_ADDONS_DIR || env.ELVIS_ADDON_REPOSITORIES) && {
+      addons: {
+        ...fromFile.addons,
+        ...(env.ELVIS_ADDONS_DIR && { builtinDir: env.ELVIS_ADDONS_DIR }),
+        // kommagetrennte Basis-URLs; ergänzt die Repos aus der Konfigurationsdatei
+        ...(env.ELVIS_ADDON_REPOSITORIES && {
+          repositories: [...new Set([...(fromFile.addons?.repositories ?? []), ...env.ELVIS_ADDON_REPOSITORIES.split(',').map((u) => u.trim()).filter(Boolean)])],
+        }),
+      },
+    }),
   });
 }
 

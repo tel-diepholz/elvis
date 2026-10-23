@@ -221,6 +221,22 @@ export function jobSteps(j: AddonJob): AddonJobStep[] {
   return [{ label: j.label, image: j.image!, command: j.command, env: j.env, volumes: j.volumes, network: j.network, capabilities: j.capabilities, devices: j.devices, gpus: j.gpus, weight: 1, progress: j.progress }];
 }
 
+/** Versionsvergleich „1.2.3“ (Zusätze wie „-beta“ zählen niedriger als die reine Version): <0, 0, >0 */
+export function compareVersions(a: string, b: string): number {
+  const parse = (v: string) => {
+    const [core, pre] = v.split(/[-+]/, 2);
+    return { nums: core!.split('.').map((n) => Number(n) || 0), pre: pre ?? null };
+  };
+  const x = parse(a);
+  const y = parse(b);
+  for (let i = 0; i < Math.max(x.nums.length, y.nums.length); i++) {
+    const d = (x.nums[i] ?? 0) - (y.nums[i] ?? 0);
+    if (d) return d;
+  }
+  if (x.pre === y.pre) return 0;
+  return x.pre === null ? 1 : y.pre === null ? -1 : x.pre.localeCompare(y.pre);
+}
+
 export type ScheduleInterval = 'never' | 'daily' | 'weekly' | 'monthly';
 export const SCHEDULE_INTERVALS: ScheduleInterval[] = ['never', 'daily', 'weekly', 'monthly'];
 

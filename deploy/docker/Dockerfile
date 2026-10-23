@@ -19,7 +19,8 @@ ENV NODE_ENV=production \
     ELVIS_DATA_DIR=/data \
     ELVIS_CONFIG=/config/elvis.json \
     ELVIS_WEB_DIST=/app/apps/web/dist \
-    ELVIS_ADDONS_DIR=/app/addons
+    ELVIS_ADDONS_DIR=/app/addons \
+    ELVIS_ADDON_REPOSITORIES=https://raw.githubusercontent.com/tel-diepholz/elvis-addons/main
 WORKDIR /app
 COPY --from=build /src/package.json ./
 COPY --from=build /src/node_modules node_modules

@@ -18,6 +18,8 @@ Einsatz möglich, abgeschlossene Einsätze sind nur lesbar.
 ## Schnellstart
 
 ```bash
+git clone --recurse-submodules https://github.com/tel-diepholz/elvis.git   # Addons kommen als Submodul mit
+cd elvis
 npm install
 npm run dev          # Backend :8080 (Simulation) + Frontend :5173 mit Hot Reload
 ```
@@ -385,8 +387,17 @@ direkt in einer WSL2-Distribution (z. B. Ubuntu) betreiben:
    Windows-Rechners. Port 2376 muss zusätzlich in der Windows-Firewall freigegeben sein.
 
 **Addons** (*Verwaltung → Addons*): Repositories enthalten eine `repository.yaml` und je Addon ein Verzeichnis mit
-`addon.yaml`. Das eingebaute Repo liegt in `addons/`, weitere (z. B. GitHub-Raw-URLs) unter
-`"addons": { "repositories": [...] }`. Aus den `options` des Manifests erzeugt ELVIS das Konfigurationsformular.
+`addon.yaml`. Die Addons liegen im eigenen Repository
+[tel-diepholz/elvis-addons](https://github.com/tel-diepholz/elvis-addons):
+- **Eingebaut (offline):** Das Repository ist als Git-Submodul unter `addons/` eingebunden. Nach einem Klonen ohne
+  `--recurse-submodules` holt `git submodule update --init` es nach. Auch das Docker-Image enthält es.
+- **Online:** Weitere Repositories (GitHub-Raw-URLs) stehen unter `"addons": { "repositories": [...] }` oder in
+  `ELVIS_ADDON_REPOSITORIES` (kommagetrennt). Das Docker-Image trägt
+  `https://raw.githubusercontent.com/tel-diepholz/elvis-addons/main` ein, damit neue Addon-Versionen ohne
+  ELVIS-Update erscheinen. Gibt es ein Addon mehrfach, gewinnt die höhere Version, bei gleicher Version die eingebaute.
+- **Addons aktualisieren:** `git submodule update --remote addons` holt den neuesten Stand ins eingebaute Repository.
+
+Aus den `options` des Manifests erzeugt ELVIS das Konfigurationsformular.
 Client und Server prüfen mit demselben Schema (`packages/shared/src/addons.ts`).
 
 ```yaml

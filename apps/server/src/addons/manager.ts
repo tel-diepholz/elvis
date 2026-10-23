@@ -1,6 +1,7 @@
 import type Docker from 'dockerode';
 import tar from 'tar-stream';
 import {
+  compareVersions,
   SCHEDULE_INTERVALS,
   defaultOptionValues,
   jobSteps,
@@ -194,7 +195,7 @@ export class AddonManager {
     let available: string | null = null;
     try {
       const repo = this.repos.manifest(r.id).manifest;
-      if (repo.version !== r.version) available = repo.version;
+      if (compareVersions(repo.version, r.version) > 0) available = repo.version;
     } catch {
       /* nicht mehr im Repo */
     }
