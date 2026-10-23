@@ -79,12 +79,13 @@ describe('Kartendruck', () => {
   });
 
   it('erzeugt genau eine Seite, auch wenn Markierungen außerhalb des Ausschnitts liegen', async () => {
-    for (const paper of ['A3', 'A2', 'A1'] as const) {
+    const formats = [...(['A4', 'A3', 'A2', 'A1'] as const).map((paper) => [paper, 'portrait'] as const), ['A4', 'landscape'] as const];
+    for (const [paper, orientation] of formats) {
       for (const lat of [51.0, 51.3]) {
-        const payload = { ...request, paper, orientation: 'portrait', markers: [{ kind: 'vehicle', lat, lon: 10.4515, label: 'ELW 2' }] };
+        const payload = { ...request, paper, orientation, markers: [{ kind: 'vehicle', lat, lon: 10.4515, label: 'ELW 2' }] };
         const res = await app.server.inject({ method: 'POST', url: '/api/print/map', payload, headers: { cookie } });
         expect(res.statusCode).toBe(200);
-        expect(res.rawPayload.toString('latin1').match(/\/Type \/Page\b/g)?.length, `${paper} lat ${lat}`).toBe(1);
+        expect(res.rawPayload.toString('latin1').match(/\/Type \/Page\b/g)?.length, `${paper} ${orientation} lat ${lat}`).toBe(1);
       }
     }
   });

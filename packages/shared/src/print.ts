@@ -3,11 +3,12 @@
  * denselben Funktionen, damit der gewählte Ausschnitt exakt dem Druck entspricht.
  */
 
-export type PaperFormat = 'A3' | 'A2' | 'A1';
+export type PaperFormat = 'A4' | 'A3' | 'A2' | 'A1';
 export type Orientation = 'portrait' | 'landscape';
 
 /** Papiermaße hochkant in mm. */
 export const PAPER_MM: Record<PaperFormat, { width: number; height: number }> = {
+  A4: { width: 210, height: 297 },
   A3: { width: 297, height: 420 },
   A2: { width: 420, height: 594 },
   A1: { width: 594, height: 841 },

@@ -193,7 +193,7 @@ export function PrintDialog(props: PrintDialogProps) {
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
         </Field>
         <Field label="Format">
-          <Segmented<PaperFormat> label="Format" value={paper} onChange={setPaper} options={(['A3', 'A2', 'A1'] as const).map((p) => ({ value: p, label: p }))} />
+          <Segmented<PaperFormat> label="Format" value={paper} onChange={setPaper} options={(['A4', 'A3', 'A2', 'A1'] as const).map((p) => ({ value: p, label: p }))} />
         </Field>
         <Field label="Ausrichtung">
           <Segmented<Orientation>

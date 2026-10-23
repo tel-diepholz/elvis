@@ -20,6 +20,14 @@ describe('Druckgeometrie', () => {
     expect(niceScale(f.scale)).toBe(6000);
   });
 
+  it('berechnet die Kartenfläche für A4 hochkant', () => {
+    const f = printFrame({ lat: 51.1657, lon: 10.4515 }, 16, 'A4', 'portrait');
+    expect(f.mapWidthMm).toBe(190);
+    expect(f.mapHeightMm).toBe(277);
+    expect(f.widthPx).toBe(760);
+    expect(f.heightPx).toBe(1108);
+  });
+
   it('liegt mittig um den gewählten Punkt und vertauscht Seiten im Querformat', () => {
     const c = { lat: 51.1657, lon: 10.4515 };
     const p = printFrame(c, 15, 'A3', 'portrait');

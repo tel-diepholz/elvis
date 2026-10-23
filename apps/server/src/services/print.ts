@@ -81,8 +81,8 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
   const frame = printFrame(req.center, req.zoom, req.paper, req.orientation);
   const paper = PAPER_MM[req.paper];
   const [pageW, pageH] = req.orientation === 'portrait' ? [paper.width, paper.height] : [paper.height, paper.width];
-  // Markierungen und Schrift wachsen mit dem Format (A3 = 1).
-  const f = Math.sqrt((pageW * pageH) / (PAPER_MM.A3.width * PAPER_MM.A3.height));
+  // Markierungen und Schrift wachsen mit dem Format (A3 = 1); A4 nicht kleiner als A3, sonst unleserlich.
+  const f = Math.max(1, Math.sqrt((pageW * pageH) / (PAPER_MM.A3.width * PAPER_MM.A3.height)));
   const k = mm(PRINT_MM_PER_PX); // pt je Kartenpixel
   const fx = mm(PRINT_MARGIN_MM);
   const fy = mm(PRINT_MARGIN_MM);

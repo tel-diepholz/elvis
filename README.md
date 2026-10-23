@@ -113,7 +113,7 @@ festgelegt:
 Platzhalter: `{z}`, `{x}`, `{y}`, optional `{s}` (Subdomain aus `subdomains`) und `{r}` (`@2x` bei
 `"pixelRatio": 2`). Sind mehrere Quellen konfiguriert, erscheint auf der Karte und im Druckdialog eine Auswahl.
 
-**Lagekarte drucken:** Auf der Karte öffnet „Drucken“ einen Dialog mit Format (A3/A2/A1), Ausrichtung,
+**Lagekarte drucken:** Auf der Karte öffnet „Drucken“ einen Dialog mit Format (A4/A3/A2/A1), Ausrichtung,
 Zoomstufe (mit Maßstabsangabe) und Kartenstil. In der Vorschau wird der Ausschnitt gewählt, indem man die Karte
 unter dem Druckrahmen verschiebt. Fahrzeugstandort, Einsatzort und Ausbreitung lassen sich einzeln zuschalten.
 Das PDF entsteht auf dem Server (`POST /api/print/map`): Die Kacheln werden direkt eingebettet, Markierungen und

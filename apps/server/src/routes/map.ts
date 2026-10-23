@@ -12,7 +12,7 @@ const latLon = z.object({ lat: z.number().min(-85).max(85), lon: z.number().min(
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 const printRequest: z.ZodType<MapPrintRequest> = z.object({
-  paper: z.enum(['A3', 'A2', 'A1']),
+  paper: z.enum(['A4', 'A3', 'A2', 'A1']),
   orientation: z.enum(['portrait', 'landscape']),
   zoom: z.number().int().min(MIN_PRINT_ZOOM).max(MAX_PRINT_ZOOM),
   center: latLon,
