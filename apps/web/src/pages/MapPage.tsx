@@ -9,6 +9,7 @@ import { compass, fmtOpt } from '../lib/format';
 import { useActiveIncident, useMediaQuery, useNow, useSettings } from '../lib/hooks';
 import { useAuth } from '../lib/auth';
 import { autoSource, printSource } from '../lib/mapSources';
+import { loadMapView, saveMapView } from '../lib/mapView';
 import { effectiveTheme, useTheme } from '../lib/theme';
 import { useDevice } from '../lib/live';
 import { tacticalIcon } from '../components/tactical/TacticalSign';
@@ -19,6 +20,8 @@ import { Modal } from '../components/ui';
 import { PrintDialog } from './map/PrintDialog';
 import { DEFAULT_SETTINGS, DispersionControls, dispersionSector, usePlume, type DispersionSettings } from './map/dispersion';
 
+const VIEW_KEY = 'elvis.map.view';
+
 const incidentIcon = L.divIcon({ className: 'map-marker incident', html: '<span>!</span>', iconSize: [30, 30], iconAnchor: [15, 15] });
 
 function ClickToPlace({ active, onPick }: { active: boolean; onPick: (lat: number, lon: number) => void }) {
@@ -26,12 +29,13 @@ function ClickToPlace({ active, onPick }: { active: boolean; onPick: (lat: numbe
   return null;
 }
 
-/** Merkt sich den aktuellen Kartenausschnitt als Startwert für den Druck. */
+/** Merkt sich den aktuellen Kartenausschnitt als Startwert für den Druck und für den nächsten Aufruf der Karte. */
 function ViewTracker({ view }: { view: { current: { lat: number; lon: number; zoom: number } | null } }) {
   const map = useMapEvents({
     moveend: () => {
       const c = map.getCenter();
       view.current = { lat: c.lat, lon: c.lng, zoom: map.getZoom() };
+      saveMapView(VIEW_KEY, view.current);
     },
   });
   return null;
@@ -61,6 +65,8 @@ export function MapPage() {
   const [flyTarget, setFlyTarget] = useState<{ pos: LatLngExpression; n: number } | null>(null);
   const [printing, setPrinting] = useState(false);
   const view = useRef<{ lat: number; lon: number; zoom: number } | null>(null);
+  // Zuletzt eingestellter Ausschnitt (nur beim Aufbau gelesen); ohne ihn Einsatzort, Fahrzeug oder Deutschland
+  const [saved] = useState(() => loadMapView(VIEW_KEY));
   const { data: sources = [] } = useQuery({ queryKey: ['mapSources'], queryFn: api.mapSources, staleTime: Infinity });
   // null = automatisch passend zum Design (dunkle Kacheln im Dunkelmodus)
   const [sourceId, setSourceId] = useState<string | null>(null);
@@ -92,7 +98,12 @@ export function MapPage() {
 
   return (
     <div className="map-page">
-      <MapContainer center={iPos ?? vPos ?? fallback} zoom={iPos ? 14 : vPos ? 16 : 6} className={`map ${placing ? 'placing' : ''}`} zoomControl={false}>
+      <MapContainer
+        center={saved ? [saved.lat, saved.lon] : iPos ?? vPos ?? fallback}
+        zoom={saved?.zoom ?? (iPos ? 14 : vPos ? 16 : 6)}
+        className={`map ${placing ? 'placing' : ''}`}
+        zoomControl={false}
+      >
         {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} attribution={source.attribution} maxZoom={source.maxZoom} />}
         {plume?.contours.map(({ level, polygon }) => (
           <Polygon key={level.threshold} positions={polygon} pathOptions={level.path} interactive={false} />

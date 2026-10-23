@@ -6,11 +6,15 @@ import { api } from '../lib/api';
 import { DISPLAY_COMMAND_EVENT, useLive } from '../lib/live';
 import { applyTheme } from '../lib/theme';
 import { DisplayCanvas } from '../components/display/DisplayCanvas';
+import { MapSyncContext, type MapSync } from '../components/display/tiles';
 
 /**
  * Seite für gekoppelte Bildschirme (Kiosk-Browser oder App, /bildschirm): ohne Menü, dunkel, Vollbild.
  * Ungekoppelt zeigt sie einen Kopplungscode; danach das Kachel-Layout, das in ELVIS eingestellt wird.
  */
+/** Kartenausschnitte an ELVIS melden (Vorschau unter „Bildschirme“); Fehler sind unkritisch */
+const mapSync: MapSync = { onMove: (tileId, view) => void api.reportDisplayMapView(tileId, view).catch(() => {}) };
+
 export function DisplayScreenPage() {
   const queryClient = useQueryClient();
   const { connection } = useLive();
@@ -84,7 +88,9 @@ export function DisplayScreenPage() {
   return (
     <div className="display-screen">
       {display!.layout.tiles.length ? (
-        <DisplayCanvas layout={display!.layout} />
+        <MapSyncContext.Provider value={mapSync}>
+          <DisplayCanvas layout={display!.layout} />
+        </MapSyncContext.Provider>
       ) : (
         <div className="display-center display-pairing">
           <MonitorSmartphone size={96} />

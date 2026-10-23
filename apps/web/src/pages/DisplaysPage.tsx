@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Eye, LayoutGrid, MonitorSmartphone, Plus, RotateCw, Save, X } from 'lucide-react';
+import { Eye, LayoutGrid, MonitorSmartphone, Move, Plus, RotateCw, Save, X } from 'lucide-react';
 import { DISPLAY_TILE_IDS, DISPLAY_TILE_TYPES, findFreeSpot, type DisplayDevice, type DisplayLayout, type DisplayTileType } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -10,6 +10,7 @@ import { useToast } from '../lib/toast';
 import { DisplayCanvas, ScaledScreen } from '../components/display/DisplayCanvas';
 import { GridEditor, TileSettings } from '../components/display/GridEditor';
 import { ScenesBar } from '../components/display/ScenesBar';
+import { MapSyncContext, type MapSync } from '../components/display/tiles';
 import { Badge, Card, EmptyState, PageHeader } from '../components/ui';
 
 const SELECTED_KEY = 'elvis.display';
@@ -126,6 +127,7 @@ export function DisplaysPage() {
   const { data: displays } = useQuery({ queryKey: ['displays'], queryFn: api.displays });
   const [selected, setSelected] = useState<string | null>(readSelected);
   const [editing, setEditing] = useState(false);
+  const [remote, setRemote] = useState(false);
   const command = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'reload' | 'identify' }) => api.displayCommand(id, action),
     onError: (e) => toast('error', e.message),
@@ -147,11 +149,20 @@ export function DisplaysPage() {
   const choose = (id: string) => {
     if (editing) return;
     setSelected(id);
+    setRemote(false);
     try {
       localStorage.setItem(SELECTED_KEY, id);
     } catch {
       /* nur Komfort */
     }
+  };
+
+  const hasMap = display.layout.tiles.some((t) => t.type === 'map');
+  const steering = remote && hasMap && display.online;
+  // Vorschau zeigt die Ausschnitte des Bildschirms; im Steuermodus gehen eigene Eingaben an den Bildschirm
+  const mapSync: MapSync = {
+    views: display.mapViews,
+    onMove: (tileId, view) => void api.displayMapView(display.id, tileId, view).catch((e: Error) => toast('error', e.message)),
   };
 
   return (
@@ -178,6 +189,18 @@ export function DisplaysPage() {
               </div>
             </div>
             <span className="btn-row">
+              {hasMap && (
+                <button
+                  type="button"
+                  className={`btn ${steering ? 'btn-primary' : ''}`}
+                  disabled={!display.online}
+                  aria-pressed={steering}
+                  onClick={() => setRemote(!steering)}
+                  title="Karten in der Vorschau verschieben und zoomen – der Bildschirm folgt"
+                >
+                  <Move size={16} /> Karte steuern
+                </button>
+              )}
               <button type="button" className="btn" disabled={!display.online || command.isPending} onClick={() => command.mutate({ id: display.id, action: 'identify' })} title="Namen auf dem Bildschirm einblenden">
                 <Eye size={16} /> Erkennen
               </button>
@@ -190,9 +213,11 @@ export function DisplaysPage() {
             </span>
           </div>
           <ScenesBar display={display} />
-          <ScaledScreen screen={display.screen} className="display-preview">
+          <ScaledScreen screen={display.screen} className={`display-preview ${steering ? 'steering' : ''}`}>
             {display.layout.tiles.length ? (
-              <DisplayCanvas layout={display.layout} />
+              <MapSyncContext.Provider value={mapSync}>
+                <DisplayCanvas layout={display.layout} />
+              </MapSyncContext.Provider>
             ) : (
               <div className="display-center display-pairing">
                 <MonitorSmartphone size={96} />

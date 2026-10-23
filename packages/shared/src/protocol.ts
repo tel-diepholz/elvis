@@ -1,4 +1,4 @@
-import type { DisplayCommand } from './displays';
+import type { DisplayCommand, DisplayMapView } from './displays';
 import type { DeviceId, DeviceSnapshot, SystemId } from './devices';
 
 export type AlertSeverity = 'info' | 'warn' | 'alarm';
@@ -35,5 +35,7 @@ export type ServerMessage =
   | { type: 'alerts'; alerts: Alert[] }
   | { type: 'invalidate'; topics: Topic[] }
   /** Nur an den betroffenen Bildschirm */
-  | { type: 'displayCommand'; action: DisplayCommand };
+  | { type: 'displayCommand'; action: DisplayCommand }
+  /** Kartenausschnitt aus ELVIS übernehmen (Fernsteuerung) */
+  | { type: 'displayMapView'; tileId: string; view: DisplayMapView };
 

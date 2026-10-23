@@ -77,6 +77,19 @@ export function findFreeSpot(layout: DisplayLayout, w: number, h: number): { x: 
   return null;
 }
 
+/** Ausschnitt einer Kartenkachel */
+export interface DisplayMapView {
+  lat: number;
+  lon: number;
+  zoom: number;
+}
+
+export const displayMapViewSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lon: z.number().min(-180).max(180),
+  zoom: z.number().min(0).max(22),
+});
+
 export interface DisplayScreen {
   width: number;
   height: number;
@@ -106,6 +119,8 @@ export interface DisplayDevice {
   scenes: DisplayScene[];
   /** Szene, deren Anordnung gerade angezeigt wird (null = geänderte oder ungespeicherte Anordnung) */
   activeSceneId: number | null;
+  /** Aktueller Ausschnitt je Kartenkachel (Kachel-ID), soweit bekannt – nur im Speicher des Servers */
+  mapViews: Record<string, DisplayMapView>;
 }
 
 /** Antwort auf GET /api/display/self – Sicht des Bildschirms auf sich selbst */

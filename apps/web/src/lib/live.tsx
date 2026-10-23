@@ -44,6 +44,8 @@ function reducer(state: LiveState, action: Action): LiveState {
 
 /** Befehle an diesen Bildschirm (nur auf /bildschirm relevant) */
 export const DISPLAY_COMMAND_EVENT = 'elvis-display-command';
+/** Kartenausschnitt aus ELVIS (Fernsteuerung), detail: { tileId, view } */
+export const DISPLAY_MAP_VIEW_EVENT = 'elvis-display-map-view';
 
 const LiveContext = createContext<LiveState>(initial);
 
@@ -65,6 +67,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         const msg = JSON.parse(ev.data as string) as ServerMessage;
         if (msg.type === 'displayCommand') {
           window.dispatchEvent(new CustomEvent(DISPLAY_COMMAND_EVENT, { detail: msg.action }));
+          return;
+        }
+        if (msg.type === 'displayMapView') {
+          window.dispatchEvent(new CustomEvent(DISPLAY_MAP_VIEW_EVENT, { detail: { tileId: msg.tileId, view: msg.view } }));
           return;
         }
         if (msg.type === 'invalidate') {

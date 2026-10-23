@@ -3164,6 +3164,19 @@ html.display-mode body {
 .display-preview .scaled-screen-inner {
   pointer-events: none;
 }
+/* „Karte steuern“: nur die Kartenkacheln nehmen Eingaben an */
+.display-preview.steering .display-tile-map {
+  pointer-events: auto;
+}
+.display-preview.steering .display-tile-map::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1001; /* über den Leaflet-Ebenen */
+  border: 6px solid var(--info);
+  border-radius: inherit;
+  pointer-events: none;
+}
 .display-preview .display-center {
   height: 100%;
 }

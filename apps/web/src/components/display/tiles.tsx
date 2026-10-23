@@ -1,15 +1,16 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { MapContainer, Marker, TileLayer, useMap } from 'react-leaflet';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, Cctv, Clock, CloudSun, Map as MapIcon, Network, Type, Video } from 'lucide-react';
-import { DEFAULT_VEHICLE_SIGN, DISPLAY_TILE_TYPES, formatDtg, type DisplayTile, type DisplayTileType } from '@elvis/shared';
+import { DEFAULT_VEHICLE_SIGN, DISPLAY_TILE_TYPES, formatDtg, type DisplayMapView, type DisplayTile, type DisplayTileType } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { compass, fmtOpt } from '../../lib/format';
 import { useNow, useSettings } from '../../lib/hooks';
 import { autoSource } from '../../lib/mapSources';
-import { useAlerts, useDevice } from '../../lib/live';
+import { DISPLAY_MAP_VIEW_EVENT, useAlerts, useDevice } from '../../lib/live';
+import { loadMapView, sameMapView, saveMapView } from '../../lib/mapView';
 import { AlertList } from '../AlertPanel';
 import { CameraImage } from '../camera/CameraImage';
 import { tacticalIcon } from '../tactical/TacticalSign';
@@ -132,6 +133,78 @@ function Follow({ pos, enabled }: { pos: [number, number] | null; enabled: boole
   return null;
 }
 
+/**
+ * Abgleich der Kartenausschnitte zwischen Bildschirm und ELVIS. Auf dem Bildschirm meldet onMove den Ausschnitt an den
+ * Server; in der Vorschau unter „Bildschirme“ kommen die gemeldeten Ausschnitte als views herein und onMove steuert den
+ * Bildschirm fern. Ohne Kontext (z. B. im Editor) bleibt die Karte für sich.
+ */
+export interface MapSync {
+  views?: Record<string, DisplayMapView>;
+  onMove: (tileId: string, view: DisplayMapView) => void;
+}
+
+export const MapSyncContext = createContext<MapSync | null>(null);
+
+const currentView = (map: L.Map): DisplayMapView => {
+  const c = map.getCenter();
+  return { lat: c.lat, lon: c.lng, zoom: map.getZoom() };
+};
+
+/** Bildschirm: Ausschnitt nach Verschieben/Zoomen merken (übersteht ein Neuladen) und an ELVIS melden */
+function ReportView({ tileId, sync }: { tileId: string; sync: MapSync }) {
+  const map = useMapEvents({
+    moveend: () => {
+      const view = currentView(map);
+      saveMapView(mapViewKey(tileId), view);
+      sync.onMove(tileId, view);
+    },
+  });
+  // Einmal beim Start melden, damit die Vorschau auch nach einem Neustart von ELVIS stimmt
+  useEffect(() => sync.onMove(tileId, currentView(map)), [map, tileId]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/** Bildschirm: Ausschnitt aus ELVIS übernehmen (Fernsteuerung) */
+function RemoteTarget({ tileId }: { tileId: string }) {
+  const map = useMap();
+  useEffect(() => {
+    const onView = (e: Event) => {
+      const { tileId: id, view } = (e as CustomEvent<{ tileId: string; view: DisplayMapView }>).detail;
+      if (id === tileId) map.setView([view.lat, view.lon], view.zoom);
+    };
+    window.addEventListener(DISPLAY_MAP_VIEW_EVENT, onView);
+    return () => window.removeEventListener(DISPLAY_MAP_VIEW_EVENT, onView);
+  }, [map, tileId]);
+  return null;
+}
+
+/**
+ * Vorschau in ELVIS: zeigt den Ausschnitt des Bildschirms und schickt eigene Eingaben dorthin. Nur Bewegungen kurz
+ * nach einer Eingabe zählen – Mitführen, Größenänderung und übernommene Ausschnitte lösen nichts aus.
+ */
+function RemoteControl({ tileId, view, onMove }: { tileId: string; view: DisplayMapView | undefined; onMove: MapSync['onMove'] }) {
+  const lastInput = useRef(0);
+  const map = useMapEvents({
+    moveend: () => {
+      if (Date.now() - lastInput.current < 2_000) onMove(tileId, currentView(map));
+    },
+  });
+  useEffect(() => {
+    const el = map.getContainer();
+    const input = () => (lastInput.current = Date.now());
+    const events = ['pointerdown', 'pointerup', 'wheel', 'dblclick'] as const;
+    events.forEach((ev) => el.addEventListener(ev, input, { passive: true }));
+    return () => events.forEach((ev) => el.removeEventListener(ev, input));
+  }, [map]);
+  useEffect(() => {
+    // Während eigener Eingaben nicht dazwischenfunken (Rückmeldungen älterer Ausschnitte)
+    if (view && Date.now() - lastInput.current > 2_000 && !sameMapView(view, currentView(map))) map.setView([view.lat, view.lon], view.zoom, { animate: false });
+  }, [map, view?.lat, view?.lon, view?.zoom]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+const mapViewKey = (tileId: string) => `elvis.display.mapView.${tileId}`;
+
 /** Größenänderung der Kachel an Leaflet weitergeben */
 function AutoResize() {
   const map = useMap();
@@ -154,14 +227,32 @@ function MapTile({ tile }: { tile: DisplayTile }) {
   const gps = weather?.state.position;
   const vPos: [number, number] | null = gps ? [gps.lat, gps.lon] : null;
   const iPos: [number, number] | null = incident?.lat != null && incident.lon != null ? [incident.lat, incident.lon] : null;
+  const follow = tile.config.follow !== false;
+  const sync = useContext(MapSyncContext);
+  const preview = !!sync?.views;
+  // Startausschnitt (nur beim Aufbau gelesen): in der Vorschau der des Bildschirms, auf dem Bildschirm ohne Mitführen
+  // der zuletzt eingestellte
+  const saved = useMemo(
+    () => (preview ? sync.views![tile.id] : sync && !follow ? loadMapView(mapViewKey(tile.id)) : null) ?? null,
+    [tile.id], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const zoom = Number(tile.config.zoom) || 15;
   const center = (tile.config.center === 'incident' ? iPos ?? vPos : vPos ?? iPos) ?? [51.1657, 10.4515];
   return (
-    <MapContainer center={center} zoom={vPos || iPos ? zoom : 6} className="tile-map" zoomControl={false} attributionControl={false}>
+    <MapContainer
+      center={saved ? [saved.lat, saved.lon] : center}
+      zoom={saved ? saved.zoom : vPos || iPos ? zoom : 6}
+      className="tile-map"
+      zoomControl={false}
+      attributionControl={false}
+    >
       {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} maxZoom={source.maxZoom} />}
       {vPos && <Marker position={vPos} icon={icon} />}
       {iPos && <Marker position={iPos} icon={incidentIcon} />}
-      <Follow pos={tile.config.center === 'incident' ? iPos : vPos} enabled={tile.config.follow !== false} />
+      <Follow pos={tile.config.center === 'incident' ? iPos : vPos} enabled={follow} />
+      {sync && preview && <RemoteControl tileId={tile.id} view={sync.views![tile.id]} onMove={sync.onMove} />}
+      {sync && !preview && <RemoteTarget tileId={tile.id} />}
+      {sync && !preview && !follow && <ReportView tileId={tile.id} sync={sync} />}
       <AutoResize />
     </MapContainer>
   );

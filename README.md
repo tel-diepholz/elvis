@@ -237,7 +237,8 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
   und jede Aktion landet im Bedienprotokoll. Beim Entkoppeln eines Bildschirms werden seine Szenen gelöscht.
 - **Kacheln:** Lagekarte (Fahrzeug und Einsatzort, Kartenstil, Mittelpunkt, Mitführen, Zoom), Kamera (Livebild),
   Wetter, Uhr (DTG), Meldungen, Netzwerk (Router/Failover). Am Bildschirm bleiben sie bedienbar, z. B. lässt sich die
-  Karte per Touch verschieben und zoomen.
+  Karte per Touch verschieben und zoomen. Unter „Bildschirme“ steuert „Karte steuern“ die Kartenkacheln aus der
+  Vorschau fern. Ohne Mitführen behält der Bildschirm den zuletzt eingestellten Ausschnitt, auch nach „Neu laden“.
 - **Rechte:** Gekoppelte Bildschirme dürfen ohne Benutzeranmeldung zusätzlich den laufenden Einsatz lesen (für den
   Einsatzort auf der Karte), sonst nur, was auch anonyme Arbeitsplätze sehen.
 - **Kiosk-Browser:** mit dauerhaftem Profil starten, nicht im Inkognito-Modus, sonst geht die Kopplung bei jedem

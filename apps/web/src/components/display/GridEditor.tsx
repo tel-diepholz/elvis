@@ -188,7 +188,7 @@ export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; 
           <Field label={`Zoomstufe (${Number(tile.config.zoom) || 15})`}>
             <input type="range" min={8} max={19} value={Number(tile.config.zoom) || 15} onChange={(e) => set('zoom', Number(e.target.value))} />
           </Field>
-          <p className="field-hint">Am Bildschirm lässt sich die Karte per Touch verschieben und zoomen; mit „mitführen“ springt sie bei Bewegung des Fahrzeugs zurück.</p>
+          <p className="field-hint">Am Bildschirm lässt sich die Karte per Touch verschieben und zoomen, unter „Bildschirme“ auch per „Karte steuern“ aus der Vorschau; mit „mitführen“ springt sie bei Bewegung des Fahrzeugs zurück. Ohne Mitführen behält der Bildschirm den zuletzt eingestellten Ausschnitt, auch nach „Neu laden“.</p>
         </>
       )}
       {tile.type === 'video' && <VideoTileSettings tile={tile} set={set} />}

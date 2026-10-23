@@ -1,5 +1,14 @@
 import { createHash, randomBytes, randomInt } from 'node:crypto';
-import { EMPTY_DISPLAY_LAYOUT, displayLayoutSchema, type DisplayDevice, type DisplayLayout, type DisplayScene, type DisplayScreen, type DisplaySelf } from '@elvis/shared';
+import {
+  EMPTY_DISPLAY_LAYOUT,
+  displayLayoutSchema,
+  type DisplayDevice,
+  type DisplayLayout,
+  type DisplayMapView,
+  type DisplayScene,
+  type DisplayScreen,
+  type DisplaySelf,
+} from '@elvis/shared';
 import type { Db } from '../db/index.js';
 import { HttpError } from '../errors.js';
 
@@ -47,6 +56,7 @@ interface Pending {
 export class DisplayService {
   private readonly pending = new Map<string, Pending>(); // Hash des Geheimnisses → Code
   private readonly online = new Set<string>();
+  private readonly mapViews = new Map<string, Map<string, DisplayMapView>>(); // Bildschirm → Kachel → Ausschnitt
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -65,6 +75,7 @@ export class DisplayService {
     return {
       scenes: scenes.map((s): DisplayScene => ({ id: s.id, name: s.name, tiles: (JSON.parse(s.layout) as DisplayLayout).tiles.length, updatedAt: s.updated_at, updatedBy: s.updated_by })),
       activeSceneId: scenes.find((s) => layoutKey(JSON.parse(s.layout) as DisplayLayout) === current)?.id ?? null,
+      mapViews: Object.fromEntries([...(this.mapViews.get(r.id) ?? [])].filter(([tileId]) => layout.tiles.some((t) => t.id === tileId))),
       id: r.id,
       name: r.name,
       layout,
@@ -211,6 +222,7 @@ export class DisplayService {
     this.db.prepare('DELETE FROM display_scenes WHERE display_id = ?').run(id);
     this.db.prepare('DELETE FROM displays WHERE id = ?').run(id);
     this.online.delete(id);
+    this.mapViews.delete(id);
     this.changed();
     return d;
   }
@@ -234,6 +246,17 @@ export class DisplayService {
     if (online === this.online.has(id)) return;
     if (online) this.online.add(id);
     else this.online.delete(id);
+    this.changed();
+  }
+
+  /** Ausschnitt einer Kartenkachel merken (vom Bildschirm gemeldet oder aus ELVIS ferngesteuert) */
+  setMapView(id: string, tileId: string, view: DisplayMapView): void {
+    const tile = this.get(id).layout.tiles.find((t) => t.id === tileId);
+    if (tile?.type !== 'map') throw new HttpError(404, 'Kartenkachel nicht gefunden');
+    const views = this.mapViews.get(id) ?? new Map<string, DisplayMapView>();
+    this.mapViews.set(id, views);
+    if (JSON.stringify(views.get(tileId)) === JSON.stringify(view)) return;
+    views.set(tileId, view);
     this.changed();
   }
 

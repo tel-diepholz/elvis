@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { DISPLAY_TILE_TYPES, type DisplaySelf, type Topic } from '@elvis/shared';
+import { DISPLAY_TILE_TYPES, displayMapViewSchema, type DisplaySelf, type Topic } from '@elvis/shared';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
 import { DISPLAY_COOKIE, DISPLAY_COOKIE_MAX_S, type DisplayService } from '../services/displays.js';
@@ -15,6 +15,7 @@ interface Deps {
 }
 
 const name = z.string().trim().min(1, 'Name fehlt').max(60);
+const mapViewBody = displayMapViewSchema.extend({ tileId: z.string().min(1).max(64) });
 
 export function displayRoutes(app: FastifyInstance, d: Deps): void {
   const audit = (req: FastifyRequest, target: string, action: string, message: string) => {
@@ -44,6 +45,15 @@ export function displayRoutes(app: FastifyInstance, d: Deps): void {
     return reply.code(204).send();
   });
 
+  /** Ausschnitt einer Kartenkachel, den der Bildschirm gerade zeigt (für die Vorschau in ELVIS) */
+  app.post('/api/display/map-view', async (req, reply) => {
+    const display = d.displays.resolve(token(req));
+    if (!display) throw new HttpError(401, 'Bildschirm nicht gekoppelt');
+    const { tileId, ...view } = parse(mapViewBody, req.body);
+    d.displays.setMapView(display.id, tileId, view);
+    return reply.code(204).send();
+  });
+
   // --- Steuerung (Lesen öffentlich wie der Fahrzeugzustand, Ändern mit Anmeldung) ---
 
   app.get('/api/displays', async () => d.displays.list());
@@ -61,6 +71,16 @@ export function displayRoutes(app: FastifyInstance, d: Deps): void {
     const { action } = parse(z.object({ action: z.enum(['reload', 'identify']) }), req.body);
     if (!d.hub.sendToDisplay(display.id, { type: 'displayCommand', action })) throw new HttpError(409, `${display.name} ist nicht verbunden`);
     audit(req, `bildschirm:${display.id}`, action, `${display.name}: ${action === 'reload' ? 'neu laden' : 'erkennen'}`);
+    return { ok: true };
+  });
+
+  /** Kartenkachel fernsteuern: Ausschnitt an den Bildschirm schicken (ohne Protokolleintrag, fällt bei jedem Verschieben an) */
+  app.post<{ Params: { id: string } }>('/api/displays/:id/map-view', async (req) => {
+    const display = d.displays.get(req.params.id);
+    const { tileId, ...view } = parse(mapViewBody, req.body);
+    if (!display.layout.tiles.some((t) => t.id === tileId && t.type === 'map')) throw new HttpError(404, 'Kartenkachel nicht gefunden');
+    if (!d.hub.sendToDisplay(display.id, { type: 'displayMapView', tileId, view })) throw new HttpError(409, `${display.name} ist nicht verbunden`);
+    d.displays.setMapView(display.id, tileId, view);
     return { ok: true };
   });
 

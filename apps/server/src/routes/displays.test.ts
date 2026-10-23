@@ -129,6 +129,45 @@ describe('Bildschirme: Layout und Fernsteuerung', () => {
     expect(audit).toEqual(expect.arrayContaining(['Bildschirm „Lagetisch“ gekoppelt', 'Lagetisch: 3 Kachel(n) – Lagekarte, Uhr, Kamera', 'Lagetisch: erkennen', 'Bildschirm „Lagetisch“ entkoppelt']));
     app.server.server.closeAllConnections();
   });
+
+  it('steuert Kartenkacheln fern und merkt sich den vom Bildschirm gemeldeten Ausschnitt', async () => {
+    const a = await pairDisplay('Lagetisch');
+    const layout = { cols: 12, rows: 8, tiles: [{ id: 'm1', type: 'map', x: 0, y: 0, w: 8, h: 8, config: { follow: false } }, { id: 'c1', type: 'clock', x: 8, y: 0, w: 4, h: 2, config: {} }] };
+    await req('PUT', `/api/displays/${a.display.id}/layout`, { layout });
+    const view = { lat: 52.6, lon: 8.37, zoom: 16 };
+
+    // Der Bildschirm meldet seinen Ausschnitt (Gerätecookie), nur für Kartenkacheln
+    expect((await req('POST', '/api/display/map-view', { tileId: 'm1', ...view }, '')).status).toBe(401);
+    expect((await req('POST', '/api/display/map-view', { tileId: 'c1', ...view }, a.cookie)).status).toBe(404);
+    expect((await req('POST', '/api/display/map-view', { tileId: 'm1', ...view, zoom: 40 }, a.cookie)).status).toBe(400);
+    expect((await req('POST', '/api/display/map-view', { tileId: 'm1', ...view }, a.cookie)).status).toBe(204);
+    expect((await req<DisplayDevice[]>('GET', '/api/displays', undefined, '')).body[0]?.mapViews).toEqual({ m1: view });
+
+    // Fernsteuerung nur mit Anmeldung und nur an verbundene Bildschirme
+    const next = { lat: 52.61, lon: 8.38, zoom: 17 };
+    expect((await req('POST', `/api/displays/${a.display.id}/map-view`, { tileId: 'm1', ...next }, '')).status).toBe(401);
+    expect((await req<{ error: string }>('POST', `/api/displays/${a.display.id}/map-view`, { tileId: 'm1', ...next })).body.error).toMatch(/nicht verbunden/);
+    expect((await req<DisplayDevice[]>('GET', '/api/displays')).body[0]?.mapViews).toEqual({ m1: view });
+
+    await app.server.listen({ port: 0, host: '127.0.0.1' });
+    const port = (app.server.server.address() as AddressInfo).port;
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/live`, { headers: { cookie: a.cookie } });
+    const messages: ServerMessage[] = [];
+    ws.on('message', (m) => messages.push(JSON.parse(String(m)) as ServerMessage));
+    await until(async () => (await req<DisplayDevice[]>('GET', '/api/displays')).body[0]?.online === true);
+
+    expect((await req('POST', `/api/displays/${a.display.id}/map-view`, { tileId: 'c1', ...next })).status).toBe(404);
+    expect((await req('POST', `/api/displays/${a.display.id}/map-view`, { tileId: 'm1', ...next })).status).toBe(200);
+    await until(() => messages.some((m) => m.type === 'displayMapView'));
+    expect(messages.find((m) => m.type === 'displayMapView')).toEqual({ type: 'displayMapView', tileId: 'm1', view: next });
+    expect((await req<DisplayDevice[]>('GET', '/api/displays')).body[0]?.mapViews).toEqual({ m1: next });
+
+    // Verschwindet die Kachel aus der Anordnung, verschwindet auch ihr Ausschnitt
+    await req('PUT', `/api/displays/${a.display.id}/layout`, { layout: { ...layout, tiles: [layout.tiles[1]] } });
+    expect((await req<DisplayDevice[]>('GET', '/api/displays')).body[0]?.mapViews).toEqual({});
+    ws.close();
+    app.server.server.closeAllConnections();
+  });
 });
 
 describe('Bildschirme: Szenen', () => {
