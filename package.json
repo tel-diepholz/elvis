@@ -1,0 +1,24 @@
+{
+  "name": "elvis",
+  "private": true,
+  "description": "ELVIS – Einsatzleitwagen-Verwaltungs- und Informationssystem",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c red,blue \"npm run dev -w @elvis/server\" \"npm run dev -w @elvis/web\"",
+    "build": "npm run build -w @elvis/web && npm run build -w @elvis/server",
+    "start": "npm run start -w @elvis/server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:lab": "sh deploy/lab/run.sh"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

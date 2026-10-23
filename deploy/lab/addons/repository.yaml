@@ -1,0 +1,4 @@
+name: ELVIS Labor
+addons:
+  - hello
+  - transfer-test

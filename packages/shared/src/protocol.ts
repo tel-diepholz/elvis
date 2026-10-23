@@ -1,0 +1,39 @@
+import type { DisplayCommand } from './displays';
+import type { DeviceId, DeviceSnapshot, SystemId } from './devices';
+
+export type AlertSeverity = 'info' | 'warn' | 'alarm';
+
+export interface Alert {
+  id: string;
+  severity: AlertSeverity;
+  system: SystemId;
+  title: string;
+  detail?: string;
+  since: string;
+}
+
+export interface VehicleInfo {
+  name: string;
+  callsign: string;
+  organization: string;
+}
+
+/** Topics a client should refetch via REST when invalidated. */
+export type Topic = 'incident' | 'journal' | 'units' | 'documents' | 'audit' | 'dockerHosts' | 'addons' | 'mapSources' | 'users' | 'settings' | 'devices' | 'cameras' | 'cameraPresets' | 'displays' | 'videoSources';
+
+export type ServerMessage =
+  | {
+      type: 'hello';
+      serverTime: string;
+      vehicle: VehicleInfo;
+      devices: DeviceSnapshot[];
+      alerts: Alert[];
+    }
+  | { type: 'device'; device: DeviceSnapshot }
+  /** Modul deaktiviert: Zustand aus der Anzeige entfernen. */
+  | { type: 'deviceRemoved'; id: DeviceId }
+  | { type: 'alerts'; alerts: Alert[] }
+  | { type: 'invalidate'; topics: Topic[] }
+  /** Nur an den betroffenen Bildschirm */
+  | { type: 'displayCommand'; action: DisplayCommand };
+

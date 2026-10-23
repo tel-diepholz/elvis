@@ -1,0 +1,27 @@
+# ELVIS auf einem Server. Kein Docker-Socket: Docker-Hosts (auch dieser Server) werden über die
+# Docker-API per TLS angebunden – siehe deploy/install.sh.
+services:
+  elvis:
+    image: elvis:latest
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile
+    container_name: elvis
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - elvis-data:/data
+      - elvis-config:/config
+    # Airmar-Wetterstation über Actisense NGX-1 (USB): Gerät durchreichen und Zugriff erlauben.
+    # Pfad mit `ls -l /dev/serial/by-id/` ermitteln; fehlt das Gerät, startet der Container nicht.
+    # In ELVIS unter System → Fahrzeugmodule dann /dev/ttyUSB0 wählen (oder als eigenen Pfad eintragen,
+    # falls die Erkennung im Container ohne udev nichts findet).
+    # devices:
+    #   - /dev/serial/by-id/usb-Actisense_NGX-1_XXXXXXXX-if00-port0:/dev/ttyUSB0
+    # group_add:
+    #   - dialout
+
+volumes:
+  elvis-data:
+  elvis-config:

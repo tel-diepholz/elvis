@@ -1,0 +1,48 @@
+{
+  "port": 8080,
+  "dataDir": "./data",
+  "webDist": "../web/dist",
+  "vehicle": {
+    "name": "ELW 2",
+    "callsign": "Florian Musterstadt 12/11-1",
+    "organization": "Freiwillige Feuerwehr Musterstadt"
+  },
+  "devices": {
+    "weather": {
+      "driver": "actisense-airmar",
+      "options": {
+        "port": "/dev/ttyUSB0",
+        "baudRate": 115200
+      }
+    },
+    "radio": {
+      "driver": "sim"
+    }
+  },
+  "map": {
+    "sources": [
+      {
+        "id": "osm",
+        "name": "OpenStreetMap",
+        "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "attribution": "© OpenStreetMap-Mitwirkende",
+        "maxZoom": 19
+      }
+    ],
+    "cacheMaxAgeDays": 30
+  },
+  "docker": {
+    "enabled": true,
+    "port": 2376
+  },
+  "addons": {
+    "repositories": []
+  },
+  "alerts": {
+    "batteryWarnPercent": 40,
+    "batteryAlarmPercent": 20,
+    "fuelWarnPercent": 25,
+    "mastWindLimitMs": 15,
+    "stormWarnMs": 17
+  }
+}

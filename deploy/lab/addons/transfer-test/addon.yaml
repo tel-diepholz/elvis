@@ -1,0 +1,8 @@
+# Nur für das Labor: Das Image existiert ausschließlich auf server1 und muss übertragen werden.
+id: transfer-test
+name: Übertragungstest
+version: 1.0.0
+containers:
+  - name: app
+    image: elvis-lab/only-on-server1:1
+    command: ["sleep", "3600"]

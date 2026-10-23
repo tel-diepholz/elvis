@@ -1,0 +1,33 @@
+# Labor: ELVIS plus zwei Docker-Daemons (dind) als "Server 1/2" mit TLS auf Port 2376.
+services:
+  elvis:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    environment:
+      ELVIS_ADDONS_DIR: /lab-addons
+    volumes:
+      - ./addons:/lab-addons:ro
+      - ../../addons/hello:/lab-addons/hello:ro
+    ports:
+      - "18080:8080"
+    depends_on: [server1, server2]
+
+  server1: &dind
+    image: docker:27-dind
+    hostname: server1
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+    volumes:
+      - server1-certs:/certs
+
+  server2:
+    <<: *dind
+    hostname: server2
+    volumes:
+      - server2-certs:/certs
+
+volumes:
+  server1-certs:
+  server2-certs:
