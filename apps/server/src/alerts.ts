@@ -55,6 +55,13 @@ export function evaluateAlerts(get: StateGetter, offline: DeviceId[], limits: El
     }
   }
 
+  const wifi = get('wifi');
+  if (wifi && !offline.includes('wifi')) {
+    for (const ap of wifi.aps.filter((x) => !x.online)) {
+      add({ id: `wifi:${ap.id}`, severity: 'alarm', system: 'comms', title: `Accesspoint ${ap.name} nicht erreichbar`, detail: ap.error ?? undefined });
+    }
+  }
+
   const network = get('network');
   if (network) {
     if (!network.internet) {

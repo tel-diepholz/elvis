@@ -57,6 +57,7 @@ const request: MapPrintRequest = {
   markers: [
     { kind: 'vehicle', lat: 51.1657, lon: 10.4515, label: 'ELW 2' },
     { kind: 'incident', lat: 51.1662, lon: 10.456, label: 'Einsatzort' },
+    { kind: 'point', lat: 51.1655, lon: 10.452, label: 'Hydrant Industriestr.', color: '#43a047' },
   ],
   polygons: [{ points: [[51.1662, 10.456], [51.17, 10.47], [51.165, 10.47]], stroke: '#e53935', fill: '#e53935', fillOpacity: 0.3 }],
   legend: [{ color: '#e53935', label: 'hoch ≥ 1·10⁻³ s/m³' }],

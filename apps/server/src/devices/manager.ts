@@ -42,7 +42,10 @@ export class DeviceManager {
     private readonly config: ElvisConfig,
     private readonly log: Logger,
     private readonly configs: DeviceConfigStore = new DeviceConfigStore(null, config.devices),
-    private readonly deps: DriverDeps = { cameras: { list: () => [], onChange: () => () => {} } },
+    private readonly deps: DriverDeps = {
+      cameras: { list: () => [], onChange: () => () => {} },
+      wifi: { list: () => [], onChange: () => () => {}, storeClients: () => {}, clearClients: () => {} },
+    },
   ) {
     this.ctx = {
       log: this.log,

@@ -25,6 +25,7 @@ import { HttpError } from '../errors.js';
 import { describeError, type HostService } from '../docker/hosts.js';
 import type { TileService } from '../services/tiles.js';
 import { JobRuns, followLogs, type JobRunRow } from './jobs.js';
+import type { GeocoderProvision, GeocoderService } from '../services/geocoder.js';
 import type { VideoProvision, VideoSourceService } from '../services/videos.js';
 import { createProgressParser, nextScheduledRun, overallPercent } from './progress.js';
 import type { RepoService } from './repos.js';
@@ -765,9 +766,18 @@ export class AddonManager {
     this.updateMapSources();
   }
 
+  private geocoder: GeocoderService | null = null;
+
+  /** Ortssuche laufender Addons (provides.geocoders) an diesen Dienst melden */
+  attachGeocoder(geocoder: GeocoderService): void {
+    this.geocoder = geocoder;
+    this.updateMapSources();
+  }
+
   private updateMapSources(): void {
     const sources: MapSourceConfig[] = [];
     const videos: VideoProvision[] = [];
+    const geocoders: GeocoderProvision[] = [];
     for (const r of this.rows()) {
       if (r.status !== 'running') continue;
       const manifest = JSON.parse(r.manifest) as AddonManifest;
@@ -794,8 +804,12 @@ export class AddonManager {
       for (const v of manifest.provides.videoSources ?? []) {
         videos.push({ id: `${r.id}-${v.id}`, name: v.name, status: renderTemplate(v.status, ctx), webrtc: renderTemplate(v.webrtc, ctx) });
       }
+      for (const g of manifest.provides.geocoders ?? []) {
+        geocoders.push({ id: `${r.id}-${g.id}`, name: g.name, type: g.type, url: renderTemplate(g.url, ctx) });
+      }
     }
     if (this.tiles.setAddonSources(sources)) this.notify(['mapSources']);
     if (this.videos?.setProvisions(videos)) this.notify(['videoSources']);
+    this.geocoder?.setProvisions(geocoders);
   }
 }

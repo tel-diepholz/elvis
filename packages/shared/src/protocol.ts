@@ -19,7 +19,7 @@ export interface VehicleInfo {
 }
 
 /** Topics a client should refetch via REST when invalidated. */
-export type Topic = 'incident' | 'journal' | 'units' | 'documents' | 'audit' | 'dockerHosts' | 'addons' | 'mapSources' | 'users' | 'settings' | 'devices' | 'cameras' | 'cameraPresets' | 'displays' | 'videoSources';
+export type Topic = 'incident' | 'journal' | 'units' | 'documents' | 'audit' | 'dockerHosts' | 'addons' | 'mapSources' | 'users' | 'settings' | 'devices' | 'cameras' | 'cameraPresets' | 'displays' | 'videoSources' | 'mapObjects' | 'wifi' | 'wifiClients';
 
 export type ServerMessage =
   | {

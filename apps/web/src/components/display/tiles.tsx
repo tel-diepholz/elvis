@@ -3,7 +3,7 @@ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Cctv, Clock, CloudSun, Map as MapIcon, Network, Type, Video } from 'lucide-react';
+import { Bell, Cctv, Clock, CloudSun, Map as MapIcon, Network, Type, Video, Wifi } from 'lucide-react';
 import { DEFAULT_VEHICLE_SIGN, DISPLAY_TILE_TYPES, formatDtg, type DisplayMapView, type DisplayTile, type DisplayTileType } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { compass, fmtOpt } from '../../lib/format';
@@ -16,8 +16,10 @@ import { CameraImage } from '../camera/CameraImage';
 import { tacticalIcon } from '../tactical/TacticalSign';
 import { WindCompass } from '../WindCompass';
 import { WebRtcPlayer } from './WebRtcPlayer';
+import { MapObjectsLayer, useMapObjects } from '../map/objects';
+import { WifiQr } from '../WifiQr';
 
-export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, clock: Clock, alerts: Bell, network: Network, text: Type };
+export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi };
 
 const date = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 const time = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -136,7 +138,7 @@ function Follow({ pos, enabled }: { pos: [number, number] | null; enabled: boole
 /**
  * Abgleich der Kartenausschnitte zwischen Bildschirm und ELVIS. Auf dem Bildschirm meldet onMove den Ausschnitt an den
  * Server; in der Vorschau unter „Bildschirme“ kommen die gemeldeten Ausschnitte als views herein und onMove steuert den
- * Bildschirm fern. Ohne Kontext (z. B. im Editor) bleibt die Karte für sich.
+ * Bildschirm fern. Nur ohne Mitführen – mitgeführte Karten stehen überall gleich. Ohne Kontext (z. B. im Editor) bleibt die Karte für sich.
  */
 export interface MapSync {
   views?: Record<string, DisplayMapView>;
@@ -205,6 +207,20 @@ function RemoteControl({ tileId, view, onMove }: { tileId: string; view: Display
 
 const mapViewKey = (tileId: string) => `elvis.display.mapView.${tileId}`;
 
+/**
+ * Bedienung der Karte: ohne Mitführen frei verschieben und zoomen, mit Mitführen gesperrt – dann folgt der Ausschnitt
+ * nur Fahrzeug bzw. Einsatzort. Die Klasse map-locked lässt in der Vorschau die Eingaben durch die Karte hindurch.
+ */
+function Interaction({ enabled }: { enabled: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    const handlers = [map.dragging, map.touchZoom, map.doubleClickZoom, map.scrollWheelZoom, map.boxZoom, map.keyboard];
+    handlers.forEach((h) => (enabled ? h.enable() : h.disable()));
+    map.getContainer().classList.toggle('map-locked', !enabled);
+  }, [map, enabled]);
+  return null;
+}
+
 /** Größenänderung der Kachel an Leaflet weitergeben */
 function AutoResize() {
   const map = useMap();
@@ -223,6 +239,11 @@ function MapTile({ tile }: { tile: DisplayTile }) {
   // Einsatzort: Bildschirme und angemeldete Benutzer dürfen ihn lesen, sonst bleibt er weg
   const { data: incident } = useQuery({ queryKey: ['incident', 'active', 'display'], queryFn: () => api.activeIncident().catch(() => null) });
   const icon = useMemo(() => tacticalIcon(settings?.mapSign ?? DEFAULT_VEHICLE_SIGN), [settings?.mapSign]);
+  // Kartenobjekte des Einsatzes (Flächen, Punkte, Ausbreitungen) wie auf der Karte in ELVIS
+  const { data: objects = [] } = useMapObjects(incident?.id);
+  const now = useNow();
+  const ws = weather?.state;
+  const wind = ws && ws.windSpeedMs !== null && ws.windDirectionDeg !== null ? { windSpeedMs: ws.windSpeedMs, windDirectionDeg: ws.windDirectionDeg } : undefined;
   const source = sources.find((s) => s.id === tile.config.sourceId) ?? autoSource(sources, true);
   const gps = weather?.state.position;
   const vPos: [number, number] | null = gps ? [gps.lat, gps.lon] : null;
@@ -247,11 +268,13 @@ function MapTile({ tile }: { tile: DisplayTile }) {
       attributionControl={false}
     >
       {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} maxZoom={source.maxZoom} />}
-      {vPos && <Marker position={vPos} icon={icon} />}
+      <MapObjectsLayer objects={objects} wind={wind} now={now} />
+      {vPos && (incident?.vehicleVisible ?? true) && <Marker position={vPos} icon={icon} />}
       {iPos && <Marker position={iPos} icon={incidentIcon} />}
       <Follow pos={tile.config.center === 'incident' ? iPos : vPos} enabled={follow} />
-      {sync && preview && <RemoteControl tileId={tile.id} view={sync.views![tile.id]} onMove={sync.onMove} />}
-      {sync && !preview && <RemoteTarget tileId={tile.id} />}
+      <Interaction enabled={!follow} />
+      {sync && preview && !follow && <RemoteControl tileId={tile.id} view={sync.views![tile.id]} onMove={sync.onMove} />}
+      {sync && !preview && !follow && <RemoteTarget tileId={tile.id} />}
       {sync && !preview && !follow && <ReportView tileId={tile.id} sync={sync} />}
       <AutoResize />
     </MapContainer>
@@ -313,6 +336,26 @@ function TextTile({ tile }: { tile: DisplayTile }) {
   );
 }
 
+/** Gastnetz des laufenden Einsatzes zum Abscannen */
+function GuestWifiTile({ tile }: { tile: DisplayTile }) {
+  const { data } = useQuery({ queryKey: ['wifi', 'guest'], queryFn: api.wifiGuest });
+  if (!data) return <TileEmpty text="Lade Gastnetz …" />;
+  if (!data.active) return <TileEmpty text={data.reason} />;
+  const title = String(tile.config.title ?? '').trim();
+  return (
+    <div className="tile-wifi">
+      <WifiQr ssid={data.ssid} password={data.password} className="tile-wifi-qr" />
+      <dl>
+        {title && <div className="tile-wifi-title">{title}</div>}
+        <dt>WLAN</dt>
+        <dd>{data.ssid}</dd>
+        <dt>Passwort</dt>
+        <dd>{data.password}</dd>
+      </dl>
+    </div>
+  );
+}
+
 function TileEmpty({ text }: { text: string }) {
   return <div className="tile-empty">{text}</div>;
 }
@@ -336,6 +379,8 @@ export function TileView({ tile }: { tile: DisplayTile }) {
       return <MapTile tile={tile} />;
     case 'text':
       return <TextTile tile={tile} />;
+    case 'guestWifi':
+      return <GuestWifiTile tile={tile} />;
     default:
       return <TileEmpty text={`Unbekannte Kachel ${DISPLAY_TILE_TYPES[tile.type as DisplayTileType]?.label ?? tile.type}`} />;
   }

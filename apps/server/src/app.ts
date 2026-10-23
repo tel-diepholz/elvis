@@ -34,24 +34,40 @@ import { LiveHub } from './routes/live.js';
 import { mapRoutes } from './routes/map.js';
 import { IncidentService } from './services/incidents.js';
 import { SettingsService } from './services/settings.js';
+import { GeocoderService, type GeocodeFetch } from './services/geocoder.js';
 import { TileService } from './services/tiles.js';
+import type { UbusHttp } from './services/openwrt.js';
+import { WifiService } from './services/wifi.js';
+import { wifiRoutes } from './routes/wifi.js';
 
 export interface App {
   server: FastifyInstance;
   devices: DeviceManager;
   docker: { hosts: HostService; repos: RepoService; addons: AddonManager } | null;
+  wifi: WifiService;
   start(): Promise<void>;
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; wifiHttp?: UbusHttp } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
   const store = new Store(db);
   const cameras = new CameraConfigStore(db);
   const cameraPresets = new CameraPresetStore(db);
-  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices), { cameras });
+  // vor den Fahrzeugmodulen: das Modul „WLAN-Accesspoints“ liest die APs hier
+  const wifi = new WifiService(db, {
+    activeIncident: () => store.activeIncident(),
+    notify: () => hub.invalidate(['wifi']),
+    notifyClients: () => hub.invalidate(['wifiClients']),
+    audit: (e) => {
+      store.addAudit(e);
+      hub.invalidate(['audit']);
+    },
+    http: opts.wifiHttp,
+  });
+  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices), { cameras, wifi });
   const settings = new SettingsService(db, { vehicle: config.vehicle });
   const hub = new LiveHub(devices, () => settings.get().vehicle);
   settings.onChange(() => hub.invalidate(['settings']));
@@ -60,8 +76,16 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const displays = new DisplayService(db);
   displays.onChange(() => hub.invalidate(['displays']));
   hub.attachDisplays({ identify: (req) => displays.resolve(req.cookies[DISPLAY_COOKIE])?.id ?? null, setOnline: (id, on) => displays.setOnline(id, on) });
-  const incidents = new IncidentService(store, config.dataDir, (topics) => hub.invalidate(topics));
+  const incidents = new IncidentService(store, config.dataDir, (topics) => {
+    hub.invalidate(topics);
+    // Gastnetz folgt dem Einsatz
+    if (topics.includes('incident')) wifi.incidentChanged();
+  });
   const tiles = new TileService(config.map, config.dataDir);
+  const geocoder = new GeocoderService(
+    { onlineUrl: config.map.geocoderUrl, outlineUrl: config.map.outlineUrl, dataDir: config.dataDir, userAgent: config.map.userAgent },
+    opts.geocodeFetch,
+  );
   const users = new UserService(db);
   const sessions = new SessionStore(db);
   const limiter = new LoginLimiter();
@@ -79,6 +103,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       hub.invalidate(['audit']);
     });
     addons.attachVideos(videos);
+    addons.attachGeocoder(geocoder);
     docker = { hosts, repos, addons };
   }
 
@@ -126,7 +151,8 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     displayRoutes(api, { displays, hub, store, notify: (t) => hub.invalidate(t) });
     api.get('/api/video/sources', async () => videos.list());
     cameraRoutes(api, { cameras, presets: cameraPresets, devices, incidents, store, notify: (t) => hub.invalidate(t) });
-    mapRoutes(api, tiles, store, settings, () => hub.invalidate(['audit']));
+    wifiRoutes(api, { wifi, store, notify: (t) => hub.invalidate(t) });
+    mapRoutes(api, tiles, store, settings, () => hub.invalidate(['audit']), geocoder);
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
       const parsed = settingsInputSchema.safeParse(req.body);
@@ -158,9 +184,11 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     server,
     devices,
     docker,
+    wifi,
     async start() {
       await devices.start();
       videos.start();
+      wifi.start();
       if (docker) {
         await docker.repos.refresh();
         docker.hosts.start();
@@ -171,6 +199,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     async close() {
       hub.closeAll();
       videos.stop();
+      wifi.stop();
       docker?.hosts.stop();
       docker?.addons.stop();
       await devices.stop();

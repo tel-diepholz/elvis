@@ -9,6 +9,7 @@ import { CamerasCard } from './system/CamerasCard';
 import { DisplaysCard } from './system/DisplaysCard';
 import { ModulesCard } from './system/ModulesCard';
 import { SettingsCard } from './system/SettingsCard';
+import { WifiApsCard, WifiCard } from './system/WifiCard';
 import { useAuth } from '../lib/auth';
 import { applyTheme, useTheme, type Theme } from '../lib/theme';
 import { Badge, Card, Dot, PageHeader, Segmented } from '../components/ui';
@@ -30,6 +31,8 @@ export function SystemPage() {
             <ModulesCard />
             <CamerasCard />
             <DisplaysCard />
+            <WifiCard />
+            <WifiApsCard />
           </>
         ) : (
           <Card title="Geräte & Treiber" icon={<Cpu size={18} />} className="span-2">

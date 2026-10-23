@@ -1,6 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { Globe, Lock, Radio, Satellite, Signal, Wifi } from 'lucide-react';
 import type { RadioDevice } from '@elvis/shared';
 import { FMS_STATUS } from '@elvis/shared';
+import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { useCommand } from '../lib/hooks';
 import { useDevice } from '../lib/live';
 import { fmtNum, fmtTime } from '../lib/format';
@@ -8,6 +11,7 @@ import { UPLINK_KIND } from '../lib/labels';
 import { ModuleDisabled } from '../components/ModuleDisabled';
 import { LeasesCard } from './comms/LeasesCard';
 import { RouterCard } from './comms/RouterCard';
+import { WifiClientsCard } from './comms/WifiClientsCard';
 import { Badge, Card, Dot, Meter, PageHeader, Toggle } from '../components/ui';
 
 function rssiTone(rssi: number | null) {
@@ -94,8 +98,13 @@ export function CommsPage() {
   const router = useDevice('router');
   const { send, pending } = useCommand('network');
   const n = net?.state;
+  // WLAN-Geräte (Modul „WLAN-Accesspoints“): nur angemeldet, wegen MAC-Adressen und Gerätenamen
+  const wifiModule = useDevice('wifi');
+  const loggedIn = !!useAuth().user;
+  const showWifi = loggedIn && !!wifiModule?.state.aps.length;
+  const { data: wifiClients = [] } = useQuery({ queryKey: ['wifiClients'], queryFn: api.wifiClients, enabled: showWifi, refetchInterval: 10_000 });
   const header = <PageHeader title="Netzwerk" subtitle="Router, Datenverbindungen, Fahrzeugnetz und Digitalfunk" />;
-  if (!radio && !n && !router)
+  if (!radio && !n && !router && !showWifi)
     return (
       <>
         {header}
@@ -108,6 +117,8 @@ export function CommsPage() {
       {header}
       <div className="grid">
         {router && <RouterCard router={router} />}
+        {showWifi && <WifiClientsCard all={wifiClients} aps={wifiModule.state.aps} network="ops" leases={router?.state.leases ?? null} />}
+        {showWifi && <WifiClientsCard all={wifiClients} aps={wifiModule.state.aps} network="guest" leases={router?.state.leases ?? null} />}
         {router && <LeasesCard router={router} />}
         {radio && (
           <Card title="Digitalfunk" icon={<Radio size={18} />} className="span-3">

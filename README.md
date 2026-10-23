@@ -78,8 +78,9 @@ Befehle mit dem Präfix `sim.` gibt es nur im Simulator.
 
 ## Ausbreitungsberechnung (Karte)
 
-Ab dem Einsatzort zeigt die Karte wahlweise eine **Gauß-Fahne** oder den schematischen **60°-Sektor**
-in Windrichtung. Die Werte für Wind und Richtung kommen live von der Wetterstation.
+Über „Objekte“ in der Karte lassen sich beliebig viele **Gauß-Fahnen** und schematische **60°-Sektoren** in
+Windrichtung einfügen – per Tipp in die Karte oder direkt am Einsatzort. Ihre Einstellungen stehen in der
+Objektliste. Wind und Richtung kommen live von der Wetterstation.
 
 - **Modell** (`packages/shared/src/dispersion.ts`): stationäre Gauß-Fahne mit Bodenreflexion und Windprofil,
   angelehnt an den Ansatz von VDI 3783 Blatt 1. Die Ausbreitungsklasse nach Klug/Manier (I–V) wird automatisch
@@ -113,9 +114,34 @@ festgelegt:
 Platzhalter: `{z}`, `{x}`, `{y}`, optional `{s}` (Subdomain aus `subdomains`) und `{r}` (`@2x` bei
 `"pixelRatio": 2`). Sind mehrere Quellen konfiguriert, erscheint auf der Karte und im Druckdialog eine Auswahl.
 
+**Bedienung:** Oben links stehen Suche, das Menü „Objekte“ (Einsatzort setzen, Gauß-Fahne oder Sektor 60°
+einfügen) und „Drucken“, oben rechts die Wahl des Kartenstils, unten links der Wind. Rechts liegt die einklappbare
+**Objektliste** des laufenden Einsatzes: an erster Stelle das eigene Fahrzeug (nur ausblendbar), dann Einsatzort,
+Ausbreitungen und übernommene Suchtreffer. Ein Klick fliegt
+hin; Objekte lassen sich ein- und ausblenden, einstellen, einfärben (Flächen, Punkte, Sektoren – Gauß-Fahnen
+behalten ihre Stufenfarben) und entfernen. Die Objekte gehören zum Einsatz
+(`/api/incidents/:id/objects`): Alle Arbeitsplätze und die Kartenkacheln der Bildschirme sehen sie, sie erscheinen
+im Druck, Hinzufügen und Entfernen stehen im Einsatztagebuch, und nach dem Einsatz bleiben sie im Archiv lesbar.
+
+**Ortssuche:** Das Suchfeld oben links in der Karte findet Straßen, Orte und Adressen. Treffer in der Nähe der
+Kartenmitte stehen vorn. Ein Treffer fliegt die Karte an, setzt eine Markierung mit UTMREF und lässt sich per
+„Zur Objektliste“ (mit Umriss als Fläche, sonst als Punkt) oder „Als Einsatzort setzen“ übernehmen. Bei Orten, Ortsteilen und Landkreisen zeigt die Karte zusätzlich den Umriss,
+sofern er in OpenStreetMap als Grenze erfasst ist (manche Ortsteile sind dort nur ein Punkt). Koordinaten erkennt ELVIS selbst, auch ohne Internet: Dezimalgrad
+(`52.70986, 8.50425`), Grad/Minuten/Sekunden (`N 52° 42.591' E 8° 30.255'`), UTM (`32U 466507 5840110`) und
+UTMREF/MGRS (`32U MD 66507 40110`). Gesucht wird über den Server (`GET /api/map/search`):
+
+1. Läuft das Addon **Ortssuche** (eigenes Nominatim mit den OSM-Daten der gewählten Region), fragt ELVIS zuerst dort –
+   Suche und Umrisse funktionieren dann komplett offline.
+2. Findet es nichts (Nominatim erkennt halb getippte Wörter oft nicht) oder läuft kein Addon, fragt ELVIS den
+   öffentlichen Dienst [photon.komoot.io](https://photon.komoot.io), einstellbar über `"map": { "geocoderUrl": "…" }`
+   (`null` = nur lokal). Treffer bleiben einen Tag im Speicher und helfen auch bei kurzen Ausfällen.
+3. Umrisse ohne Addon kommen vom öffentlichen Nominatim (`"map": { "outlineUrl": "…" }`, höchstens eine Anfrage je
+   Sekunde). Jeder geladene Umriss bleibt in `data/outlines/` und steht danach auch offline zur Verfügung.
+
 **Lagekarte drucken:** Auf der Karte öffnet „Drucken“ einen Dialog mit Format (A4/A3/A2/A1), Ausrichtung,
 Zoomstufe (mit Maßstabsangabe) und Kartenstil. In der Vorschau wird der Ausschnitt gewählt, indem man die Karte
-unter dem Druckrahmen verschiebt. Fahrzeugstandort, Einsatzort und Ausbreitung lassen sich einzeln zuschalten.
+unter dem Druckrahmen verschiebt. Fahrzeugstandort, Einsatzort und die sichtbaren Kartenobjekte lassen sich
+einzeln zuschalten.
 Das PDF entsteht auf dem Server (`POST /api/print/map`): Die Kacheln werden direkt eingebettet, Markierungen und
 Ausbreitung als Vektorgrafik. Dazu kommen ein Infokasten mit Titel, DTG, Maßstab, Maßstabsleiste, Legende, Wind
 und Quellenangabe sowie ein Nordpfeil. Jeder Druck wird im Bedienprotokoll vermerkt.
@@ -233,14 +259,16 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
 - **Szenen je Bildschirm:** Die aktuelle Anordnung lässt sich als Szene speichern, z. B. „Anfahrt“, „Lage“ oder
   „Kameras“. Ein Klick auf die Szene stellt den Bildschirm sofort um. Die gerade angezeigte Szene erkennt ELVIS am
   Inhalt. Nach Änderungen im Editor steht „Anordnung geändert“, bis man neu speichert oder eine Szene überschreibt.
-  Szenen lassen sich umbenennen, überschreiben, sortieren und löschen. Sie bleiben unabhängig vom Einsatz erhalten,
+  Szenen lassen sich umbenennen, überschreiben, sortieren und löschen. Admins können eine Szene im Verwalten-Dialog
+  per Schloss schützen; sie lässt sich dann weder überschreiben noch löschen (umbenennen und aufrufen geht weiter). Sie bleiben unabhängig vom Einsatz erhalten,
   und jede Aktion landet im Bedienprotokoll. Beim Entkoppeln eines Bildschirms werden seine Szenen gelöscht.
 - **Kacheln:** Lagekarte (Fahrzeug und Einsatzort, Kartenstil, Mittelpunkt, Mitführen, Zoom), Kamera (Livebild),
-  Wetter, Uhr (DTG), Meldungen, Netzwerk (Router/Failover). Am Bildschirm bleiben sie bedienbar, z. B. lässt sich die
-  Karte per Touch verschieben und zoomen. Unter „Bildschirme“ steuert „Karte steuern“ die Kartenkacheln aus der
-  Vorschau fern. Ohne Mitführen behält der Bildschirm den zuletzt eingestellten Ausschnitt, auch nach „Neu laden“.
+  Wetter, Uhr (DTG), Meldungen, Netzwerk (Router/Failover), Gast-WLAN (QR-Code, Netzname und Passwort des Gastnetzes
+  im laufenden Einsatz, siehe „WLAN“). Eine mitgeführte Karte folgt Fahrzeug bzw. Einsatzort und
+  lässt sich nicht verschieben. Ohne Mitführen lässt sie sich am Bildschirm per Touch und unter „Bildschirme“ direkt in
+  der Vorschau verschieben und zoomen – der Bildschirm folgt und behält den Ausschnitt, auch nach „Neu laden“.
 - **Rechte:** Gekoppelte Bildschirme dürfen ohne Benutzeranmeldung zusätzlich den laufenden Einsatz lesen (für den
-  Einsatzort auf der Karte), sonst nur, was auch anonyme Arbeitsplätze sehen.
+  Einsatzort auf der Karte) und das Gastnetz (Kachel „Gast-WLAN“), sonst nur, was auch anonyme Arbeitsplätze sehen.
 - **Kiosk-Browser:** mit dauerhaftem Profil starten, nicht im Inkognito-Modus, sonst geht die Kopplung bei jedem
   Neustart verloren. Beispiel: `chromium --kiosk --noerrdialogs --disable-session-crashed-bubble http://<elvis>:8080/bildschirm`.
 - **Smart-TV / Android:** Die App [ELVIS Bildschirm](https://github.com/tel-diepholz/elvis-tv) zeigt `/bildschirm` im
@@ -275,6 +303,36 @@ zeigt Modell und Funktionen der Kamera.
   Die Einträge bleiben dem alten Einsatz zugeordnet.
 - Für Zoom und Fokus über die Optics Control API und für Tag/Nacht über `param.cgi` braucht ELVIS ein Kamerakonto mit
   Administratorrechten. Für das Livebild reicht ein Konto mit geringeren Rechten.
+
+### WLAN (OpenWrt-Accesspoints)
+
+Unter **System → WLAN-Accesspoints** (nur Admins) beliebig viele OpenWrt-Geräte anlegen: Adresse, Konto (meist
+`root`), das Netz für das Betriebs-WLAN (meist `lan`) und die **Gastnetz-Bridge** (z. B. `br-guests`). Angegeben
+werden kann jeweils eine OpenWrt-Schnittstelle (`lan`), eine Bridge (`br-lan`) oder ein Bridge-Port (`eth0`). Die Bridge
+muss auf dem AP bereits eingerichtet sein; hat sie noch keine Schnittstelle (nur unter *Netzwerk → Geräte* angelegt),
+legt ELVIS dafür die Schnittstelle `elvis_guest` (ohne IP) an und entfernt sie mit dem Gastnetz wieder. Leer = auf
+diesem AP kein Gastnetz.
+
+- **Zugriff:** wie LuCI über ubus/JSON-RPC (`/ubus`, Paket `uhttpd-mod-ubus`, bei LuCI dabei); Änderungen werden mit
+  `uci apply` übernommen (das root-Konto von LuCI darf kein `uci commit`). ELVIS legt je Funkmodul
+  eigene WLANs an (`elvis_ops_<radio>`, `elvis_guest_<radio>`, WPA2), schaltet ausgeschaltete Funkmodule ein und lässt
+  alle anderen WLANs unverändert. Geschrieben und neu geladen wird nur bei Abweichungen; der Abgleich läuft bei jeder
+  Änderung und jede Minute (holt zurückgesetzte APs wieder auf den Sollstand). „Jetzt übertragen“ stößt ihn sofort an.
+- **Betriebs-WLAN** (System → WLAN): Netzname und Passwort, dauerhaft auf allen aktiven APs.
+- **Gastnetz:** einschaltbar mit eigenem Netznamen. Sobald ein Einsatz eröffnet ist, richtet ELVIS es auf allen APs
+  mit Gastnetz-Bridge ein – Netzname mit angehängter Einsatznummer (`Gast-12`), Passwort je Einsatz neu erzeugt, Clients
+  untereinander abgeschottet. Mit Ende des Einsatzes verschwindet es wieder.
+- **Fahrzeugmodul „WLAN-Accesspoints“** (Treiber *OpenWrt*, unter *System → Fahrzeugmodule*): fragt alle aktiven APs
+  im Hintergrund ab (Vorgabe alle 10 s, `iwinfo assoclist`, Zuordnung der WLANs über `luci-rpc`) und schreibt die
+  angemeldeten Geräte in die Tabelle `wifi_clients` – nur der aktuelle Stand, abgemeldete Geräte verschwinden. Unter
+  *Netzwerk* zeigen zwei Tabellen (nur angemeldet) daraus die Geräte im Betriebs-WLAN und im Gastnetz mit AP, Band,
+  Signal, Datenrate und Verbindungsdauer. Namen und IPs kommen aus den Host-Hinweisen des APs und, falls das Modul
+  ELW-Router läuft, aus dessen DHCP-Leases.
+- **Alarm:** Antwortet ein AP nicht, meldet das Modul „Accesspoint … nicht erreichbar“ (Alarm); seine Geräte bleiben
+  bis zur nächsten erfolgreichen Abfrage mit dem letzten Stand stehen.
+- Entfernte oder deaktivierte APs fasst ELVIS nicht mehr an; dort bereits eingerichtete WLANs bleiben bestehen.
+- Ergebnis und Fehler je AP (nicht erreichbar, Anmeldung abgelehnt, Gastnetz-Bridge fehlt) stehen in der Liste;
+  Übertragungen und neue Fehler im Bedienprotokoll.
 
 ### Wetterstation Airmar 150WX (NMEA 2000 über Actisense NGX-1)
 
@@ -429,6 +487,8 @@ provides:                                 # Integration in ELVIS
 - Fehlt dem Zielhost das Internet, überträgt ELVIS das Image von einem anderen Host (`docker save` → `docker load`).
   Eine Registry ist nicht nötig.
 - Laufende Addons mit `provides.mapSources` erscheinen automatisch als Kartenstil auf der Karte und im Druck.
+  `provides.geocoders` (`{ id, name, type: photon|nominatim, url }`) ersetzt den öffentlichen Suchdienst der
+  Ortssuche; bei Nominatim auch für Umrisse. `shmSize` (z. B. `"1g"`) vergrößert `/dev/shm`, etwa für PostgreSQL.
 
 **Labor:** `npm run test:lab` startet ELVIS und zwei Docker-Daemons (dind) und prüft den kompletten Ablauf gegen
 echte Docker-APIs: TLS, Installation, Neukonfiguration, Job, Protokolle, Image-Übertragung, Deinstallation.

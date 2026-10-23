@@ -9,6 +9,8 @@ export interface Incident {
   /** Einsatzort auf der Karte, optional. */
   lat: number | null;
   lon: number | null;
+  /** Eigenes Fahrzeug auf der Karte zeigen (in der Objektliste ausblendbar) */
+  vehicleVisible: boolean;
   startedAt: string;
   closedAt: string | null;
 }
@@ -22,7 +24,7 @@ export interface NewIncident {
   lon?: number | null;
 }
 
-export type IncidentPatch = Partial<NewIncident>;
+export type IncidentPatch = Partial<NewIncident> & { vehicleVisible?: boolean };
 
 export type JournalCategory =
   | 'lage'

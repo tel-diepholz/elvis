@@ -38,6 +38,7 @@ interface SceneRow {
   sort: number;
   updated_at: string;
   updated_by: string;
+  locked: number;
 }
 
 /** Vergleich unabhängig von Reihenfolge der Kacheln und Schlüssel */
@@ -73,7 +74,7 @@ export class DisplayService {
     const scenes = this.sceneRows(r.id);
     const current = layoutKey(layout);
     return {
-      scenes: scenes.map((s): DisplayScene => ({ id: s.id, name: s.name, tiles: (JSON.parse(s.layout) as DisplayLayout).tiles.length, updatedAt: s.updated_at, updatedBy: s.updated_by })),
+      scenes: scenes.map((s): DisplayScene => ({ id: s.id, name: s.name, tiles: (JSON.parse(s.layout) as DisplayLayout).tiles.length, updatedAt: s.updated_at, updatedBy: s.updated_by, locked: s.locked === 1 })),
       activeSceneId: scenes.find((s) => layoutKey(JSON.parse(s.layout) as DisplayLayout) === current)?.id ?? null,
       mapViews: Object.fromEntries([...(this.mapViews.get(r.id) ?? [])].filter(([tileId]) => layout.tiles.some((t) => t.id === tileId))),
       id: r.id,
@@ -173,6 +174,10 @@ export class DisplayService {
     return s;
   }
 
+  private unlocked(row: SceneRow, what: string): void {
+    if (row.locked) throw new HttpError(409, `Szene „${row.name}“ ist geschützt und lässt sich nicht ${what}`);
+  }
+
   /** Aktuelle Anordnung als neue Szene speichern */
   saveScene(displayId: string, name: string, actor: string): DisplayScene {
     const d = this.get(displayId);
@@ -188,6 +193,7 @@ export class DisplayService {
   updateScene(displayId: string, sceneId: number, patch: { name?: string; overwrite?: boolean }, actor: string): DisplayScene {
     const d = this.get(displayId);
     const row = this.scene(displayId, sceneId);
+    if (patch.overwrite) this.unlocked(row, 'überschreiben');
     const name = patch.name?.trim() ?? row.name;
     if (d.scenes.some((s) => s.id !== sceneId && s.name.toLowerCase() === name.toLowerCase())) throw new HttpError(409, `Szene „${name}“ gibt es schon`);
     this.db
@@ -199,7 +205,16 @@ export class DisplayService {
 
   removeScene(displayId: string, sceneId: number): string {
     const row = this.scene(displayId, sceneId);
+    this.unlocked(row, 'löschen');
     this.db.prepare('DELETE FROM display_scenes WHERE id = ?').run(sceneId);
+    this.changed();
+    return row.name;
+  }
+
+  /** Szene schützen bzw. freigeben; liefert ihren Namen */
+  lockScene(displayId: string, sceneId: number, locked: boolean): string {
+    const row = this.scene(displayId, sceneId);
+    this.db.prepare('UPDATE display_scenes SET locked = ? WHERE id = ?').run(locked ? 1 : 0, sceneId);
     this.changed();
     return row.name;
   }

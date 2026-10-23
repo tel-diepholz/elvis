@@ -252,6 +252,23 @@ export interface CameraPreset {
   createdBy: string;
 }
 
+// --- WLAN-Accesspoints (OpenWrt) ---
+
+/** Erreichbarkeit eines APs laut letzter Abfrage der angemeldeten Geräte */
+export interface WifiApLive {
+  id: string;
+  name: string;
+  online: boolean;
+  error: string | null;
+  /** Angemeldete Geräte je Netz */
+  clients: { ops: number; guest: number };
+}
+
+/** Die Geräte selbst stehen in der Tabelle wifi_clients (GET /api/wifi/clients), nicht im Zustand */
+export interface WifiState {
+  aps: WifiApLive[];
+}
+
 // --- Videoquellen aus Addons (z. B. NDI-Gateway) ---
 
 export type VideoStreamState = 'starting' | 'running' | 'error';
@@ -339,13 +356,14 @@ export interface DeviceStateMap {
   network: NetworkState;
   router: RouterState;
   cameras: CamerasState;
+  wifi: WifiState;
   media: MediaState;
   weather: WeatherState;
 }
 
 export type DeviceId = keyof DeviceStateMap;
 
-export const DEVICE_IDS: readonly DeviceId[] = ['router', 'cameras', 'radio', 'network', 'media', 'weather'];
+export const DEVICE_IDS: readonly DeviceId[] = ['router', 'wifi', 'cameras', 'radio', 'network', 'media', 'weather'];
 
 export interface DeviceSnapshot<K extends DeviceId = DeviceId> {
   id: K;

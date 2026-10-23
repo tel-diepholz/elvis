@@ -14,7 +14,9 @@ describe('Migrationen', () => {
       const legacy = new Database(join(dir, 'elvis.sqlite'));
       legacy.exec('ALTER TABLE addons DROP COLUMN manifest');
       legacy.exec('DROP TABLE addon_job_runs'); // entstand erst mit v6
-      legacy.exec('DROP TABLE camera_presets; DROP TABLE cameras; DROP TABLE display_scenes; DROP TABLE displays'); // v8–v10
+      legacy.exec('DROP TABLE camera_presets; DROP TABLE cameras; DROP TABLE display_scenes; DROP TABLE displays; DROP TABLE map_objects'); // v8–v12
+      legacy.exec('ALTER TABLE incidents DROP COLUMN vehicle_visible'); // v13
+      legacy.exec('DROP TABLE wifi_clients; DROP TABLE wifi_aps'); // v15–v16
       legacy.pragma('user_version = 4');
       legacy.close();
 

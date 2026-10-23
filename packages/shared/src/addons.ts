@@ -68,6 +68,8 @@ const runSpec = {
   devices: z.array(z.object({ path: z.string().regex(/^\/dev\/[\w./-]+$/, 'Gerätepfad unter /dev'), when: whenSchema.optional() })).default([]),
   /** NVIDIA-GPU anfordern (NVIDIA Container Toolkit auf dem Host nötig) – optional nur bei passender Option */
   gpus: z.object({ when: whenSchema.optional() }).optional(),
+  /** Größe von /dev/shm, z. B. "1g" oder "{{options.shm}}" (Docker-Vorgabe 64 MB; PostgreSQL braucht oft mehr) */
+  shmSize: templated.optional(),
 };
 
 const containerSchema = z.object({
@@ -94,7 +96,24 @@ const containerSchema = z.object({
  */
 const progressSchema = z.object({
   phases: z
-    .array(z.object({ match: z.string().min(1), percent: z.number().min(0).max(100), label: z.string().max(80).optional() }))
+    .array(
+      z.object({
+        // Wird zu new RegExp(match) – ungültige Muster (z. B. „(?i)“) schon beim Laden des Manifests melden
+        match: z
+          .string()
+          .min(1)
+          .refine((m) => {
+            try {
+              new RegExp(m);
+              return true;
+            } catch {
+              return false;
+            }
+          }, 'Ungültiger regulärer Ausdruck (JavaScript-Syntax)'),
+        percent: z.number().min(0).max(100),
+        label: z.string().max(80).optional(),
+      }),
+    )
     .default([]),
   /** Prozentangaben in Logzeilen („42%“) verfeinern den Fortschritt innerhalb einer Phase. */
   inlinePercent: z.boolean().default(false),
@@ -121,6 +140,7 @@ const jobSchema = z
     capabilities: runSpec.capabilities,
     devices: runSpec.devices,
     gpus: runSpec.gpus,
+    shmSize: runSpec.shmSize,
     progress: progressSchema.optional(),
     // … oder mehrere Schritte nacheinander
     steps: z.array(stepSchema).min(1).optional(),
@@ -158,6 +178,15 @@ const mapSourceProvision = z.object({
   variant: z.enum(['light', 'dark', 'print']).optional(),
 });
 
+/** Ortssuche: Photon (GET <url>/api?q=…) oder Nominatim (GET <url>/search, Umrisse über /lookup) */
+const geocoderProvision = z.object({
+  id: slug,
+  name: z.string().min(1),
+  type: z.enum(['photon', 'nominatim']).default('photon'),
+  /** Basisadresse, z. B. http://{{host.address}}:8088 */
+  url: templated,
+});
+
 export const addonManifestSchema = z
   .object({
     id: slug,
@@ -170,7 +199,13 @@ export const addonManifestSchema = z
     options: z.record(z.string().regex(/^[a-z][a-zA-Z0-9_]*$/), addonOptionSchema).default({}),
     containers: z.array(containerSchema).min(1),
     jobs: z.record(slug, jobSchema).default({}),
-    provides: z.object({ mapSources: z.array(mapSourceProvision).default([]), videoSources: z.array(videoSourceProvision).default([]) }).default({}),
+    provides: z
+      .object({
+        mapSources: z.array(mapSourceProvision).default([]),
+        videoSources: z.array(videoSourceProvision).default([]),
+        geocoders: z.array(geocoderProvision).default([]),
+      })
+      .default({}),
     /**
      * Images, die ELVIS beim Installieren auf dem Zielhost aus dem Addon baut (Docker-API). Kontext ist ein
      * Unterordner von files/; Container und Job-Schritte verweisen mit „build:<name>“ darauf.
@@ -218,7 +253,7 @@ export type AddonProgressSpec = z.infer<typeof progressSchema>;
 /** Schritte eines Jobs – ein einfacher Job ist ein einzelner Schritt. */
 export function jobSteps(j: AddonJob): AddonJobStep[] {
   if (j.steps) return j.steps;
-  return [{ label: j.label, image: j.image!, command: j.command, env: j.env, volumes: j.volumes, network: j.network, capabilities: j.capabilities, devices: j.devices, gpus: j.gpus, weight: 1, progress: j.progress }];
+  return [{ label: j.label, image: j.image!, command: j.command, env: j.env, volumes: j.volumes, network: j.network, capabilities: j.capabilities, devices: j.devices, gpus: j.gpus, shmSize: j.shmSize, weight: 1, progress: j.progress }];
 }
 
 /** Versionsvergleich „1.2.3“ (Zusätze wie „-beta“ zählen niedriger als die reine Version): <0, 0, >0 */

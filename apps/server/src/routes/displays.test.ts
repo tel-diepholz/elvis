@@ -7,7 +7,7 @@ import WebSocket from 'ws';
 import type { DisplayDevice, DisplaySelf, ServerMessage } from '@elvis/shared';
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
-import { adminCookie } from '../test-helpers.js';
+import { adminCookie, sessionCookie } from '../test-helpers.js';
 
 let app: App;
 let dataDir: string;
@@ -216,6 +216,22 @@ describe('Bildschirme: Szenen', () => {
 
     const audit = (await req<{ message: string }[]>('GET', '/api/audit')).body.map((a) => a.message);
     expect(audit).toEqual(expect.arrayContaining(['Lagetisch: Szene „Lage“ gespeichert', 'Lagetisch: Szene „Lage“ angezeigt', 'Lagetisch: Szene „Lage“ mit aktueller Anordnung überschrieben', 'Lagetisch: Szene „Kameras“ gelöscht']));
+
+    // Schutz: nur Admins schalten um; geschützt weder überschreiben noch löschen, umbenennen und aufrufen geht
+    const lageId = s1.body.id;
+    const user = await req<{ id: number }>('POST', '/api/users', { firstName: 'Anna', lastName: 'Test', pin: '1111' });
+    const login = await app.server.inject({ method: 'POST', url: '/api/auth/login', payload: { userId: user.body.id, pin: '1111' } });
+    const anna = sessionCookie(login.headers['set-cookie']);
+    expect((await req('PUT', `/api/displays/${display.id}/scenes/${lageId}/lock`, { locked: true }, anna)).status).toBe(403);
+    const locked = await req<DisplayDevice>('PUT', `/api/displays/${display.id}/scenes/${lageId}/lock`, { locked: true });
+    expect(locked.body.scenes.find((s) => s.id === lageId)?.locked).toBe(true);
+    expect((await req<{ error: string }>('PUT', `/api/displays/${display.id}/scenes/${lageId}`, { overwrite: true }, anna)).body.error).toMatch(/geschützt/);
+    expect((await req('PUT', `/api/displays/${display.id}/scenes/${lageId}`, { overwrite: true })).status).toBe(409);
+    expect((await req('DELETE', `/api/displays/${display.id}/scenes/${lageId}`)).status).toBe(409);
+    expect((await req('PUT', `/api/displays/${display.id}/scenes/${lageId}`, { name: 'Lage' }, anna)).status).toBe(200);
+    expect((await req('POST', `/api/displays/${display.id}/scenes/${lageId}/apply`, undefined, anna)).status).toBe(200);
+    await req('PUT', `/api/displays/${display.id}/scenes/${lageId}/lock`, { locked: false });
+    expect((await req('PUT', `/api/displays/${display.id}/scenes/${lageId}`, { overwrite: true }, anna)).status).toBe(200);
 
     // Entkoppeln löscht auch die Szenen
     await req('DELETE', `/api/system/displays/${display.id}`);

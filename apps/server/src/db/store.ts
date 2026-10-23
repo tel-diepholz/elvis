@@ -5,6 +5,7 @@ import type {
   IncidentPatch,
   JournalCategory,
   JournalEntry,
+  MapObject,
   NewIncident,
   NewJournalEntry,
   NewUnit,
@@ -22,6 +23,7 @@ const toIncident = (r: Row): Incident => ({
   leader: r.leader as string,
   lat: (r.lat as number | null) ?? null,
   lon: (r.lon as number | null) ?? null,
+  vehicleVisible: r.vehicle_visible !== 0,
   startedAt: r.started_at as string,
   closedAt: (r.closed_at as string | null) ?? null,
 });
@@ -54,6 +56,21 @@ const toUnit = (r: Row): Unit => ({
   releasedAt: (r.released_at as string | null) ?? null,
   updatedAt: r.updated_at as string,
 });
+
+const toMapObject = (r: Row): MapObject =>
+  ({
+    id: r.id as number,
+    incidentId: r.incident_id as number,
+    kind: r.kind,
+    name: r.name as string,
+    lat: r.lat as number,
+    lon: r.lon as number,
+    visible: r.visible === 1,
+    color: (r.color as string | null) ?? null,
+    data: JSON.parse(r.data as string),
+    createdAt: r.created_at as string,
+    createdBy: r.created_by as string,
+  }) as MapObject;
 
 const toDocument = (r: Row): IncidentDocument & { storageName: string } => ({
   id: r.id as number,
@@ -126,8 +143,19 @@ export class Store {
     const current = this.incident(id)!;
     const next = { ...current, ...patch };
     this.db
-      .prepare('UPDATE incidents SET keyword=@keyword, title=@title, location=@location, leader=@leader, lat=@lat, lon=@lon WHERE id=@id')
-      .run({ id, keyword: next.keyword, title: next.title, location: next.location, leader: next.leader, lat: next.lat ?? null, lon: next.lon ?? null });
+      .prepare(
+        'UPDATE incidents SET keyword=@keyword, title=@title, location=@location, leader=@leader, lat=@lat, lon=@lon, vehicle_visible=@vehicleVisible WHERE id=@id',
+      )
+      .run({
+        id,
+        keyword: next.keyword,
+        title: next.title,
+        location: next.location,
+        leader: next.leader,
+        lat: next.lat ?? null,
+        lon: next.lon ?? null,
+        vehicleVisible: next.vehicleVisible ? 1 : 0,
+      });
     return this.incident(id)!;
   }
 
@@ -228,6 +256,39 @@ export class Store {
         updatedAt: now(),
       });
     return this.unit(u.id)!;
+  }
+
+  // --- Kartenobjekte ---
+
+  mapObjects(incidentId: number): MapObject[] {
+    return (this.db.prepare('SELECT * FROM map_objects WHERE incident_id = ? ORDER BY id').all(incidentId) as Row[]).map(toMapObject);
+  }
+
+  mapObject(id: number): MapObject | null {
+    const r = this.db.prepare('SELECT * FROM map_objects WHERE id = ?').get(id) as Row | undefined;
+    return r ? toMapObject(r) : null;
+  }
+
+  addMapObject(incidentId: number, o: Pick<MapObject, 'kind' | 'name' | 'lat' | 'lon' | 'data'>, author: string): MapObject {
+    const ts = now();
+    const info = this.db
+      .prepare(
+        `INSERT INTO map_objects (incident_id, kind, name, lat, lon, visible, data, created_at, created_by, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+      )
+      .run(incidentId, o.kind, o.name, o.lat, o.lon, JSON.stringify(o.data), ts, author, ts);
+    return this.mapObject(Number(info.lastInsertRowid))!;
+  }
+
+  saveMapObject(o: MapObject): MapObject {
+    this.db
+      .prepare('UPDATE map_objects SET name = ?, lat = ?, lon = ?, visible = ?, color = ?, data = ?, updated_at = ? WHERE id = ?')
+      .run(o.name, o.lat, o.lon, o.visible ? 1 : 0, o.color, JSON.stringify(o.data), now(), o.id);
+    return this.mapObject(o.id)!;
+  }
+
+  removeMapObject(id: number): void {
+    this.db.prepare('DELETE FROM map_objects WHERE id = ?').run(id);
   }
 
   // --- Dokumente ---

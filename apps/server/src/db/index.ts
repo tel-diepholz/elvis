@@ -216,6 +216,65 @@ const MIGRATIONS: Migration[] = [
   );
   CREATE INDEX display_scenes_display ON display_scenes(display_id, sort);
   `,
+  // Kartenobjekte je Einsatz (übernommene Suchtreffer, Ausbreitungen); data = JSON je Art
+  `
+  CREATE TABLE map_objects (
+    id INTEGER PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    lat REAL NOT NULL,
+    lon REAL NOT NULL,
+    visible INTEGER NOT NULL DEFAULT 1,
+    data TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX map_objects_incident ON map_objects(incident_id);
+  `,
+  // Eigene Farbe je Kartenobjekt (NULL = Vorgabe der Objektart)
+  `ALTER TABLE map_objects ADD COLUMN color TEXT;`,
+  // Eigenes Fahrzeug auf der Karte des Einsatzes ein-/ausblenden (Objektliste)
+  `ALTER TABLE incidents ADD COLUMN vehicle_visible INTEGER NOT NULL DEFAULT 1;`,
+  // Szenen schützen (nur Admins): geschützte lassen sich weder überschreiben noch löschen
+  `ALTER TABLE display_scenes ADD COLUMN locked INTEGER NOT NULL DEFAULT 0;`,
+  // OpenWrt-Accesspoints für Betriebs-WLAN und Gastnetz (Systemeinstellungen)
+  `
+  CREATE TABLE wifi_aps (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    host TEXT NOT NULL,
+    protocol TEXT NOT NULL,
+    username TEXT NOT NULL,
+    password TEXT NOT NULL,
+    verify_tls INTEGER NOT NULL,
+    ops_network TEXT NOT NULL,
+    guest_network TEXT NOT NULL,
+    enabled INTEGER NOT NULL,
+    sort INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  `,
+  // Am WLAN angemeldete Geräte, alle 10 s von den APs abgefragt (nur der aktuelle Stand, kein Verlauf)
+  `
+  CREATE TABLE wifi_clients (
+    ap_id TEXT NOT NULL REFERENCES wifi_aps(id) ON DELETE CASCADE,
+    mac TEXT NOT NULL,
+    network TEXT NOT NULL,
+    ssid TEXT NOT NULL,
+    band TEXT,
+    name TEXT,
+    ip TEXT,
+    signal_dbm INTEGER,
+    rx_rate_kbps INTEGER,
+    tx_rate_kbps INTEGER,
+    connected_sec INTEGER,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    PRIMARY KEY (ap_id, mac, network)
+  );
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

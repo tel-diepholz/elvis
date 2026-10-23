@@ -120,7 +120,10 @@ export interface MapSource {
 }
 
 export interface PrintMarker {
-  kind: 'vehicle' | 'incident';
+  /** Fahrzeug (taktisches Zeichen), Einsatzort, Kartenobjekt (Punkt aus der Objektliste) */
+  kind: 'vehicle' | 'incident' | 'point';
+  /** Farbe eines Punkts (#rrggbb), sonst Blau */
+  color?: string;
   lat: number;
   lon: number;
   label: string;

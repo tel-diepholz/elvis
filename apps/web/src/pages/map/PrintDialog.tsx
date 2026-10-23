@@ -13,6 +13,8 @@ import {
   niceScale,
   printFrame,
   type Incident,
+  objectColor,
+  type MapObject,
   type MapPrintRequest,
   type MapSource,
   type Orientation,
@@ -24,7 +26,8 @@ import { useToast } from '../../lib/toast';
 import { useSettings } from '../../lib/hooks';
 import { tacticalIcon } from '../../components/tactical/TacticalSign';
 import { Field, Segmented, Toggle } from '../../components/ui';
-import { LEVELS, dispersionSector, fmtDistance, fmtExp, type DispersionSettings, type PlumeResult } from './dispersion';
+import { computePlume, dispersionSector, fmtDistance, fmtExp, type Wind } from '../../components/map/dispersion';
+import { MapObjectsLayer } from '../../components/map/objects';
 
 const incidentIcon = L.divIcon({ className: 'map-marker incident', html: '<span>!</span>', iconSize: [30, 30], iconAnchor: [15, 15] });
 
@@ -38,12 +41,56 @@ export interface PrintDialogProps {
   /** null, solange kein Fahrzeugstandort (GPS) bekannt ist. */
   vehicle: (LatLon & { name: string }) | null;
   incident: Incident | null;
+  /** Kartenobjekte des Einsatzes; gedruckt werden die sichtbaren */
+  objects: MapObject[];
   /** Wind für Ausbreitung und Hinweis (nur wenn Geschwindigkeit und Richtung bekannt sind). */
-  wind: { windSpeedMs: number; windDirectionDeg: number } | undefined;
+  wind: Wind | undefined;
   weatherGustMs: number | null;
-  settings: DispersionSettings;
-  plume: PlumeResult | null;
   onDone: () => void;
+}
+
+/** Ring auf höchstens max Punkte ausdünnen (Druckanfrage begrenzt die Punkte je Fläche) */
+function thin<T>(points: T[], max = 2000): T[] {
+  if (points.length <= max) return points;
+  const step = points.length / max;
+  return Array.from({ length: max }, (_, i) => points[Math.floor(i * step)]!);
+}
+
+/** Sichtbare Kartenobjekte als Markierungen, Flächen, Legende und Hinweise für den PDF-Druck */
+function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: Date) {
+  const markers: MapPrintRequest['markers'] = [];
+  const polygons: MapPrintRequest['polygons'] = [];
+  const legend: MapPrintRequest['legend'] = [];
+  const notes: string[] = [];
+  for (const o of objects.filter((x) => x.visible)) {
+    const color = objectColor(o);
+    if (o.kind === 'point') markers.push({ kind: 'point', lat: o.lat, lon: o.lon, label: o.name, color });
+    if (o.kind === 'area') {
+      const outers = o.data.outline.type === 'Polygon' ? [o.data.outline.coordinates[0]!] : o.data.outline.coordinates.map((p) => p[0]!);
+      for (const ring of outers) polygons.push({ points: thin(ring.map(([lon, lat]) => [lat!, lon!] as [number, number])), stroke: color, fill: color, fillOpacity: 0.08, dashed: true });
+      legend.push({ color, label: o.name });
+    }
+    if (o.kind === 'sector' && weather) {
+      polygons.push({ points: dispersionSector(o.lat, o.lon, weather.windDirectionDeg, o.data.sectorM), stroke: color, fill: color, fillOpacity: 0.22, dashed: true });
+      legend.push({ color, label: `${o.name}: Schemasektor 60° in Windrichtung (${fmtDistance(o.data.sectorM)})` });
+    }
+    if (o.kind === 'gauss') {
+      const plume = computePlume(o.data, o, weather, now);
+      if (!plume) continue;
+      for (const { level, polygon } of plume.contours) {
+        polygons.push({ points: polygon, stroke: level.path.color, fill: level.path.fillColor, fillOpacity: level.path.fillOpacity, dashed: 'dashArray' in level.path });
+      }
+      const rate = o.data.releaseRateKgS;
+      for (const { level, contour } of plume.contours.slice().reverse()) {
+        const value = rate ? `${fmtNum(level.threshold * rate * 1e6, 0)} mg/m³` : `${fmtExp(level.threshold)} s/m³`;
+        legend.push({ color: level.path.color, label: `${o.name}: ${level.label} ≥ ${value} – bis ${contour.truncated ? '> ' : ''}${fmtDistance(contour.maxDistanceM)}` });
+      }
+      notes.push(
+        `${o.name}: Gauß-Fahne, Klasse ${plume.stability} (${KLUG_MANIER[plume.stability].label}), ${TERRAIN_LABELS[o.data.terrain]}, Quellhöhe ${o.data.sourceHeightM} m${rate ? `, Freisetzung ${fmtNum(rate, 2)} kg/s` : ''}. Nur Orientierung – keine Grundlage für Grenzwertentscheidungen.`,
+      );
+    }
+  }
+  return { markers, polygons, legend, notes };
 }
 
 /** Hält den Druckmittelpunkt in der Mitte der Vorschaukarte – der Rahmen bleibt stehen, die Karte wird verschoben. */
@@ -85,7 +132,7 @@ function download(blob: Blob, filename: string) {
 }
 
 export function PrintDialog(props: PrintDialogProps) {
-  const { sources, vehicle, incident, wind: weather, weatherGustMs, settings, plume } = props;
+  const { sources, vehicle, incident, objects, wind: weather, weatherGustMs } = props;
   const mapSign = useSettings().data?.mapSign ?? DEFAULT_VEHICLE_SIGN;
   const vehicleIcon = useMemo(() => tacticalIcon(mapSign, 36), [mapSign]);
   const toast = useToast();
@@ -98,10 +145,10 @@ export function PrintDialog(props: PrintDialogProps) {
   const [center, setCenter] = useState<LatLon>(props.initialCenter);
   const [title, setTitle] = useState(incident ? [incident.keyword, incident.title].filter(Boolean).join(' · ') : 'Lagekarte');
   const hasIncidentPos = incident?.lat != null && incident.lon != null;
-  const hasDispersion = hasIncidentPos && !!weather && settings.mode !== 'off';
-  const [withVehicle, setWithVehicle] = useState(!!props.vehicle);
+  const visibleObjects = objects.filter((o) => o.visible);
+  const [withVehicle, setWithVehicle] = useState(!!props.vehicle && (incident?.vehicleVisible ?? true));
   const [withIncident, setWithIncident] = useState(hasIncidentPos);
-  const [withDispersion, setWithDispersion] = useState(hasDispersion);
+  const [withObjects, setWithObjects] = useState(visibleObjects.length > 0);
 
   const frame = useMemo(() => printFrame(center, zoom, paper, orientation), [center, zoom, paper, orientation]);
   const b = frame.bounds;
@@ -109,9 +156,8 @@ export function PrintDialog(props: PrintDialogProps) {
     [b.south, b.west],
     [b.north, b.east],
   ];
+  const [previewTime] = useState(() => new Date());
   const tileCount = (Math.ceil(frame.widthPx / TILE_SIZE) + 1) * (Math.ceil(frame.heightPx / TILE_SIZE) + 1);
-
-  const sector = hasIncidentPos && weather && settings.mode === 'sector' ? dispersionSector(incident!.lat!, incident!.lon!, weather.windDirectionDeg, settings.sectorM) : null;
 
   const buildRequest = (): MapPrintRequest => {
     const now = new Date();
@@ -122,28 +168,18 @@ export function PrintDialog(props: PrintDialogProps) {
     const polygons: MapPrintRequest['polygons'] = [];
     const legend: MapPrintRequest['legend'] = [];
     const notes: string[] = [];
+    if (withObjects) {
+      const o = objectsForPrint(objects, weather, now);
+      markers.push(...o.markers);
+      polygons.push(...o.polygons);
+      legend.push(...o.legend);
+      notes.push(...o.notes);
+    }
     if (weather) {
       notes.push(
         `Wind ${fmtNum(weather.windSpeedMs)} m/s aus ${compass(weather.windDirectionDeg)} (${weather.windDirectionDeg}°)${weatherGustMs !== null ? `, Böen ${fmtNum(weatherGustMs)} m/s` : ''} – Stand ${fmtDtg(now)}`,
       );
     }
-    if (withDispersion && plume) {
-      for (const { level, polygon } of plume.contours) {
-        polygons.push({ points: polygon, stroke: level.path.color, fill: level.path.fillColor, fillOpacity: level.path.fillOpacity, dashed: 'dashArray' in level.path });
-      }
-      const rate = settings.releaseRateKgS;
-      for (const { level, contour } of plume.contours.slice().reverse()) {
-        const value = rate ? `${fmtNum(level.threshold * rate * 1e6, 0)} mg/m³` : `${fmtExp(level.threshold)} s/m³`;
-        legend.push({ color: level.path.color, label: `${level.label} ≥ ${value} – bis ${contour.truncated ? '> ' : ''}${fmtDistance(contour.maxDistanceM)}` });
-      }
-      notes.push(
-        `Ausbreitung: Gauß-Fahne, Klasse ${plume.stability} (${KLUG_MANIER[plume.stability].label}), ${TERRAIN_LABELS[settings.terrain]}, Quellhöhe ${settings.sourceHeightM} m${rate ? `, Freisetzung ${fmtNum(rate, 2)} kg/s` : ''}. Nur Orientierung – keine Grundlage für Grenzwertentscheidungen.`,
-      );
-    } else if (withDispersion && sector) {
-      polygons.push({ points: sector, stroke: '#e3a008', fill: '#e3a008', fillOpacity: 0.22, dashed: true });
-      legend.push({ color: '#e3a008', label: `Schemasektor 60° in Windrichtung (${fmtDistance(settings.sectorM)})` });
-    }
-
     return {
       paper,
       orientation,
@@ -223,12 +259,7 @@ export function PrintDialog(props: PrintDialogProps) {
         <div className="toggle-group">
           <Toggle label="Fahrzeugstandort" checked={withVehicle} onChange={setWithVehicle} disabled={!vehicle} />
           <Toggle label="Einsatzort" checked={withIncident} onChange={setWithIncident} disabled={!hasIncidentPos} />
-          <Toggle
-            label={settings.mode === 'sector' ? 'Ausbreitungssektor' : 'Ausbreitung (Gauß-Fahne)'}
-            checked={withDispersion}
-            onChange={setWithDispersion}
-            disabled={!hasDispersion}
-          />
+          <Toggle label={`Kartenobjekte (${visibleObjects.length})`} checked={withObjects} onChange={setWithObjects} disabled={!visibleObjects.length} />
         </div>
         <p className="muted print-summary">
           Ausschnitt {fmtDistance(frame.widthM)} × {fmtDistance(frame.heightM)} · ca. {tileCount} Kacheln. Karte in der Vorschau verschieben, um den Ausschnitt zu wählen.
@@ -243,10 +274,7 @@ export function PrintDialog(props: PrintDialogProps) {
           <TileLayer url={api.tileUrl(sourceId)} maxZoom={source.maxZoom} />
           <Polygon positions={mask} pathOptions={{ stroke: false, fillColor: '#000', fillOpacity: 0.4 }} interactive={false} />
           <Rectangle bounds={frameBounds} pathOptions={{ color: '#e53935', weight: 3, fill: false }} interactive={false} />
-          {withDispersion && plume?.contours.map(({ level, polygon }) => <Polygon key={level.threshold} positions={polygon} pathOptions={level.path} interactive={false} />)}
-          {withDispersion && sector && (
-            <Polygon positions={sector} pathOptions={{ color: '#e3a008', fillColor: '#e3a008', fillOpacity: 0.22, weight: 2, dashArray: '6 4' }} interactive={false} />
-          )}
+          {withObjects && <MapObjectsLayer objects={objects} wind={weather} now={previewTime} labels={false} />}
           {withVehicle && vehicle && <Marker position={[vehicle.lat, vehicle.lon]} icon={vehicleIcon} interactive={false} />}
           {withIncident && hasIncidentPos && <Marker position={[incident!.lat!, incident!.lon!]} icon={incidentIcon} interactive={false} />}
           <CenterSync onCenter={setCenter} />

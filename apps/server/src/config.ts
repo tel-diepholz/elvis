@@ -59,6 +59,16 @@ const configSchema = z.object({
       cacheMaxAgeDays: z.number().default(30),
       /** Pflichtangabe nach Tile-Usage-Policy von OpenStreetMap. */
       userAgent: z.string().default('ELVIS/0.1 (Einsatzleitwagen-Verwaltungssystem)'),
+      /**
+       * Öffentlicher Photon-Dienst für die Ortssuche, solange kein Addon „Ortssuche“ läuft (oder es ausfällt);
+       * null = nur lokal suchen.
+       */
+      geocoderUrl: z.string().url().nullable().default('https://photon.komoot.io'),
+      /**
+       * Öffentlicher Nominatim-Dienst für Ortsumrisse, solange kein Addon „Ortssuche“ läuft; geladene Umrisse
+       * bleiben im Datenverzeichnis (data/outlines). null = nur lokal.
+       */
+      outlineUrl: z.string().url().nullable().default('https://nominatim.openstreetmap.org'),
     })
     .default({}),
   docker: z

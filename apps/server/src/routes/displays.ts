@@ -113,6 +113,17 @@ export function displayRoutes(app: FastifyInstance, d: Deps): void {
     return reply.code(204).send();
   });
 
+  /** Schutz vor Überschreiben und Löschen – nur Admins */
+  app.put('/api/displays/:id/scenes/:sceneId/lock', async (req) => {
+    if (!req.user?.isAdmin) throw new HttpError(403, 'Nur Admins können Szenen schützen');
+    const p = parse(sceneParams, req.params);
+    const display = d.displays.get(p.id);
+    const { locked } = parse(z.object({ locked: z.boolean() }), req.body);
+    const sceneName = d.displays.lockScene(display.id, p.sceneId, locked);
+    audit(req, `bildschirm:${display.id}`, 'scene.lock', `${display.name}: Szene „${sceneName}“ ${locked ? 'geschützt' : 'freigegeben'}`);
+    return d.displays.get(display.id);
+  });
+
   app.post('/api/displays/:id/scenes/:sceneId/apply', async (req) => {
     const p = parse(sceneParams, req.params);
     const display = d.displays.get(p.id);

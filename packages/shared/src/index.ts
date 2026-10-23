@@ -9,3 +9,6 @@ export * from './users';
 export * from './tactical';
 export * from './settings';
 export * from './displays';
+export * from './geocode';
+export * from './mapobjects';
+export * from './wifi';

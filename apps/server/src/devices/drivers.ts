@@ -2,6 +2,7 @@ import type { AddonOption, DeviceId, OptionValues, SystemId } from '@elvis/share
 import type { DeviceAdapter } from './adapter.js';
 import { AirmarAdapter } from './drivers/airmar.js';
 import { CamerasAdapter, type CameraSource } from './drivers/cameras.js';
+import { OpenWrtWifiAdapter, type WifiSource } from './drivers/openwrt.js';
 import { TeltonikaAdapter } from './drivers/teltonika.js';
 import { MediaSim } from './sim/media.js';
 import { NetworkSim } from './sim/network.js';
@@ -20,6 +21,8 @@ export interface DriverDefinition<K extends DeviceId> {
 /** Dienste, die Treiber brauchen können (z. B. die Kameraliste aus den Systemeinstellungen) */
 export interface DriverDeps {
   cameras: CameraSource;
+  /** Accesspoints aus den Systemeinstellungen (WLAN) */
+  wifi: WifiSource;
 }
 
 export interface DeviceDefinition<K extends DeviceId> {
@@ -100,6 +103,21 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
         description: 'Zeigt und bedient die unter „Kameras“ eingetragenen Kameras (z. B. Axis über VAPIX). Kameratyp und Zugangsdaten werden je Kamera eingestellt.',
         options: {},
         create: (_o, deps) => new CamerasAdapter(deps.cameras),
+      },
+    },
+  },
+  wifi: {
+    name: 'WLAN-Accesspoints',
+    system: 'comms',
+    drivers: {
+      openwrt: {
+        label: 'OpenWrt-Accesspoints aus den Systemeinstellungen',
+        description:
+          'Fragt die unter „WLAN-Accesspoints“ eingetragenen OpenWrt-Geräte ab: angemeldete Geräte in Betriebs-WLAN und Gastnetz (Netzwerk-Seite) und Erreichbarkeit – ein nicht erreichbarer Accesspoint löst einen Alarm aus.',
+        options: {
+          pollSeconds: { type: 'int', label: 'Abfrageintervall (Sekunden)', required: false, default: 10, min: 5, max: 300 },
+        },
+        create: (o, deps) => new OpenWrtWifiAdapter(deps.wifi, Number(o.pollSeconds || 10) * 1000),
       },
     },
   },

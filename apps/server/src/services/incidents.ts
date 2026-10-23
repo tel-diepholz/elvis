@@ -5,12 +5,16 @@ import { join } from 'node:path';
 import { Transform, type Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import {
+  COLORABLE_KINDS,
   FMS_STATUS,
+  MAP_OBJECT_LABELS,
   formatStrength,
   type Incident,
   type IncidentDocument,
   type IncidentPatch,
   type JournalEntry,
+  type MapObject,
+  type MapObjectPatch,
   type NewIncident,
   type NewJournalEntry,
   type NewUnit,
@@ -21,13 +25,15 @@ import {
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
 
-const INCIDENT_FIELD_LABELS: Record<keyof IncidentPatch, string> = {
+/** Felder fürs Einsatztagebuch; null = Darstellungsfrage, kein Tagebuchereignis */
+const INCIDENT_FIELD_LABELS: Record<keyof IncidentPatch, string | null> = {
   keyword: 'Stichwort',
   title: 'Bezeichnung',
   location: 'Einsatzort',
   leader: 'Einsatzleiter',
   lat: 'Position',
   lon: 'Position',
+  vehicleVisible: null,
 };
 
 const fms = (s: number | null) => (s === null ? '–' : `${s} (${FMS_STATUS[s]?.label ?? '?'})`);
@@ -90,13 +96,13 @@ export class IncidentService {
       const updated = this.store.updateIncident(id, patch);
       const changed = new Set(
         (Object.keys(patch) as (keyof IncidentPatch)[])
-          .filter((k) => before[k] !== updated[k])
-          .map((k) => INCIDENT_FIELD_LABELS[k]),
+          .filter((k) => before[k] !== updated[k] && INCIDENT_FIELD_LABELS[k])
+          .map((k) => INCIDENT_FIELD_LABELS[k]!),
       );
       if (changed.size > 0) this.system(id, `Einsatzdaten geändert: ${[...changed].join(', ')}`, operator);
       return updated;
     });
-    this.notify(['incident', 'journal']);
+    this.notify(Object.keys(patch).every((k) => k === 'vehicleVisible') ? ['incident'] : ['incident', 'journal']);
     return after;
   }
 
@@ -128,6 +134,61 @@ export class IncidentService {
     const created = this.store.addJournal(id, entry, operator);
     this.notify(['journal']);
     return created;
+  }
+
+  // --- Kartenobjekte ---
+
+  mapObjects(id: number): MapObject[] {
+    this.get(id);
+    return this.store.mapObjects(id);
+  }
+
+  addMapObject(id: number, input: Pick<MapObject, 'kind' | 'name' | 'lat' | 'lon' | 'data'>, operator: string): MapObject {
+    this.requireOpen(id);
+    const created = this.store.transaction(() => {
+      const o = this.store.addMapObject(id, input, operator);
+      this.system(id, `Kartenobjekt hinzugefügt: ${MAP_OBJECT_LABELS[o.kind]} „${o.name}“`, operator);
+      return o;
+    });
+    this.notify(['mapObjects', 'journal']);
+    return created;
+  }
+
+  /** Name, Sichtbarkeit, Lage und Einstellungen; Änderungen an Einstellungen landen nicht im Tagebuch */
+  patchMapObject(objectId: number, patch: MapObjectPatch, operator: string): MapObject {
+    const before = this.store.mapObject(objectId);
+    if (!before) throw new HttpError(404, `Kartenobjekt ${objectId} nicht gefunden`);
+    this.requireOpen(before.incidentId);
+    if (patch.data && before.kind !== 'gauss' && before.kind !== 'sector') throw new HttpError(400, 'Dieses Objekt hat keine Einstellungen');
+    if (patch.color && !COLORABLE_KINDS.includes(before.kind)) throw new HttpError(400, 'Die Farben einer Gauß-Fahne stehen für die Konzentrationsstufen');
+    const next = {
+      ...before,
+      ...(patch.name !== undefined && { name: patch.name }),
+      ...(patch.visible !== undefined && { visible: patch.visible }),
+      ...(patch.color !== undefined && { color: patch.color }),
+      ...(patch.lat !== undefined && { lat: patch.lat }),
+      ...(patch.lon !== undefined && { lon: patch.lon }),
+      ...(patch.data && { data: { ...before.data, ...patch.data } }),
+    } as MapObject;
+    const saved = this.store.transaction(() => {
+      const o = this.store.saveMapObject(next);
+      if (before.name !== o.name) this.system(o.incidentId, `Kartenobjekt umbenannt: „${before.name}“ → „${o.name}“`, operator);
+      if (before.lat !== o.lat || before.lon !== o.lon) this.system(o.incidentId, `Kartenobjekt verschoben: ${MAP_OBJECT_LABELS[o.kind]} „${o.name}“`, operator);
+      return o;
+    });
+    this.notify(before.name !== saved.name || before.lat !== saved.lat || before.lon !== saved.lon ? ['mapObjects', 'journal'] : ['mapObjects']);
+    return saved;
+  }
+
+  removeMapObject(objectId: number, operator: string): void {
+    const o = this.store.mapObject(objectId);
+    if (!o) throw new HttpError(404, `Kartenobjekt ${objectId} nicht gefunden`);
+    this.requireOpen(o.incidentId);
+    this.store.transaction(() => {
+      this.store.removeMapObject(objectId);
+      this.system(o.incidentId, `Kartenobjekt entfernt: ${MAP_OBJECT_LABELS[o.kind]} „${o.name}“`, operator);
+    });
+    this.notify(['mapObjects', 'journal']);
   }
 
   // --- Kräfte ---

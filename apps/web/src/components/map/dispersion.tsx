@@ -8,35 +8,15 @@ import {
   plumeContour,
   plumeToLatLon,
   sunElevationDeg,
+  type GaussSettings,
   type KlugManierClass,
   type PlumeContour,
   type Terrain,
 } from '@elvis/shared';
 import { fmtNum } from '../../lib/format';
-import { Field, Segmented } from '../../components/ui';
+import { Field } from '../ui';
 
-export type DispersionMode = 'gauss' | 'sector' | 'off';
-
-export interface DispersionSettings {
-  mode: DispersionMode;
-  stability: 'auto' | KlugManierClass;
-  cloudOktas: number;
-  terrain: Terrain;
-  sourceHeightM: number;
-  /** Optionale Freisetzungsrate in kg/s, nur für die Umrechnung in mg/m³. */
-  releaseRateKgS: number | null;
-  sectorM: number;
-}
-
-export const DEFAULT_SETTINGS: DispersionSettings = {
-  mode: 'gauss',
-  stability: 'auto',
-  cloudOktas: 4,
-  terrain: 'rural',
-  sourceHeightM: 0,
-  releaseRateKgS: null,
-  sectorM: 1000,
-};
+export type Wind = { windSpeedMs: number; windDirectionDeg: number };
 
 /** c/Q-Stufen in s/m³ – von außen (gering) nach innen (hoch) gezeichnet. */
 export const LEVELS = [
@@ -80,88 +60,73 @@ export interface PlumeResult {
   contours: { level: (typeof LEVELS)[number]; contour: PlumeContour; polygon: [number, number][] }[];
 }
 
-export function usePlume(
-  settings: DispersionSettings,
-  origin: { lat: number; lon: number } | null,
-  weather: { windSpeedMs: number; windDirectionDeg: number } | undefined,
-  now: Date,
-): PlumeResult | null {
-  // Sonnenstand ändert sich langsam – minutengenau genügt und vermeidet Neuberechnung im Sekundentakt.
-  const minute = Math.floor(now.getTime() / 60_000);
-  return useMemo(() => {
-    if (!origin || !weather || settings.mode !== 'gauss') return null;
-    const sunDeg = sunElevationDeg(new Date(minute * 60_000), origin.lat, origin.lon);
-    const autoStability = settings.stability === 'auto';
-    const stability = autoStability
-      ? estimateStability({ windSpeedMs: weather.windSpeedMs, cloudOktas: settings.cloudOktas, sunElevationDeg: sunDeg })
-      : (settings.stability as KlugManierClass);
-    const params = {
-      stability,
-      terrain: settings.terrain,
-      windSpeed10mMs: weather.windSpeedMs,
-      sourceHeightM: settings.sourceHeightM,
-    };
-    const contours = LEVELS.flatMap((level) => {
-      const contour = plumeContour(params, level.threshold);
-      if (!contour) return [];
-      const polygon = contour.outline.map((pt) => plumeToLatLon(origin, weather.windDirectionDeg, pt));
-      return [{ level, contour, polygon }];
-    });
-    return { stability, autoStability, sunDeg, calm: weather.windSpeedMs < MIN_WIND_MS, contours };
-  }, [settings, origin?.lat, origin?.lon, weather?.windSpeedMs, weather?.windDirectionDeg, minute]);
+/** Gauß-Fahne am Ursprung für den aktuellen Wind; null ohne Winddaten */
+export function computePlume(settings: GaussSettings, origin: { lat: number; lon: number }, weather: Wind | undefined, at: Date): PlumeResult | null {
+  if (!weather) return null;
+  const sunDeg = sunElevationDeg(at, origin.lat, origin.lon);
+  const autoStability = settings.stability === 'auto';
+  const stability = autoStability
+    ? estimateStability({ windSpeedMs: weather.windSpeedMs, cloudOktas: settings.cloudOktas, sunElevationDeg: sunDeg })
+    : (settings.stability as KlugManierClass);
+  const params = {
+    stability,
+    terrain: settings.terrain,
+    windSpeed10mMs: weather.windSpeedMs,
+    sourceHeightM: settings.sourceHeightM,
+  };
+  const contours = LEVELS.flatMap((level) => {
+    const contour = plumeContour(params, level.threshold);
+    if (!contour) return [];
+    const polygon = contour.outline.map((pt) => plumeToLatLon(origin, weather.windDirectionDeg, pt));
+    return [{ level, contour, polygon }];
+  });
+  return { stability, autoStability, sunDeg, calm: weather.windSpeedMs < MIN_WIND_MS, contours };
 }
 
-export function DispersionControls({
+export function usePlume(settings: GaussSettings, origin: { lat: number; lon: number }, weather: Wind | undefined, now: Date): PlumeResult | null {
+  // Sonnenstand ändert sich langsam – minutengenau genügt und vermeidet Neuberechnung im Sekundentakt.
+  const minute = Math.floor(now.getTime() / 60_000);
+  return useMemo(
+    () => computePlume(settings, origin, weather, new Date(minute * 60_000)),
+    [settings, origin.lat, origin.lon, weather?.windSpeedMs, weather?.windDirectionDeg, minute], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+}
+
+/** Warnhinweis, solange die Wetterstation keinen Wind liefert */
+export function NoWindWarning() {
+  return (
+    <p className="dispersion-warning">
+      <AlertTriangle size={16} /> Keine Winddaten von der Wetterstation – Ausbreitung kann nicht dargestellt werden.
+    </p>
+  );
+}
+
+/** Einstellungen einer Gauß-Fahne mit Legende und Hinweisen (in der Objektliste) */
+export function GaussControls({
   settings,
   onChange,
   result,
   noWind,
+  disabled,
 }: {
-  settings: DispersionSettings;
-  onChange: (s: DispersionSettings) => void;
+  settings: GaussSettings;
+  onChange: (s: Partial<GaussSettings>) => void;
   result: PlumeResult | null;
   /** Wetterstation liefert (noch) keine Windgeschwindigkeit/-richtung. */
   noWind?: boolean;
+  disabled?: boolean;
 }) {
-  const set = <K extends keyof DispersionSettings>(k: K, v: DispersionSettings[K]) => onChange({ ...settings, [k]: v });
+  const set = <K extends keyof GaussSettings>(k: K, v: GaussSettings[K]) => onChange({ [k]: v });
   const rate = settings.releaseRateKgS;
 
   return (
     <div className="dispersion-panel">
-      <Segmented<DispersionMode>
-        label="Ausbreitung"
-        value={settings.mode}
-        onChange={(m) => set('mode', m)}
-        options={[
-          { value: 'gauss', label: 'Gauß-Fahne' },
-          { value: 'sector', label: 'Sektor 60°' },
-          { value: 'off', label: 'Aus' },
-        ]}
-      />
-
-      {settings.mode === 'sector' && (
-        <Field label="Sektorlänge">
-          <select value={settings.sectorM} onChange={(e) => set('sectorM', Number(e.target.value))}>
-            {[250, 500, 1000, 2000, 5000].map((m) => (
-              <option key={m} value={m}>
-                {fmtDistance(m)}
-              </option>
-            ))}
-          </select>
-        </Field>
-      )}
-
-      {noWind && settings.mode !== 'off' && (
-        <p className="dispersion-warning">
-          <AlertTriangle size={16} /> Keine Winddaten von der Wetterstation – Ausbreitung kann nicht dargestellt werden.
-        </p>
-      )}
-
-      {settings.mode === 'gauss' && (
+      {noWind && <NoWindWarning />}
+      <fieldset disabled={disabled} className="dispersion-fields">
         <>
           <div className="dispersion-grid">
             <Field label="Ausbreitungsklasse">
-              <select value={settings.stability} onChange={(e) => set('stability', e.target.value as DispersionSettings['stability'])}>
+              <select value={settings.stability} onChange={(e) => set('stability', e.target.value as GaussSettings['stability'])}>
                 <option value="auto">
                   Auto{result?.autoStability ? ` (${result.stability})` : ''}
                 </option>
@@ -246,7 +211,7 @@ export function DispersionControls({
             </p>
           )}
         </>
-      )}
+      </fieldset>
     </div>
   );
 }

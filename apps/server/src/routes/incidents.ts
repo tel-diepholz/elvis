@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { JOURNAL_CATEGORY_LABELS, type JournalCategory } from '@elvis/shared';
+import { JOURNAL_CATEGORY_LABELS, mapObjectPatchSchema, newMapObjectSchema, type JournalCategory } from '@elvis/shared';
 import { HttpError } from '../errors.js';
 import type { IncidentService } from '../services/incidents.js';
 import { idParam, operatorOf, parse } from './util.js';
@@ -63,7 +63,7 @@ export function incidentRoutes(app: FastifyInstance, incidents: IncidentService)
 
   app.patch('/api/incidents/:id', async (req) => {
     const { id } = parse(idParam, req.params);
-    return incidents.update(id, parse(newIncident.partial(), req.body), operatorOf(req));
+    return incidents.update(id, parse(newIncident.partial().extend({ vehicleVisible: z.boolean().optional() }), req.body), operatorOf(req));
   });
 
   app.post('/api/incidents/:id/close', async (req) => incidents.close(parse(idParam, req.params).id, operatorOf(req)));
@@ -97,6 +97,24 @@ export function incidentRoutes(app: FastifyInstance, incidents: IncidentService)
     const csv = '﻿' + [header.map(csvCell), ...rows].map((r) => r.join(';')).join('\r\n');
     const name = `ETB_${incident.startedAt.slice(0, 10)}_${incident.id}.csv`;
     return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', `attachment; filename="${name}"`).send(csv);
+  });
+
+  // Kartenobjekte (Flächen können große Umrisse mitbringen)
+  app.get('/api/incidents/:id/objects', async (req) => incidents.mapObjects(parse(idParam, req.params).id));
+
+  app.post('/api/incidents/:id/objects', { bodyLimit: 8 * 1024 * 1024 }, async (req, reply) => {
+    const { id } = parse(idParam, req.params);
+    return reply.code(201).send(incidents.addMapObject(id, parse(newMapObjectSchema, req.body), operatorOf(req)));
+  });
+
+  app.patch('/api/map-objects/:id', async (req) => {
+    const { id } = parse(idParam, req.params);
+    return incidents.patchMapObject(id, parse(mapObjectPatchSchema, req.body), operatorOf(req));
+  });
+
+  app.delete('/api/map-objects/:id', async (req, reply) => {
+    incidents.removeMapObject(parse(idParam, req.params).id, operatorOf(req));
+    return reply.code(204).send();
   });
 
   // Kräfte

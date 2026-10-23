@@ -5,6 +5,7 @@ import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
 import { renderMapPdf } from '../services/print.js';
 import type { SettingsService } from '../services/settings.js';
+import type { GeocoderService } from '../services/geocoder.js';
 import type { TileService } from '../services/tiles.js';
 import { operatorOf, parse } from './util.js';
 
@@ -20,8 +21,8 @@ const printRequest: z.ZodType<MapPrintRequest> = z.object({
   title: z.string().trim().min(1).max(120),
   subtitle: z.string().max(200).optional(),
   markers: z
-    .array(latLon.extend({ kind: z.enum(['vehicle', 'incident']), label: z.string().max(80) }))
-    .max(20),
+    .array(latLon.extend({ kind: z.enum(['vehicle', 'incident', 'point']), label: z.string().max(120), color: color.optional() }))
+    .max(100),
   polygons: z
     .array(
       z.object({
@@ -32,9 +33,9 @@ const printRequest: z.ZodType<MapPrintRequest> = z.object({
         dashed: z.boolean().optional(),
       }),
     )
-    .max(20),
-  legend: z.array(z.object({ color, label: z.string().max(120) })).max(10),
-  notes: z.array(z.string().max(400)).max(10),
+    .max(100),
+  legend: z.array(z.object({ color, label: z.string().max(160) })).max(30),
+  notes: z.array(z.string().max(400)).max(20),
 });
 
 const tileParams = z.object({
@@ -44,8 +45,27 @@ const tileParams = z.object({
   y: z.coerce.number().int(),
 });
 
-export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notifyAudit: () => void): void {
+const searchQuery = z.object({
+  q: z.string().max(200).default(''),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lon: z.coerce.number().min(-180).max(180).optional(),
+});
+
+export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notifyAudit: () => void, geocoder: GeocoderService): void {
   app.get('/api/map/sources', async () => tiles.list());
+
+  /** Ortssuche: Straßen, Orte, Adressen sowie Koordinaten und UTMREF; lat/lon bevorzugen Treffer in der Nähe */
+  app.get('/api/map/search', async (req) => {
+    const { q, lat, lon } = parse(searchQuery, req.query);
+    return geocoder.search(q, lat !== undefined && lon !== undefined ? { lat, lon } : null);
+  });
+
+  /** Umriss eines Orts oder Gebiets zu einem Suchtreffer (osm = „R1461203“) */
+  app.get<{ Params: { osm: string } }>('/api/map/outline/:osm', async (req) => {
+    const outline = await geocoder.outline(req.params.osm);
+    if (!outline) throw new HttpError(404, 'Kein Umriss verfügbar');
+    return outline;
+  });
 
   app.get('/api/map/tiles/:source/:z/:x/:y', async (req, reply) => {
     const { source, z: zoom, x, y } = parse(tileParams, req.params);
@@ -54,7 +74,8 @@ export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store
     return reply.header('content-type', tile.contentType).header('cache-control', 'public, max-age=86400').send(tile.data);
   });
 
-  app.post('/api/print/map', async (req, reply) => {
+  // Flächen aus der Objektliste bringen viele Punkte mit
+  app.post('/api/print/map', { bodyLimit: 8 * 1024 * 1024 }, async (req, reply) => {
     const body = parse(printRequest, req.body);
     const source = tiles.source(body.sourceId);
     if (body.zoom > source.maxZoom) throw new HttpError(400, `${source.name} unterstützt höchstens Zoomstufe ${source.maxZoom}`);

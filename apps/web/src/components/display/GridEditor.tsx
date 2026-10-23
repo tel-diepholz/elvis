@@ -31,6 +31,7 @@ function useTileSummary() {
       const text = String(t.config.text ?? '').trim();
       return text ? (text.length > 40 ? `${text.slice(0, 40)} …` : text) : 'kein Text';
     }
+    if (t.type === 'guestWifi') return String(t.config.title ?? '').trim() || 'Gastnetz des Einsatzes';
     if (t.type === 'map') return `${t.config.center === 'incident' ? 'Einsatzort' : 'Fahrzeug'}${t.config.follow !== false ? ', mitgeführt' : ''}`;
     return '';
   };
@@ -188,7 +189,7 @@ export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; 
           <Field label={`Zoomstufe (${Number(tile.config.zoom) || 15})`}>
             <input type="range" min={8} max={19} value={Number(tile.config.zoom) || 15} onChange={(e) => set('zoom', Number(e.target.value))} />
           </Field>
-          <p className="field-hint">Am Bildschirm lässt sich die Karte per Touch verschieben und zoomen, unter „Bildschirme“ auch per „Karte steuern“ aus der Vorschau; mit „mitführen“ springt sie bei Bewegung des Fahrzeugs zurück. Ohne Mitführen behält der Bildschirm den zuletzt eingestellten Ausschnitt, auch nach „Neu laden“.</p>
+          <p className="field-hint">Mit „mitführen“ folgt die Karte Fahrzeug bzw. Einsatzort und lässt sich nicht verschieben. Ohne Mitführen lässt sie sich am Bildschirm per Touch und unter „Bildschirme“ in der Vorschau verschieben und zoomen; der Bildschirm behält den zuletzt eingestellten Ausschnitt, auch nach „Neu laden“.</p>
         </>
       )}
       {tile.type === 'video' && <VideoTileSettings tile={tile} set={set} />}
@@ -228,6 +229,14 @@ export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; 
             />
           </Field>
           <p className="field-hint">Die Schriftgröße passt sich automatisch an, sodass der Text die Kachel ausfüllt.</p>
+        </>
+      )}
+      {tile.type === 'guestWifi' && (
+        <>
+          <Field label="Überschrift" hint="optional, z. B. „Gäste-WLAN“">
+            <input value={String(tile.config.title ?? '')} onChange={(e) => set('title', e.target.value.slice(0, 60))} maxLength={60} />
+          </Field>
+          <p className="field-hint">Zeigt Netzname, Passwort und QR-Code des Gastnetzes, solange ein Einsatz läuft. Einrichten unter System → WLAN.</p>
         </>
       )}
       {(tile.type === 'clock' || tile.type === 'weather' || tile.type === 'alerts' || tile.type === 'network') && <p className="muted">Keine weiteren Einstellungen.</p>}

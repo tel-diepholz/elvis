@@ -45,6 +45,15 @@ export function addonVolumes(m: AddonManifest): string[] {
   return [...new Set(names)].map((n) => volumeName(m.id, n));
 }
 
+const SHM_UNITS: Record<string, number> = { '': 1, k: 1024, m: 1024 ** 2, g: 1024 ** 3 };
+
+/** "512m", "2g" → Bytes */
+export function parseShmSize(value: string): number {
+  const m = /^(\d+)\s*([kmg]?)b?$/i.exec(value.trim());
+  if (!m) throw new Error(`Ungültige shmSize: ${value}`);
+  return Number(m[1]) * SHM_UNITS[m[2]!.toLowerCase()]!;
+}
+
 function baseSpec(m: AddonManifest, run: AddonContainer | AddonJobStep, ctx: TemplateContext, labels: Record<string, string>): ContainerCreateOptions {
   const r = (s: string) => renderTemplate(s, ctx);
   const devices = run.devices.filter((d) => conditionMet(d.when, ctx.options));
@@ -61,6 +70,7 @@ function baseSpec(m: AddonManifest, run: AddonContainer | AddonJobStep, ctx: Tem
       Devices: devices.length ? devices.map((d) => ({ PathOnHost: d.path, PathInContainer: d.path, CgroupPermissions: 'rwm' })) : undefined,
       // NVIDIA: alle GPUs mit Video-Encoder (NVIDIA Container Toolkit auf dem Host)
       DeviceRequests: gpu ? [{ Driver: 'nvidia', Count: -1, Capabilities: [['gpu', 'video', 'compute', 'utility']] }] : undefined,
+      ShmSize: run.shmSize ? parseShmSize(r(run.shmSize)) : undefined,
       Privileged: false,
       LogConfig: { Type: 'json-file', Config: { 'max-size': '10m', 'max-file': '3' } },
     },

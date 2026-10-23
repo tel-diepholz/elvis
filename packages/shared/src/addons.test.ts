@@ -31,6 +31,18 @@ describe('Addon-Manifest', () => {
     expect(addonManifestSchema.safeParse({ ...minimal, containers: [] }).success).toBe(false);
     expect(addonManifestSchema.safeParse({ ...minimal, containers: [{ name: 'a', image: 'x' }, { name: 'a', image: 'y' }] }).success).toBe(false);
     expect(addonManifestSchema.safeParse({ ...minimal, options: { x: { type: 'farbe', label: 'X' } } }).success).toBe(false);
+    // Fortschrittsphasen werden zu JavaScript-Regexen: „(?i)“ gibt es dort nicht
+    const job = (match: string) => ({ ...minimal, jobs: { j: { label: 'J', image: 'x', progress: { phases: [{ match, percent: 5 }] } } } });
+    expect(addonManifestSchema.safeParse(job('[Rr]ank 26')).success).toBe(true);
+    expect(addonManifestSchema.safeParse(job('(?i)rank 26')).success).toBe(false);
+  });
+
+  it('akzeptiert alle eingebauten Addons', () => {
+    const repo = parseYaml(readFileSync(fileURLToPath(new URL('../../../addons/repository.yaml', import.meta.url)), 'utf8')) as { addons: string[] };
+    for (const dir of repo.addons) {
+      const parsed = addonManifestSchema.safeParse(parseYaml(readFileSync(fileURLToPath(new URL(`../../../addons/${dir}/addon.yaml`, import.meta.url)), 'utf8')));
+      expect(parsed.success, `${dir}: ${parsed.error?.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`).toBe(true);
+    }
   });
 });
 
