@@ -425,3 +425,8 @@ Voraussetzung: Docker und Node auf dem Entwicklungsrechner.
 - **TLS für die Weboberfläche:** Die Sitzungs-Cookies laufen im Fahrzeug-LAN derzeit über HTTP.
 - Echte Treiber für die verbauten Systeme.
 - Druckansicht/PDF für Einsatztagebuch und Kräfteübersicht, Backup/Export der Datenbank.
+
+## Lizenz
+
+ELVIS steht unter der [MIT-Lizenz](LICENSE). Addons laden Software Dritter erst bei der Installation und unter deren
+eigenen Lizenzen, z. B. das NDI-Gateway die NDI-Laufzeit (NDI SDK License Agreement, nur nach Zustimmung).

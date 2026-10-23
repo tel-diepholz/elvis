@@ -1,5 +1,6 @@
 {
   "name": "elvis",
+  "license": "MIT",
   "private": true,
   "description": "ELVIS – Einsatzleitwagen-Verwaltungs- und Informationssystem",
   "workspaces": [
