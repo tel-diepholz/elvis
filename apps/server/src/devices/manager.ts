@@ -45,6 +45,7 @@ export class DeviceManager {
     private readonly deps: DriverDeps = {
       cameras: { list: () => [], onChange: () => () => {} },
       wifi: { list: () => [], onChange: () => () => {}, storeClients: () => {}, clearClients: () => {} },
+      monitoring: { list: () => [], onChange: () => () => {} },
     },
   ) {
     this.ctx = {

@@ -1,10 +1,17 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   DEFAULT_PRINT_SETTINGS,
+  GUEST_PRINT_RETENTION_HOURS,
   PRINT_JOB_DONE,
+  extensionOf,
   parsePageRanges,
   printSettingsInputSchema,
+  sanitizeName,
   sortMedia,
+  type GuestPrintJob,
   type PrintJob,
   type PrintJobState,
   type PrintOptions,
@@ -25,6 +32,21 @@ export interface PrintServerProvision {
   name: string;
   /** http://host:port des CUPS-Servers */
   url: string;
+}
+
+/** Gastdrucker eines Addons (provides.guestPrinters): schickt Aufträge aus dem Gastnetz mit diesem Token */
+export interface GuestPrinterProvision {
+  id: string;
+  name: string;
+  token: string;
+}
+
+/** Auftrag vom Gastdrucker; die Angaben stammen vom Gerät des Gastes */
+export interface GuestSubmission {
+  jobName: string;
+  user: string;
+  copies: number;
+  sourceIp: string;
 }
 
 /** IPP-Anfrage per HTTP-POST; liefert den Antwortkörper */
@@ -82,6 +104,31 @@ interface JobRow {
   created_at: string;
 }
 
+interface GuestRow {
+  id: number;
+  storage_name: string;
+  filename: string;
+  size_bytes: number;
+  copies: number;
+  submitted_by: string;
+  source_ip: string;
+  received_at: string;
+}
+
+const toGuestJob = (r: GuestRow): GuestPrintJob => ({
+  id: r.id,
+  filename: r.filename,
+  sizeBytes: r.size_bytes,
+  copies: r.copies,
+  submittedBy: r.submitted_by,
+  sourceIp: r.source_ip,
+  receivedAt: r.received_at,
+});
+
+const sameSecret = (a: string, b: string) => timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
+
+const isPdf = (content: Buffer) => content.subarray(0, 1024).indexOf('%PDF-') >= 0;
+
 const str = (g: IppGroup, k: string) => (g[k]?.[0] !== undefined ? String(g[k]![0]) : '');
 const strings = (g: IppGroup, k: string) => (g[k] ?? []).map(String);
 
@@ -110,25 +157,35 @@ function toJob(r: JobRow): PrintJob {
  */
 export class PrintService {
   private servers: PrintServerProvision[] = [];
+  private guests: GuestPrinterProvision[] = [];
   private cache = new Map<string, { at: number; printers: ServerPrinter[]; error: string | null }>();
+  /** Ablage der Gastaufträge, die auf Freigabe warten */
+  readonly guestDir: string;
 
   constructor(
     private readonly store: Store,
+    dataDir: string,
     private readonly deps: {
       documents: DocumentService;
       notify: (topics: Topic[]) => void;
       transport?: IppTransport;
+      /** Läuft das Gast-WLAN gerade? */
+      guestWifiActive?: () => boolean;
     },
-  ) {}
+  ) {
+    this.guestDir = join(dataDir, 'guest-print');
+    if (dataDir !== ':memory:') mkdirSync(this.guestDir, { recursive: true });
+  }
 
   private get transport(): IppTransport {
     return this.deps.transport ?? defaultTransport;
   }
 
-  /** Laufende Addons melden ihre Druckserver */
-  setProvisions(list: PrintServerProvision[]): void {
-    if (JSON.stringify(list) === JSON.stringify(this.servers)) return;
+  /** Laufende Addons melden ihre Druckserver und Gastdrucker */
+  setProvisions(list: PrintServerProvision[], guests: GuestPrinterProvision[] = []): void {
+    if (JSON.stringify([list, guests]) === JSON.stringify([this.servers, this.guests])) return;
     this.servers = list;
+    this.guests = guests;
     this.cache.clear();
     this.deps.notify(['printing']);
   }
@@ -216,6 +273,7 @@ export class PrintService {
       errors,
       defaultPrinter: settings.defaultPrinter && printers.some((p) => p.id === settings.defaultPrinter) ? settings.defaultPrinter : null,
       archive: { enabled: settings.archive, incident: incident ? { id: incident.id, title: incident.title } : null, path: settings.folderPath },
+      guest: { available: this.guests.length > 0, mode: settings.guest.mode, waiting: this.guestCount() },
     };
   }
 
@@ -247,7 +305,7 @@ export class PrintService {
   }
 
   async print(file: { filename: string; content: Buffer }, o: PrintOptions, by: { userId: number | null; name: string }): Promise<PrintJob> {
-    if (file.content.subarray(0, 1024).indexOf('%PDF-') < 0) throw new HttpError(415, 'Nur PDF-Dateien können gedruckt werden');
+    if (!isPdf(file.content)) throw new HttpError(415, 'Nur PDF-Dateien können gedruckt werden');
     const slash = o.printerId.indexOf('/');
     const server = this.servers.find((s) => s.id === o.printerId.slice(0, slash));
     if (!server) throw new HttpError(404, 'Drucker nicht gefunden');
@@ -375,5 +433,115 @@ export class PrintService {
 
   recent(limit = 50): PrintJob[] {
     return (this.store.db.prepare('SELECT * FROM print_jobs ORDER BY created_at DESC, rowid DESC LIMIT ?').all(limit) as JobRow[]).map(toJob);
+  }
+
+  // --- Gastdrucker ---
+
+  private guestCount(): number {
+    return (this.store.db.prepare('SELECT COUNT(*) AS n FROM guest_print_jobs').get() as { n: number }).n;
+  }
+
+  /**
+   * Auftrag vom Gastdrucker des Addons: je nach Einstellung sofort drucken oder bis zur Freigabe zurückhalten.
+   * Fehler gehen an das Addon zurück, das Gerät des Gastes zeigt den Druck dann als fehlgeschlagen an.
+   */
+  async acceptGuest(token: string, content: Buffer, meta: GuestSubmission): Promise<{ queued: GuestPrintJob | null; job: PrintJob | null }> {
+    const provision = this.guests.find((g) => sameSecret(token, g.token));
+    if (!token || !provision) throw new HttpError(401, 'Unbekannter Gastdrucker');
+    const g = this.settings().guest;
+    if (g.mode === 'off') throw new HttpError(409, 'Der Gastdrucker ist abgeschaltet');
+    if (g.onlyWithGuestWifi && !(this.deps.guestWifiActive?.() ?? false)) throw new HttpError(409, 'Der Gastdrucker nimmt nur während eines Einsatzes Aufträge an');
+    if (!isPdf(content)) throw new HttpError(415, 'Der Gastdrucker liefert kein PDF');
+
+    const user = meta.user.replace(/[^\p{L}\p{N} ._@-]/gu, '').trim().slice(0, 60);
+    const by = `Gast ${user || meta.sourceIp || 'unbekannt'}`;
+    const base = sanitizeName(meta.jobName.replace(/^.*[\\/]/, '')).slice(0, 150) || 'Gastdruck';
+    const filename = extensionOf(base) === 'pdf' ? base : `${base}.pdf`;
+    const copies = Math.min(Math.max(1, Math.trunc(meta.copies) || 1), g.maxCopies);
+    const audit = (message: string) =>
+      this.store.addAudit({ operator: by, target: 'druck', action: 'gast', params: JSON.stringify({ von: meta.sourceIp, kopien: copies, modus: g.mode }), success: true, message });
+
+    if (g.mode === 'direct') {
+      const job = await this.print({ filename, content }, await this.guestOptions(g.printer!, copies), { userId: null, name: by });
+      return { queued: null, job };
+    }
+
+    const storageName = randomUUID();
+    await writeFile(join(this.guestDir, storageName), content);
+    const id = Number(
+      this.store.db
+        .prepare('INSERT INTO guest_print_jobs (storage_name, filename, size_bytes, copies, submitted_by, source_ip, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(storageName, filename, content.length, copies, user, meta.sourceIp.slice(0, 64), new Date().toISOString()).lastInsertRowid,
+    );
+    audit(`${filename} wartet auf Freigabe`);
+    this.deps.notify(['printing', 'audit']);
+    return { queued: this.guestJob(id), job: null };
+  }
+
+  /** Druckeinstellungen für Gastaufträge; was der Drucker nicht kann (Farbe, beidseitig), fällt weg */
+  private async guestOptions(printerId: string, copies: number): Promise<PrintOptions> {
+    const g = this.settings().guest;
+    const server = this.servers.find((s) => s.id === printerId.slice(0, printerId.indexOf('/')));
+    const printer = server ? (await this.serverPrinters(server)).printers.find((p) => p.id === printerId) : undefined;
+    return {
+      printerId,
+      copies,
+      sides: printer && !printer.duplex ? 'one-sided' : g.sides,
+      color: printer && !printer.color ? 'monochrome' : g.color,
+      media: '',
+      orientation: 'auto',
+      pageRanges: '',
+      numberUp: 1,
+      fitToPage: true,
+    };
+  }
+
+  private guestRow(id: number): GuestRow {
+    const r = this.store.db.prepare('SELECT * FROM guest_print_jobs WHERE id = ?').get(id) as GuestRow | undefined;
+    if (!r) throw new HttpError(404, 'Gastauftrag nicht gefunden (schon freigegeben oder verworfen?)');
+    return r;
+  }
+
+  guestJob(id: number): GuestPrintJob {
+    return toGuestJob(this.guestRow(id));
+  }
+
+  guestJobs(): GuestPrintJob[] {
+    return (this.store.db.prepare('SELECT * FROM guest_print_jobs ORDER BY received_at DESC, id DESC').all() as GuestRow[]).map(toGuestJob);
+  }
+
+  async guestFile(id: number): Promise<{ filename: string; content: Buffer }> {
+    const r = this.guestRow(id);
+    return { filename: r.filename, content: await readFile(join(this.guestDir, r.storage_name)) };
+  }
+
+  /** Freigeben: drucken und aus der Warteschlange nehmen */
+  async releaseGuest(id: number, o: PrintOptions, by: { userId: number | null; name: string }): Promise<PrintJob> {
+    const r = this.guestRow(id);
+    const { content } = await this.guestFile(id);
+    const job = await this.print({ filename: r.filename, content }, o, { userId: by.userId, name: `${by.name} (Freigabe für Gast ${r.submitted_by || r.source_ip})` });
+    await this.dropGuest(r);
+    return job;
+  }
+
+  async discardGuest(id: number, actor: string): Promise<void> {
+    const r = this.guestRow(id);
+    await this.dropGuest(r);
+    this.store.addAudit({ operator: actor, target: 'druck', action: 'gast-verworfen', params: JSON.stringify({ von: r.source_ip }), success: true, message: r.filename });
+    this.deps.notify(['printing', 'audit']);
+  }
+
+  private async dropGuest(r: GuestRow): Promise<void> {
+    this.store.db.prepare('DELETE FROM guest_print_jobs WHERE id = ?').run(r.id);
+    await unlink(join(this.guestDir, r.storage_name)).catch(() => {});
+    this.deps.notify(['printing']);
+  }
+
+  /** Nicht freigegebene Gastaufträge nach Ablauf der Frist verwerfen (beim Start und stündlich) */
+  async cleanupGuest(now = Date.now()): Promise<number> {
+    const before = new Date(now - GUEST_PRINT_RETENTION_HOURS * 3600_000).toISOString();
+    const stale = this.store.db.prepare('SELECT * FROM guest_print_jobs WHERE received_at < ?').all(before) as GuestRow[];
+    for (const r of stale) await this.dropGuest(r);
+    return stale.length;
   }
 }

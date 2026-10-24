@@ -487,6 +487,38 @@ const MIGRATIONS: Migration[] = [
   ALTER TABLE units_new RENAME TO units;
   CREATE INDEX units_incident ON units(incident_id);
   `,
+  // Monitoring: Abfrageziele (SNMP, Node Exporter); Schwellen und eigene Prüfungen als JSON
+  `
+  CREATE TABLE monitoring_targets (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    host TEXT NOT NULL,
+    port INTEGER NOT NULL,
+    snmp_version TEXT NOT NULL DEFAULT '2c',
+    community TEXT NOT NULL DEFAULT '',
+    always_on INTEGER NOT NULL DEFAULT 1,
+    limits TEXT NOT NULL,
+    checks TEXT NOT NULL DEFAULT '[]',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    sort INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  `,
+  // Gastdrucker: Aufträge aus dem Gastnetz, die auf Freigabe warten (PDF im Datenverzeichnis)
+  `
+  CREATE TABLE guest_print_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    storage_name TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    copies INTEGER NOT NULL DEFAULT 1,
+    submitted_by TEXT NOT NULL,
+    source_ip TEXT NOT NULL,
+    received_at TEXT NOT NULL
+  );
+  CREATE INDEX guest_print_jobs_received ON guest_print_jobs(received_at);
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

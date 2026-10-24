@@ -4,6 +4,7 @@
  */
 
 import type { AddonOption, OptionValues } from './addons';
+import type { MonitoringState } from './monitoring';
 
 export type SystemId = 'energy' | 'vehicle' | 'comms' | 'media';
 
@@ -359,11 +360,12 @@ export interface DeviceStateMap {
   wifi: WifiState;
   media: MediaState;
   weather: WeatherState;
+  monitoring: MonitoringState;
 }
 
 export type DeviceId = keyof DeviceStateMap;
 
-export const DEVICE_IDS: readonly DeviceId[] = ['router', 'wifi', 'cameras', 'radio', 'network', 'media', 'weather'];
+export const DEVICE_IDS: readonly DeviceId[] = ['router', 'wifi', 'cameras', 'radio', 'network', 'media', 'weather', 'monitoring'];
 
 export interface DeviceSnapshot<K extends DeviceId = DeviceId> {
   id: K;

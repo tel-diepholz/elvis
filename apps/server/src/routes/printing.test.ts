@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parsePageRanges, mediaLabel, type DocumentListing, type Incident, type PrintJob, type PrintStatus } from '@elvis/shared';
+import { existsSync, readdirSync } from 'node:fs';
+import { parsePageRanges, mediaLabel, type DocumentListing, type GuestPrintJob, type Incident, type PrintJob, type PrintStatus } from '@elvis/shared';
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
 import { GROUP, OP, TAG, attr, decodeResponse, encodeMessage, type IppGroup } from '../services/ipp.js';
@@ -226,6 +227,100 @@ describe('Druckserver', () => {
     await print({ printerId: 'druckserver-cups/Laser_ELW', color: 'monochrome' });
     const { body } = await get<{ jobs: PrintJob[] }>('/api/system/printing');
     expect(body.jobs).toHaveLength(1);
+  });
+});
+
+describe('Gastdrucker', () => {
+  const TOKEN = 'geheim-123';
+
+  beforeEach(() => {
+    app.printing.setProvisions([{ id: 'druckserver-cups', name: 'Druckserver', url: 'http://docker1:631' }], [{ id: 'druckserver-gast', name: 'Gastdrucker', token: TOKEN }]);
+  });
+
+  const settings = (guest: object) =>
+    app.server.inject({ method: 'PUT', url: '/api/system/printing', headers: { cookie: admin }, payload: { archive: false, folderPath: 'Drucke', defaultPrinter: null, guest } });
+
+  const submit = (token = TOKEN, data = PDF, headers: Record<string, string> = {}) =>
+    app.server.inject({
+      method: 'POST',
+      url: '/api/printing/guest/submit',
+      payload: data,
+      headers: {
+        'content-type': 'application/pdf',
+        authorization: `Bearer ${token}`,
+        'x-job-name': encodeURIComponent('Bordkarte München'),
+        'x-job-user': encodeURIComponent('iPhone von Kim'),
+        'x-job-copies': '50',
+        'x-job-client': '10.20.0.17',
+        ...headers,
+      },
+    });
+
+  it('ist ab Werk aus und lehnt fremde Tokens ab', async () => {
+    expect((await get<PrintStatus>('/api/printing', '')).body.guest).toEqual({ available: true, mode: 'off', waiting: 0 });
+    expect((await submit()).statusCode).toBe(409);
+    await settings({ mode: 'release', onlyWithGuestWifi: false });
+    expect((await submit('falsch')).statusCode).toBe(401);
+    expect((await submit('')).statusCode).toBe(401);
+    expect((await submit(TOKEN, Buffer.from('kein pdf'))).statusCode).toBe(415);
+  });
+
+  it('nimmt mit „nur mit Gast-WLAN“ ohne laufendes Gastnetz nichts an', async () => {
+    await settings({ mode: 'release' });
+    const res = await submit();
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain('Einsatz');
+  });
+
+  it('druckt direkt auf dem eingestellten Drucker, ohne Fähigkeiten zu überschreiten', async () => {
+    expect((await settings({ mode: 'direct', onlyWithGuestWifi: false })).statusCode).toBe(400); // Drucker fehlt
+    await settings({ mode: 'direct', printer: 'druckserver-cups/Laser_ELW', color: 'color', sides: 'two-sided-long-edge', maxCopies: 3, onlyWithGuestWifi: false });
+    const res = await submit();
+    expect(res.statusCode).toBe(201);
+    expect(res.json().job).toMatchObject({ filename: 'Bordkarte München.pdf', copies: 3, submittedBy: 'Gast iPhone von Kim' });
+    const job = received.find((r) => r.operation === OP.printJob)!;
+    expect(job.job['print-color-mode']).toEqual(['monochrome']); // Drucker kann keine Farbe
+    expect(job.job.sides).toEqual(['two-sided-long-edge']);
+  });
+
+  it('hält Aufträge zur Freigabe zurück; Freigeben druckt, Verwerfen löscht', async () => {
+    await settings({ mode: 'release', onlyWithGuestWifi: false });
+    const res = await submit();
+    expect(res.statusCode).toBe(201);
+    expect(received.some((r) => r.operation === OP.printJob)).toBe(false);
+    expect((await get<PrintStatus>('/api/printing', '')).body.guest.waiting).toBe(1);
+
+    // Warteschlange nur angemeldet
+    expect((await get('/api/printing/guest', '')).status).toBe(401);
+    const list = (await get<GuestPrintJob[]>('/api/printing/guest')).body;
+    expect(list).toEqual([expect.objectContaining({ filename: 'Bordkarte München.pdf', copies: 5, submittedBy: 'iPhone von Kim', sourceIp: '10.20.0.17' })]);
+    const file = await app.server.inject({ method: 'GET', url: `/api/printing/guest/${list[0]!.id}/file`, headers: { cookie: admin } });
+    expect(file.rawPayload.equals(PDF)).toBe(true);
+
+    const release = await app.server.inject({
+      method: 'POST',
+      url: `/api/printing/guest/${list[0]!.id}/release`,
+      headers: { cookie: admin },
+      payload: { options: { printerId: 'druckserver-cups/Laser_ELW', color: 'monochrome', copies: 2 } },
+    });
+    expect(release.statusCode).toBe(201);
+    expect(release.json()).toMatchObject({ copies: 2, filename: 'Bordkarte München.pdf' });
+    expect((await get<GuestPrintJob[]>('/api/printing/guest')).body).toEqual([]);
+    expect(readdirSync(app.printing.guestDir)).toEqual([]);
+
+    await submit();
+    const second = (await get<GuestPrintJob[]>('/api/printing/guest')).body[0]!;
+    expect((await app.server.inject({ method: 'DELETE', url: `/api/printing/guest/${second.id}` })).statusCode).toBe(401);
+    expect((await app.server.inject({ method: 'DELETE', url: `/api/printing/guest/${second.id}`, headers: { cookie: admin } })).statusCode).toBe(204);
+    expect((await get<GuestPrintJob[]>('/api/printing/guest')).body).toEqual([]);
+  });
+
+  it('verwirft nicht freigegebene Aufträge nach 24 Stunden', async () => {
+    await settings({ mode: 'release', onlyWithGuestWifi: false });
+    await submit();
+    expect(await app.printing.cleanupGuest(Date.now() + 23 * 3600_000)).toBe(0);
+    expect(await app.printing.cleanupGuest(Date.now() + 25 * 3600_000)).toBe(1);
+    expect(existsSync(app.printing.guestDir) && readdirSync(app.printing.guestDir)).toEqual([]);
   });
 });
 

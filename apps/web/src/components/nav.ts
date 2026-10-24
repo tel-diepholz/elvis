@@ -1,4 +1,5 @@
 import {
+  Activity,
   Archive,
   BookOpenText,
   CloudSun,
@@ -52,6 +53,7 @@ export const NAV: NavGroup[] = [
       { to: '/karte', label: 'Karte', icon: Map },
       { to: '/wetter', label: 'Wetterstation', icon: CloudSun },
       { to: '/netzwerk', label: 'Netzwerk', icon: Network },
+      { to: '/monitoring', label: 'Monitoring', icon: Activity },
       { to: '/kameras', label: 'Kameras', icon: Cctv },
       { to: '/bildschirme', label: 'Bildschirme', icon: MonitorSmartphone },
       { to: '/medien', label: 'Medien', icon: MonitorPlay },

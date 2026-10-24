@@ -62,6 +62,21 @@ export function evaluateAlerts(get: StateGetter, offline: DeviceId[], limits: El
     }
   }
 
+  const monitoring = get('monitoring');
+  if (monitoring && !offline.includes('monitoring')) {
+    for (const t of monitoring.targets) {
+      // Nicht dauerhaft eingeschaltete Geräte dürfen fehlen; ihre letzten Messwerte gelten dann nicht mehr
+      if (t.reachable === false) {
+        if (t.alwaysOn) add({ id: `monitoring:${t.id}`, severity: 'alarm', system: 'comms', title: `${t.name} nicht erreichbar`, detail: t.error ?? undefined });
+        continue;
+      }
+      for (const m of t.metrics) {
+        if (m.severity === 'ok') continue;
+        add({ id: `monitoring:${t.id}:${m.id}`, severity: m.severity, system: 'comms', title: `${t.name}: ${m.label}`, detail: m.problem && m.problem !== m.text ? `${m.text} – ${m.problem}` : m.text });
+      }
+    }
+  }
+
   const network = get('network');
   if (network) {
     if (!network.internet) {

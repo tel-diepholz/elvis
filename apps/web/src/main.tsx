@@ -31,6 +31,7 @@ import { SystemPage } from './pages/SystemPage';
 import { UsersPage } from './pages/UsersPage';
 import { VehiclePage } from './pages/VehiclePage';
 import { WeatherPage } from './pages/WeatherPage';
+import { MonitoringPage } from './pages/MonitoringPage';
 import './styles/app.css';
 
 applyTheme();
@@ -56,6 +57,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="fahrzeug" element={<ViewOnlyUnlessLoggedIn><VehiclePage /></ViewOnlyUnlessLoggedIn>} />
                 <Route path="karte" element={<MapPage />} />
                 <Route path="wetter" element={<WeatherPage />} />
+                <Route path="monitoring" element={<MonitoringPage />} />
                 <Route path="netzwerk" element={<ViewOnlyUnlessLoggedIn><CommsPage /></ViewOnlyUnlessLoggedIn>} />
                 {/* alte Adresse (Lesezeichen) */}
                 <Route path="kommunikation" element={<Navigate to="/netzwerk" replace />} />

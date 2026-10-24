@@ -334,6 +334,27 @@ diesem AP kein Gastnetz.
 - Ergebnis und Fehler je AP (nicht erreichbar, Anmeldung abgelehnt, Gastnetz-Bridge fehlt) stehen in der Liste;
   Übertragungen und neue Fehler im Bedienprotokoll.
 
+### Monitoring (SNMP, Node Exporter)
+
+Das Modul „Monitoring“ fragt Geräte im Fahrzeugnetz regelmäßig ab (Vorgabe alle 30 s, einstellbar unter
+Fahrzeugmodule). Die Ziele legen Admins unter **System → Monitoring** an, „Verbindung testen“ zeigt die Messwerte
+vor dem Speichern. Den aktuellen Stand sehen alle auf der Seite **Monitoring**, Auffälligkeiten stehen in der Meldungsleiste.
+
+| Art | Abfrage | Fest eingebaute Prüfungen |
+| --- | --- | --- |
+| Drucker (SNMP) | SNMP v1/v2c, Port 161 | Zustand, Störungen aus `hrPrinterDetectedErrorState` (Papierstau, kein Papier, Klappe offen …), Füllstände aus der Drucker-MIB (Warnung unter x %) |
+| Gerät (SNMP) | SNMP v1/v2c, Port 161 | nur Name und Laufzeit, Messwerte über eigene Prüfungen |
+| Rechner (Node Exporter) | `http://<host>:9100/metrics` | Last je Kern, freier Arbeitsspeicher, freier Platz je Dateisystem, höchste Temperatur |
+
+Zusätzlich lassen sich je Ziel **eigene Prüfungen** anlegen: eine OID (SNMP) bzw. eine Metrik mit Labels
+(`node_filesystem_avail_bytes{mountpoint="/data"}`), dazu ein Faktor, eine Einheit und Grenzen für Warnung und Alarm
+(jeweils „unter“ und „über“, leer bedeutet keine Prüfung).
+
+**Dauerhaft eingeschaltet:** Ist ein Gerät so markiert und antwortet zweimal in Folge nicht, gibt es einen Alarm.
+Ohne diese Markierung (z. B. ein Drucker, der nur im Einsatz eingeschaltet wird) gilt „nicht erreichbar“ als
+ausgeschaltet. Dann gibt es keine Meldung, und die letzten Messwerte werden nur noch grau angezeigt. Gemeldet werden
+nur Probleme in den Messwerten, solange das Gerät läuft.
+
 ### Wetterstation Airmar 150WX (NMEA 2000 über Actisense NGX-1)
 
 Treiber `actisense-airmar`: liest die Station über ein Actisense-Gateway (NGX-1 oder NGT-1) am USB-Port.
@@ -480,7 +501,8 @@ provides:                                 # Integration in ELVIS
 ```
 
 - Optionstypen: `string`, `password`, `int`, `bool`, `select`, `ip`. Platzhalter: `{{options.*}}`,
-  `{{addon.id}}`, `{{addon.version}}`, `{{host.address}}`, `{{host.name}}`.
+  `{{addon.id}}`, `{{addon.version}}`, `{{addon.secret}}` (je Addon festes Geheimnis, z. B. für Rückrufe an ELVIS),
+  `{{host.address}}`, `{{host.name}}`.
 - Daten liegen in benannten Volumes (`elvis-addon-<id>-<name>`) und bleiben bei Updates und Neukonfiguration
   erhalten. Privilegierte Container gibt es nicht. Host-Netzwerk, Capabilities und Ports werden vor der Installation
   angezeigt.
@@ -552,13 +574,30 @@ Voraussetzung: Docker und Node auf dem Entwicklungsrechner.
 - **Technik:** ELVIS spricht IPP direkt mit CUPS (`apps/server/src/services/ipp.ts`) und braucht dafür keine weitere
   Bibliothek. Addons melden Druckserver über `provides.printServers` (`{ id, name, url }`). Endpunkte:
   `GET /api/printing`, `POST /api/printing/jobs` (Multipart: `options` als JSON, dann `file`) und
-  `GET /api/printing/jobs/:ref`.
+  `GET /api/printing/jobs/:ref`; Gastdrucker: `GET /api/printing/guest`, `GET …/:id/file`, `POST …/:id/release`,
+  `DELETE …/:id`.
 - **Ablage** (*System → Druckserver*, nur Admins): Ist ein Einsatz eröffnet, landet jeder Druck als PDF in dessen
   Dokumentverwaltung. Der Ablageort lässt sich mit Platzhaltern wie bei Vorlagen festlegen (Vorgabe `Drucke`), fehlende
   Ordner werden angelegt. Jeder Druck steht im Bedienprotokoll, die Ablage zusätzlich im Einsatztagebuch. Ohne offenen
   Einsatz wird gedruckt, aber nichts abgelegt. Die Karte zeigt außerdem die letzten Aufträge und den vorausgewählten Drucker.
 - **Sicherheit:** Drucken über CUPS ist im Netz ohne Anmeldung möglich, die CUPS-Verwaltung braucht ein Passwort.
   Port 631 sollte nur aus dem Fahrzeug-LAN erreichbar sein.
+- **Gastdrucker (AirPrint, Android, Windows):** Mit der Addon-Option „Gastdrucker im Gastnetz“ kündigt ein zweiter
+  Container (`gast`, Netzwerk des Hosts) per Bonjour/mDNS einen virtuellen Drucker an. iPhone/iPad (AirPrint), Android
+  (Standarddruckdienst) und Windows 10/11 (Einstellungen → Drucker hinzufügen) finden ihn ohne App oder Treiber.
+  - Ein eigener, abgespeckter CUPS (Vorgabe Port 8631, keine Verwaltung, nur drucken) wandelt PDF, JPEG, Apple- und
+    PWG-Raster in PDF. Das Backend `elvis` schickt jeden Auftrag an `POST /api/printing/guest/submit`, angemeldet mit
+    einem je Addon festen Geheimnis (`{{addon.secret}}`, Manifest: `provides.guestPrinters`).
+  - *System → Druckserver → Gastdrucker:* **Aus** (Aufträge ablehnen), **Direkt drucken** (fester Drucker, Farbe und
+    Seiten einstellbar, nur was der Drucker kann) oder **Freigabe durch Personal**: Die Aufträge erscheinen
+    angemeldet unter *Drucken* mit Vorschau, werden dort mit den üblichen Einstellungen freigegeben oder verworfen und
+    nach 24 Stunden gelöscht. Höchstzahl Kopien je Auftrag einstellbar; Vorgabe: nur annehmen, solange das Gast-WLAN
+    läuft (Einsatz eröffnet). Ablage, Bedienprotokoll und Einsatztagebuch wie bei jedem Druck.
+  - **Netz:** Der Docker-Host braucht eine Adresse im Gastnetz (z. B. VLAN-Schnittstelle `eth0.20`). Diese
+    Schnittstelle in der Option „Netzwerkschnittstelle zum Gastnetz“ eintragen: CUPS und avahi laufen dann nur dort.
+    Außerdem „Adresse von ELVIS“ eintragen (wie der Docker-Host ELVIS erreicht). Per Firewall aus dem Gastnetz nur
+    den Gastdrucker-Port (TCP 8631) und mDNS (UDP 5353) zum Docker-Host freigeben, nicht ELVIS oder Port 631.
+  - Kein TLS (`ipps`) und kein WSD: Windows vor 10 21H2 findet den Drucker unter Umständen nicht.
 
 ## Scannen (Scan-Eingang)
 

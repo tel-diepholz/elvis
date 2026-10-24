@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { extensionOf, printOptionsSchema, printSettingsInputSchema, sanitizeName, type Topic } from '@elvis/shared';
+import { GUEST_PRINT_MODES, extensionOf, guestReleaseSchema, printOptionsSchema, printSettingsInputSchema, sanitizeName, type Topic } from '@elvis/shared';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
 import type { OfficeService } from '../services/office.js';
 import type { PrintService } from '../services/printing.js';
-import { operatorOf, parse } from './util.js';
+import { idParam, operatorOf, parse } from './util.js';
 
 export const MAX_PRINT_BYTES = 50 * 1024 * 1024;
 
@@ -82,6 +82,59 @@ export function printingRoutes(
 
   app.get('/api/printing/jobs/:ref', async (req) => printing.job(parse(z.object({ ref: z.string().regex(/^[\w-]{8,40}$/) }), req.params).ref));
 
+  // --- Gastdrucker ---
+
+  /**
+   * Der Gastdrucker des Addons (CUPS im Gastnetz) schickt jeden Auftrag als PDF im Rumpf. Die Angaben des Geräts
+   * stehen URL-kodiert in Kopfzeilen; angemeldet wird mit dem Token aus provides.guestPrinters.
+   */
+  app.register(async (guest) => {
+    guest.addContentTypeParser('application/pdf', { parseAs: 'buffer', bodyLimit: MAX_PRINT_BYTES }, (_req, body, done) => done(null, body));
+    guest.post('/api/printing/guest/submit', async (req, reply) => {
+      const header = (name: string) => {
+        const v = req.headers[name];
+        try {
+          return decodeURIComponent(String(Array.isArray(v) ? v[0] : (v ?? ''))).slice(0, 300);
+        } catch {
+          return '';
+        }
+      };
+      if (!Buffer.isBuffer(req.body)) throw new HttpError(415, 'PDF im Rumpf erwartet (Content-Type application/pdf)');
+      const token = header('authorization').replace(/^Bearer\s+/i, '');
+      const result = await printing.acceptGuest(token, req.body, {
+        jobName: header('x-job-name'),
+        user: header('x-job-user'),
+        copies: Number(header('x-job-copies')) || 1,
+        sourceIp: header('x-job-client').replace(/[^\w.:-]/g, ''),
+      });
+      return reply.code(201).send(result);
+    });
+  });
+
+  // Warteschlange zur Freigabe (Anmeldung nötig)
+  app.get('/api/printing/guest', async () => printing.guestJobs());
+
+  app.get('/api/printing/guest/:id/file', async (req, reply) => {
+    const f = await printing.guestFile(parse(idParam, req.params).id);
+    return reply
+      .header('content-type', 'application/pdf')
+      .header('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(f.filename)}`)
+      .header('x-content-type-options', 'nosniff')
+      .send(f.content);
+  });
+
+  app.post('/api/printing/guest/:id/release', async (req, reply) => {
+    const { id } = parse(idParam, req.params);
+    const { options } = parse(guestReleaseSchema, req.body);
+    const job = await printing.releaseGuest(id, options, { userId: req.user?.id ?? null, name: operatorOf(req) });
+    return reply.code(201).send(job);
+  });
+
+  app.delete('/api/printing/guest/:id', async (req, reply) => {
+    await printing.discardGuest(parse(idParam, req.params).id, operatorOf(req));
+    return reply.code(204).send();
+  });
+
   // --- Einstellungen (nur Admins über /api/system/) ---
 
   app.get('/api/system/printing', async () => ({ settings: printing.settings(), jobs: printing.recent() }));
@@ -95,7 +148,7 @@ export function printingRoutes(
       action: 'einstellungen',
       params: '',
       success: true,
-      message: input.archive ? `Ablage unter „${input.folderPath || '/'}“` : 'Ablage aus',
+      message: [input.archive ? `Ablage unter „${input.folderPath || '/'}“` : 'Ablage aus', `Gastdrucker: ${GUEST_PRINT_MODES[next.guest.mode]}`].join(', '),
     });
     deps.notify(['audit']);
     return next;

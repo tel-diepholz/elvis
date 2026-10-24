@@ -206,6 +206,17 @@ const printServerProvision = z.object({
   url: templated,
 });
 
+/**
+ * Gastdrucker: virtueller Drucker im Gastnetz, der Aufträge als PDF an ELVIS schickt
+ * (POST /api/printing/guest/submit mit „Authorization: Bearer <token>“).
+ */
+const guestPrinterProvision = z.object({
+  id: slug,
+  name: z.string().min(1),
+  /** Gemeinsames Geheimnis, meist {{addon.secret}} – dasselbe bekommt der Container per Umgebungsvariable */
+  token: templated,
+});
+
 export const addonManifestSchema = z
   .object({
     id: slug,
@@ -225,6 +236,7 @@ export const addonManifestSchema = z
         geocoders: z.array(geocoderProvision).default([]),
         office: z.array(officeProvision).default([]),
         printServers: z.array(printServerProvision).default([]),
+        guestPrinters: z.array(guestPrinterProvision).default([]),
       })
       .default({}),
     /**
@@ -369,7 +381,8 @@ export function defaultOptionValues(options: AddonManifest['options']): OptionVa
 
 export interface TemplateContext {
   options: OptionValues;
-  addon: { id: string; version: string };
+  /** secret: zufälliges, je Addon festes Geheimnis von ELVIS (z. B. für Rückrufe des Addons an ELVIS) */
+  addon: { id: string; version: string; secret?: string };
   host: { address: string; name: string };
 }
 

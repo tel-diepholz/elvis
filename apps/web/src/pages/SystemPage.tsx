@@ -10,6 +10,7 @@ import { DisplaysCard } from './system/DisplaysCard';
 import { DocumentFoldersCard } from './system/DocumentFoldersCard';
 import { ForcesCard } from './system/ForcesCard';
 import { ModulesCard } from './system/ModulesCard';
+import { MonitoringCard } from './system/MonitoringCard';
 import { PrintSettingsCard } from './system/PrintSettingsCard';
 import { ScanSettingsCard } from './system/ScanSettingsCard';
 import { RolesCard } from './system/RolesCard';
@@ -39,6 +40,7 @@ export function SystemPage() {
             <DisplaysCard />
             <WifiCard />
             <WifiApsCard />
+            <MonitoringCard />
             <DocumentFoldersCard />
             <PrintSettingsCard />
             <ScanSettingsCard />

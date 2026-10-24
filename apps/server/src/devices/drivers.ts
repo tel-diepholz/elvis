@@ -2,6 +2,7 @@ import type { AddonOption, DeviceId, OptionValues, SystemId } from '@elvis/share
 import type { DeviceAdapter } from './adapter.js';
 import { AirmarAdapter } from './drivers/airmar.js';
 import { CamerasAdapter, type CameraSource } from './drivers/cameras.js';
+import { MonitoringAdapter, type MonitoringSource } from './drivers/monitoring.js';
 import { OpenWrtWifiAdapter, type WifiSource } from './drivers/openwrt.js';
 import { TeltonikaAdapter } from './drivers/teltonika.js';
 import { MediaSim } from './sim/media.js';
@@ -23,6 +24,8 @@ export interface DriverDeps {
   cameras: CameraSource;
   /** Accesspoints aus den Systemeinstellungen (WLAN) */
   wifi: WifiSource;
+  /** Ziele des Monitorings aus den Systemeinstellungen */
+  monitoring: MonitoringSource;
 }
 
 export interface DeviceDefinition<K extends DeviceId> {
@@ -118,6 +121,21 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
           pollSeconds: { type: 'int', label: 'Abfrageintervall (Sekunden)', required: false, default: 10, min: 5, max: 300 },
         },
         create: (o, deps) => new OpenWrtWifiAdapter(deps.wifi, Number(o.pollSeconds || 10) * 1000),
+      },
+    },
+  },
+  monitoring: {
+    name: 'Monitoring',
+    system: 'comms',
+    drivers: {
+      standard: {
+        label: 'Ziele aus den Systemeinstellungen',
+        description:
+          'Fragt die unter „Monitoring“ eingetragenen Geräte ab: Drucker und andere Geräte per SNMP, Rechner per Prometheus Node Exporter. Auffällige Messwerte erscheinen als Meldung; nicht erreichbar löst nur bei dauerhaft eingeschalteten Geräten einen Alarm aus.',
+        options: {
+          pollSeconds: { type: 'int', label: 'Abfrageintervall (Sekunden)', required: false, default: 30, min: 10, max: 600 },
+        },
+        create: (o, deps) => new MonitoringAdapter(deps.monitoring, Number(o.pollSeconds || 30) * 1000),
       },
     },
   },

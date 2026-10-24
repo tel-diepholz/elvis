@@ -2396,6 +2396,9 @@ select.unit-status.has-children {
 .print-jobs li:last-child {
   border-bottom: none;
 }
+.print-jobs li.selected {
+  background: var(--bg-hover);
+}
 .print-job-name {
   overflow-wrap: anywhere;
 }
@@ -4661,4 +4664,45 @@ html.display-mode body {
 }
 .tile-task-meta svg {
   vertical-align: -0.1em;
+}
+
+/* Monitoring */
+.metric-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.metric-list li {
+  display: grid;
+  grid-template-columns: auto minmax(7em, 1fr) minmax(0, auto);
+  align-items: center;
+  column-gap: 8px;
+}
+.metric-list .metric-value {
+  text-align: right;
+}
+.metric-list .metric-problem {
+  grid-column: 2 / -1;
+}
+.metric-list.is-stale {
+  opacity: 0.6;
+}
+.monitoring-check {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 12px 44px 12px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.monitoring-check-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+.monitoring-test {
+  margin-top: 12px;
 }

@@ -36,6 +36,8 @@ export interface PrintStatus {
   defaultPrinter: string | null;
   /** Ablage der Drucke in der Dokumentverwaltung */
   archive: { enabled: boolean; incident: { id: number; title: string } | null; path: string };
+  /** Gastdrucker (AirPrint/IPP im Gastnetz) */
+  guest: { available: boolean; mode: GuestPrintMode; waiting: number };
 }
 
 export type PrintJobState = 'pending' | 'held' | 'processing' | 'stopped' | 'canceled' | 'aborted' | 'completed' | 'unknown';
@@ -112,6 +114,49 @@ export const printOptionsSchema = z.object({
 export type PrintOptions = z.output<typeof printOptionsSchema>;
 export type PrintOptionsInput = z.input<typeof printOptionsSchema>;
 
+/**
+ * Gastdrucker: Das Druckserver-Addon kündigt im Gastnetz einen virtuellen Drucker an (AirPrint, Android, Windows)
+ * und reicht die Aufträge als PDF an ELVIS weiter. Je nach Einstellung druckt ELVIS sofort oder wartet auf Freigabe.
+ */
+export const GUEST_PRINT_MODES = {
+  off: 'Aus (Aufträge ablehnen)',
+  direct: 'Direkt drucken',
+  release: 'Freigabe durch Personal',
+} as const;
+export type GuestPrintMode = keyof typeof GUEST_PRINT_MODES;
+
+export const guestPrintSettingsSchema = z
+  .object({
+    mode: z.enum(Object.keys(GUEST_PRINT_MODES) as [GuestPrintMode, ...GuestPrintMode[]]).default('off'),
+    /** Drucker für „Direkt drucken“ */
+    printer: z.string().min(1).max(200).nullable().default(null),
+    sides: z.enum(Object.keys(SIDES) as [Sides, ...Sides[]]).default('one-sided'),
+    color: z.enum(['color', 'monochrome']).default('monochrome'),
+    /** Höchstzahl Kopien je Auftrag (Gäste wählen sie am Gerät) */
+    maxCopies: z.coerce.number().int().min(1).max(99).default(5),
+    /** Nur annehmen, solange das Gast-WLAN läuft (Einsatz eröffnet) */
+    onlyWithGuestWifi: z.boolean().default(true),
+  })
+  .refine((g) => g.mode !== 'direct' || g.printer !== null, { message: 'Für „Direkt drucken“ einen Drucker wählen', path: ['printer'] });
+export type GuestPrintSettings = z.output<typeof guestPrintSettingsSchema>;
+
+/** Wartende Aufträge aus dem Gastnetz werden nach dieser Zeit verworfen */
+export const GUEST_PRINT_RETENTION_HOURS = 24;
+
+export interface GuestPrintJob {
+  id: number;
+  filename: string;
+  sizeBytes: number;
+  copies: number;
+  /** Name, den das Gerät mitschickt (requesting-user-name) */
+  submittedBy: string;
+  sourceIp: string;
+  receivedAt: string;
+}
+
+export const guestReleaseSchema = z.object({ options: printOptionsSchema });
+export type GuestRelease = z.infer<typeof guestReleaseSchema>;
+
 export interface PrintSettings {
   /** Drucke in der Dokumentverwaltung des laufenden Einsatzes ablegen */
   archive: boolean;
@@ -119,6 +164,7 @@ export interface PrintSettings {
   folderPath: string;
   /** Vorauswahl auf der Druckseite */
   defaultPrinter: string | null;
+  guest: GuestPrintSettings;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -127,10 +173,16 @@ export const printSettingsInputSchema = z.object({
   archive: z.boolean(),
   folderPath: archivePathSchema,
   defaultPrinter: z.string().min(1).max(200).nullable(),
+  guest: guestPrintSettingsSchema.default({}),
 });
 export type PrintSettingsInput = z.infer<typeof printSettingsInputSchema>;
 
-export const DEFAULT_PRINT_SETTINGS: Omit<PrintSettings, 'updatedAt' | 'updatedBy'> = { archive: true, folderPath: 'Drucke', defaultPrinter: null };
+export const DEFAULT_PRINT_SETTINGS: Omit<PrintSettings, 'updatedAt' | 'updatedBy'> = {
+  archive: true,
+  folderPath: 'Drucke',
+  defaultPrinter: null,
+  guest: guestPrintSettingsSchema.parse({}),
+};
 
 const MEDIA_NAMES: Record<string, string> = {
   iso_a3: 'A3',

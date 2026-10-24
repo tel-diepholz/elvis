@@ -1,3 +1,4 @@
+import { createHmac, randomBytes } from 'node:crypto';
 import type Docker from 'dockerode';
 import tar from 'tar-stream';
 import {
@@ -27,7 +28,7 @@ import type { TileService } from '../services/tiles.js';
 import { JobRuns, followLogs, type JobRunRow } from './jobs.js';
 import type { GeocoderProvision, GeocoderService } from '../services/geocoder.js';
 import type { OfficeProvision, OfficeService } from '../services/office.js';
-import type { PrintServerProvision, PrintService } from '../services/printing.js';
+import type { GuestPrinterProvision, PrintServerProvision, PrintService } from '../services/printing.js';
 import type { VideoProvision, VideoSourceService } from '../services/videos.js';
 import { createProgressParser, nextScheduledRun, overallPercent } from './progress.js';
 import type { RepoService } from './repos.js';
@@ -299,7 +300,20 @@ export class AddonManager {
 
   private ctx(m: AddonManifest, options: OptionValues, hostId: number): TemplateContext {
     const h = this.hosts.get(hostId);
-    return { options, addon: { id: m.id, version: m.version }, host: { address: h.address, name: h.name } };
+    return { options, addon: { id: m.id, version: m.version, secret: this.addonSecret(m.id) }, host: { address: h.address, name: h.name } };
+  }
+
+  /** Je Addon festes Geheimnis ({{addon.secret}}), abgeleitet aus einem einmal erzeugten Schlüssel dieser Installation */
+  private addonSecret(addonId: string): string {
+    const KEY = 'addons:secret';
+    let row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(KEY) as { value: string } | undefined;
+    if (!row) {
+      this.db
+        .prepare('INSERT OR IGNORE INTO settings (key, value, updated_at, updated_by) VALUES (?, ?, ?, ?)')
+        .run(KEY, JSON.stringify(randomBytes(32).toString('hex')), this.now().toISOString(), 'system');
+      row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(KEY) as { value: string };
+    }
+    return createHmac('sha256', JSON.parse(row.value) as string).update(addonId).digest('base64url');
   }
 
   private assertNoJobRunning(id: string): void {
@@ -798,6 +812,7 @@ export class AddonManager {
     const geocoders: GeocoderProvision[] = [];
     const offices: OfficeProvision[] = [];
     const printServers: PrintServerProvision[] = [];
+    const guestPrinters: GuestPrinterProvision[] = [];
     for (const r of this.rows()) {
       if (r.status !== 'running') continue;
       const manifest = JSON.parse(r.manifest) as AddonManifest;
@@ -833,11 +848,14 @@ export class AddonManager {
       for (const p of manifest.provides.printServers ?? []) {
         printServers.push({ id: `${r.id}-${p.id}`, name: p.name, url: renderTemplate(p.url, ctx) });
       }
+      for (const g of manifest.provides.guestPrinters ?? []) {
+        guestPrinters.push({ id: `${r.id}-${g.id}`, name: g.name, token: renderTemplate(g.token, ctx) });
+      }
     }
     if (this.tiles.setAddonSources(sources)) this.notify(['mapSources']);
     if (this.videos?.setProvisions(videos)) this.notify(['videoSources']);
     this.geocoder?.setProvisions(geocoders);
     this.office?.setProvisions(offices);
-    this.printing?.setProvisions(printServers);
+    this.printing?.setProvisions(printServers, guestPrinters);
   }
 }

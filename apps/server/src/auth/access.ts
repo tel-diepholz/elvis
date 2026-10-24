@@ -28,6 +28,8 @@ export function accessLevel(method: string, rawUrl: string): AccessLevel {
 
   // Druckserver: PDFs drucken dürfen auch anonyme Arbeitsplätze (Einstellungen unter /api/system/)
   if (url === '/api/printing' || url === '/api/printing/jobs' || url.startsWith('/api/printing/jobs/')) return 'public';
+  // Gastdrucker des Addons: meldet sich mit eigenem Token (prüft der Druckdienst)
+  if (url === '/api/printing/guest/submit') return 'public';
 
   // Fahrzeugname und Kartenzeichen braucht auch die anonyme Ansicht; ändern dürfen nur Admins.
   if (url === '/api/settings') return read ? 'public' : 'admin';

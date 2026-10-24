@@ -40,6 +40,9 @@ import { TileService } from './services/tiles.js';
 import type { UbusHttp } from './services/openwrt.js';
 import { WifiService } from './services/wifi.js';
 import { wifiRoutes } from './routes/wifi.js';
+import { monitoringRoutes } from './routes/monitoring.js';
+import { MonitoringService } from './services/monitoring.js';
+import type { ProbeDeps } from './services/monitoring-probes.js';
 import { documentRoutes } from './routes/documents.js';
 import { wopiRoutes } from './routes/wopi.js';
 import { DocumentService } from './services/documents.js';
@@ -65,7 +68,7 @@ export interface App {
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -83,7 +86,8 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     },
     http: opts.wifiHttp,
   });
-  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices), { cameras, wifi });
+  const monitoring = new MonitoringService(db, () => hub.invalidate(['monitoring']), opts.monitoringProbes);
+  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices), { cameras, wifi, monitoring });
   const settings = new SettingsService(db, { vehicle: config.vehicle });
   const hub = new LiveHub(devices, () => settings.get().vehicle);
   settings.onChange(() => hub.invalidate(['settings']));
@@ -95,7 +99,12 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const templates = new TemplateService(db, config.dataDir, (t) => hub.invalidate(t));
   const documents = new DocumentService(store, config.dataDir, { templates, vehicle: () => settings.get().vehicle, notify: (t) => hub.invalidate(t) });
   const office = new OfficeService(db, () => hub.invalidate(['office']), opts.officeFetch);
-  const printing = new PrintService(store, { documents, notify: (t) => hub.invalidate(t), transport: opts.ippTransport });
+  const printing = new PrintService(store, config.dataDir, {
+    documents,
+    notify: (t) => hub.invalidate(t),
+    transport: opts.ippTransport,
+    guestWifiActive: () => wifi.guest().active,
+  });
   const scanning = new ScanService(store, config.dataDir, { documents, notify: (t) => hub.invalidate(t) });
   const sessions = new SessionStore(db);
   const roles = new RoleService(db, sessions);
@@ -118,6 +127,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const cleanup = () => {
     void documents.cleanupDrafts().catch((err) => server.log.warn({ err }, 'Entwürfe aufräumen fehlgeschlagen'));
     void scanning.cleanup().catch((err) => server.log.warn({ err }, 'Scan-Eingang aufräumen fehlgeschlagen'));
+    void printing.cleanupGuest().catch((err) => server.log.warn({ err }, 'Gastaufträge aufräumen fehlgeschlagen'));
   };
   let cleanupTimer: NodeJS.Timeout | null = null;
   const tiles = new TileService(config.map, config.dataDir);
@@ -201,6 +211,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     api.get('/api/video/sources', async () => videos.list());
     cameraRoutes(api, { cameras, presets: cameraPresets, devices, incidents, store, notify: (t) => hub.invalidate(t) });
     wifiRoutes(api, { wifi, store, notify: (t) => hub.invalidate(t) });
+    monitoringRoutes(api, { monitoring, store, notify: (t) => hub.invalidate(t) });
     mapRoutes(api, tiles, store, settings, () => hub.invalidate(['audit']), geocoder);
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
