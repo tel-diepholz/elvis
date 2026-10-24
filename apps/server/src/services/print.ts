@@ -156,12 +156,13 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
   for (const m of req.markers) {
     const [x, y] = toPt(m.lat, m.lon);
     if (x < fx || x > fx + fw || y < fy || y > fy + fh) {
-      outside.push(m.label || (m.kind === 'vehicle' ? 'Fahrzeug' : m.kind === 'incident' ? 'Einsatzort' : 'Punkt'));
+      outside.push(m.label || (m.kind === 'vehicle' ? 'Fahrzeug' : m.kind === 'incident' ? 'Einsatzort' : m.kind === 'unit' ? 'Einheit' : 'Punkt'));
       continue;
     }
     doc.save();
-    if (m.kind === 'vehicle') {
-      drawTacticalSign(doc, vehicleSign, x, y, signScale);
+    const sign = m.kind === 'vehicle' ? vehicleSign : m.kind === 'unit' ? buildTacticalSign(m.sign ?? {}) : null;
+    if (sign) {
+      drawTacticalSign(doc, sign, x, y, signScale);
     } else if (m.kind === 'point') {
       doc.circle(x, y, 5 * f).lineWidth(1.5 * f).fillAndStroke(m.color ?? '#1e6fd9', '#ffffff');
     } else {
@@ -172,7 +173,7 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
       const label = pdfText(m.label);
       doc.font('Helvetica-Bold').fontSize(8 * f);
       const lw = doc.widthOfString(label) + 6 * f;
-      const ly = m.kind === 'vehicle' ? y + (vehicleSign.box.y + vehicleSign.box.height - vehicleSign.anchor.y) * signScale + 2 * f : y + (m.kind === 'point' ? 7 : 12) * f;
+      const ly = sign ? y + (sign.box.y + sign.box.height - sign.anchor.y) * signScale + 2 * f : y + (m.kind === 'point' ? 7 : 12) * f;
       doc.rect(x - lw / 2, ly, lw, 11 * f).fillOpacity(0.85).fill('#ffffff');
       doc.fillOpacity(1).fillColor('#111111').text(label, x - lw / 2, ly + 2 * f, { width: lw, align: 'center', lineBreak: false });
     }

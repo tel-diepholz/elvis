@@ -1616,6 +1616,14 @@ input[type='checkbox'] {
   background: var(--warn-bg);
   color: var(--warn);
 }
+.map-object-icon.unit {
+  width: auto;
+  min-width: 28px;
+  background: none;
+}
+.map-objects-subhead {
+  border-top: 1px solid var(--border);
+}
 /* Farbwahl je Objekt */
 .map-color-dot {
   width: 16px;
@@ -2089,49 +2097,148 @@ input[type='checkbox'] {
   margin-left: auto;
 }
 
-.fms,
-.fms-select {
-  font-weight: 700;
-  font-family: var(--mono);
-}
-.fms {
-  display: inline-grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
+/* Kräfte: Status, Baum, Kräfteverwaltung */
+.unit-status {
+  display: inline-block;
+  padding: 3px 8px;
   border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
   background: var(--muted-bg);
+  color: var(--text-muted);
+  white-space: nowrap;
 }
-.fms-select {
+select.unit-status {
   width: auto;
+  padding: 6px 8px;
 }
-.fms-1,
-.fms-2 {
-  background: var(--ok-bg);
-  color: var(--ok);
+select.unit-status.has-children {
+  outline: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+  outline-offset: 1px;
 }
-.fms-3 {
+.unit-status-alarmiert,
+.unit-status-anmarsch {
   background: var(--warn-bg);
   color: var(--warn);
 }
-.fms-4 {
+.unit-status-eingetroffen,
+.unit-status-ruhe {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.unit-status-einsatz {
   background: var(--alarm-bg);
   color: var(--alarm);
 }
-.fms-0,
-.fms-5 {
-  background: var(--alarm);
-  color: #fff;
-}
-.fms-7,
-.fms-8 {
+.unit-status-abmarsch {
   background: var(--info-bg);
   color: var(--info);
 }
-.fms-6,
-.fms-9 {
-  background: var(--muted-bg);
+.unit-status-legend {
+  margin-top: 12px;
+}
+.unit-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.unit-cell .tactical-sign {
+  flex-shrink: 0;
+}
+.unit-map {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
   color: var(--text-muted);
+  opacity: 0.45;
+}
+.unit-map.placed {
+  color: var(--ok);
+  opacity: 1;
+}
+.force-members,
+.force-sign {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.force-members legend,
+.force-sign legend {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+.force-member-role {
+  width: min(220px, 40%);
+}
+.force-list .chip-row {
+  margin: 4px 0;
+}
+.force-list > li,
+.force-members .simple-list > li {
+  gap: 10px;
+}
+.force-filter {
+  margin-bottom: 8px;
+}
+.deploy-pick {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.deploy-pick-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.deploy-pick-item:hover:not(:disabled) {
+  background: var(--muted-bg);
+}
+.deploy-pick-item:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.deploy-pick-item .grow,
+.deploy-node .grow {
+  display: flex;
+  flex-direction: column;
+}
+.deploy-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 45vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.deploy-node label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.deploy-node .grow {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.deploy-node.off {
+  opacity: 0.5;
 }
 
 /* Einsatztagebuch */
@@ -4420,6 +4527,81 @@ html.display-mode body {
   .task-detail {
     padding-left: 8px;
   }
+}
+
+/* Kachel „Kräfteübersicht“ */
+.tile-forces {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 3cqmin 4cqmin;
+  font-size: clamp(12px, 4.2cqmin, 26px);
+}
+.tile-forces-list {
+  flex: 1;
+  overflow: auto;
+}
+.tile-forces h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6em;
+  margin: 0.5em 0 0.2em;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.tile-forces section:first-child h3 {
+  margin-top: 0;
+}
+.tile-forces ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tile-forces li {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.25em 0.4em;
+  border-bottom: 1px solid var(--border);
+}
+.tile-unit-sign {
+  flex: none;
+  display: inline-flex;
+}
+/* Zeichen wachsen mit der Schrift der Kachel */
+.tile-unit-sign svg {
+  height: 1.8em;
+  width: auto;
+}
+.tile-unit-sign.sub svg {
+  height: 1.4em;
+}
+.tile-unit-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tile-unit-name {
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile-unit-meta {
+  font-size: 0.7em;
+  color: var(--text-muted);
+}
+.tile-unit-strength {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 0.85em;
+}
+.tile-forces .unit-status {
+  flex: none;
+  font-size: 0.75em;
 }
 
 /* Kachel „Aufgaben“ */

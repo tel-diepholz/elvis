@@ -55,6 +55,9 @@ import {
   type NewIncident,
   type NewJournalEntry,
   type NewUnit,
+  type DeployUnitInput,
+  type ForceUnit,
+  type ForceUnitInput,
   type Unit,
   type UnitPatch,
   type WifiAp,
@@ -134,6 +137,13 @@ export const api = {
   units: (id: number) => request<Unit[]>('GET', `/api/incidents/${id}/units`),
   addUnit: (id: number, unit: NewUnit) => request<Unit>('POST', `/api/incidents/${id}/units`, unit),
   patchUnit: (unitId: number, patch: UnitPatch) => request<Unit>('PATCH', `/api/units/${unitId}`, patch),
+  deployUnit: (id: number, input: DeployUnitInput) => request<Unit>('POST', `/api/incidents/${id}/units/deploy`, input),
+
+  forces: () => request<ForceUnit[]>('GET', '/api/forces'),
+  createForce: (input: ForceUnitInput) => request<ForceUnit>('POST', '/api/system/forces', input),
+  updateForce: (id: number, input: ForceUnitInput) => request<ForceUnit>('PUT', `/api/system/forces/${id}`, input),
+  removeForce: (id: number) => request<void>('DELETE', `/api/system/forces/${id}`),
+  adoptUnit: (unitId: number) => request<ForceUnit>('POST', `/api/system/forces/adopt/${unitId}`),
 
   documents: (id: number) => request<DocumentListing>('GET', `/api/incidents/${id}/documents`),
   uploadDocument: (id: number, file: File, description: string, folderId: number | null) => {

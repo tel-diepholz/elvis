@@ -8,6 +8,7 @@ import { useLive } from '../lib/live';
 import { CamerasCard } from './system/CamerasCard';
 import { DisplaysCard } from './system/DisplaysCard';
 import { DocumentFoldersCard } from './system/DocumentFoldersCard';
+import { ForcesCard } from './system/ForcesCard';
 import { ModulesCard } from './system/ModulesCard';
 import { PrintSettingsCard } from './system/PrintSettingsCard';
 import { ScanSettingsCard } from './system/ScanSettingsCard';
@@ -43,6 +44,7 @@ export function SystemPage() {
             <ScanSettingsCard />
             <RolesCard />
             <TaskTemplatesCard />
+            <ForcesCard />
           </>
         ) : (
           <Card title="Geräte & Treiber" icon={<Cpu size={18} />} className="span-2">

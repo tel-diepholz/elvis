@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { MAX_PRINT_ZOOM, MIN_PRINT_ZOOM, formatDtg, type MapPrintRequest } from '@elvis/shared';
+import { MAX_PRINT_ZOOM, MIN_PRINT_ZOOM, formatDtg, tacticalSignSchema, type MapPrintRequest } from '@elvis/shared';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
 import { renderMapPdf } from '../services/print.js';
@@ -21,8 +21,8 @@ const printRequest: z.ZodType<MapPrintRequest> = z.object({
   title: z.string().trim().min(1).max(120),
   subtitle: z.string().max(200).optional(),
   markers: z
-    .array(latLon.extend({ kind: z.enum(['vehicle', 'incident', 'point']), label: z.string().max(120), color: color.optional() }))
-    .max(100),
+    .array(latLon.extend({ kind: z.enum(['vehicle', 'incident', 'point', 'unit']), label: z.string().max(120), color: color.optional(), sign: tacticalSignSchema.optional() }))
+    .max(300),
   polygons: z
     .array(
       z.object({

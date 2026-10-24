@@ -428,6 +428,65 @@ const MIGRATIONS: Migration[] = [
   );
   CREATE INDEX scans_received ON scans(received_at);
   `,
+  // Kräfteverwaltung: Systemeinheiten (Fahrzeug, Zug, Verband) mit Untereinheiten; Kräfte im Einsatz als Baum
+  // mit eigenem Status statt FMS, taktischem Zeichen und Kartenposition
+  `
+  CREATE TABLE force_units (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    callsign TEXT NOT NULL DEFAULT '',
+    organization TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    sign TEXT NOT NULL,
+    leaders INTEGER NOT NULL DEFAULT 0,
+    sub_leaders INTEGER NOT NULL DEFAULT 0,
+    crew INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE force_unit_members (
+    parent_id INTEGER NOT NULL REFERENCES force_units(id) ON DELETE CASCADE,
+    child_id INTEGER NOT NULL REFERENCES force_units(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT '',
+    sort INTEGER NOT NULL,
+    PRIMARY KEY (parent_id, child_id)
+  );
+  CREATE INDEX force_unit_members_child ON force_unit_members(child_id);
+
+  CREATE TABLE units_new (
+    id INTEGER PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    parent_id INTEGER REFERENCES units_new(id),
+    role TEXT NOT NULL DEFAULT '',
+    source_id INTEGER REFERENCES force_units(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    callsign TEXT NOT NULL DEFAULT '',
+    organization TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    sign TEXT NOT NULL,
+    leaders INTEGER NOT NULL DEFAULT 0,
+    sub_leaders INTEGER NOT NULL DEFAULT 0,
+    crew INTEGER NOT NULL DEFAULT 0,
+    section TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL,
+    lat REAL,
+    lon REAL,
+    map_visible INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    arrived_at TEXT,
+    released_at TEXT,
+    updated_at TEXT NOT NULL
+  );
+  -- Bisherige Einheiten: Funkrufname wird Name, Fahrzeugtyp Text im Zeichen, FMS entfällt
+  INSERT INTO units_new (id, incident_id, name, organization, notes, sign, leaders, sub_leaders, crew, section, status,
+                         created_at, arrived_at, released_at, updated_at)
+    SELECT id, incident_id, callsign, organization, notes, json_object('text', substr(unit_type, 1, 12)), leaders, sub_leaders, crew,
+           section, CASE WHEN released_at IS NULL THEN 'eingetroffen' ELSE 'entlassen' END, arrived_at, arrived_at, released_at, updated_at
+    FROM units;
+  DROP TABLE units;
+  ALTER TABLE units_new RENAME TO units;
+  CREATE INDEX units_incident ON units(incident_id);
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

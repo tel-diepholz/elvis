@@ -1,7 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { JOURNAL_CATEGORY_LABELS, mapObjectPatchSchema, newMapObjectSchema, type JournalCategory } from '@elvis/shared';
+import {
+  JOURNAL_CATEGORY_LABELS,
+  deployUnitSchema,
+  forceUnitInputSchema,
+  mapObjectPatchSchema,
+  newMapObjectSchema,
+  newUnitSchema,
+  unitPatchSchema,
+  type JournalCategory,
+  type Topic,
+} from '@elvis/shared';
+import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
+import type { ForceService } from '../services/forces.js';
 import type { IncidentService } from '../services/incidents.js';
 import { idParam, operatorOf, parse } from './util.js';
 
@@ -28,26 +40,12 @@ const newJournal = z.object({
   timestamp: z.string().datetime({ offset: true }).optional(),
 });
 
-const strength = z.object({
-  leaders: z.number().int().min(0).max(999),
-  subLeaders: z.number().int().min(0).max(999),
-  crew: z.number().int().min(0).max(9999),
-});
-const fmsStatus = z.number().int().min(0).max(9).nullable();
-const newUnit = z.object({
-  callsign: text(100).min(1, 'Funkrufname fehlt'),
-  unitType: text(40).optional(),
-  organization: text(100).optional(),
-  strength: strength.optional(),
-  section: text(100).optional(),
-  fmsStatus: fmsStatus.optional(),
-  notes: text(1000).optional(),
-});
-const unitPatch = newUnit.partial().extend({ released: z.boolean().optional() });
-
 const csvCell = (v: string) => `"${v.replace(/"/g, '""')}"`;
 
-export function incidentRoutes(app: FastifyInstance, incidents: IncidentService): void {
+export function incidentRoutes(
+  app: FastifyInstance,
+  { incidents, forces, store, notify }: { incidents: IncidentService; forces: ForceService; store: Store; notify: (t: Topic[]) => void },
+): void {
   app.get('/api/incidents', async () => incidents.list());
   app.get('/api/incidents/active', async () => incidents.active());
 
@@ -119,11 +117,51 @@ export function incidentRoutes(app: FastifyInstance, incidents: IncidentService)
 
   app.post('/api/incidents/:id/units', async (req, reply) => {
     const { id } = parse(idParam, req.params);
-    return reply.code(201).send(incidents.addUnit(id, parse(newUnit, req.body), operatorOf(req)));
+    return reply.code(201).send(incidents.addUnit(id, parse(newUnitSchema, req.body), operatorOf(req)));
+  });
+
+  app.post('/api/incidents/:id/units/deploy', async (req, reply) => {
+    const { id } = parse(idParam, req.params);
+    return reply.code(201).send(incidents.deploy(id, parse(deployUnitSchema, req.body), operatorOf(req)));
   });
 
   app.patch('/api/units/:id', async (req) => {
     const { id } = parse(idParam, req.params);
-    return incidents.patchUnit(id, parse(unitPatch, req.body), operatorOf(req));
+    return incidents.patchUnit(id, parse(unitPatchSchema, req.body), operatorOf(req));
+  });
+
+  // Kräfteverwaltung: lesen alle (Übernahme in den Einsatz), pflegen Admins (/api/system/)
+  const audit = (operator: string, action: string, message: string) => {
+    store.addAudit({ operator, target: 'kräfte', action, params: '', success: true, message });
+    notify(['forces', 'audit']);
+  };
+
+  app.get('/api/forces', async () => forces.list());
+
+  app.post('/api/system/forces', async (req, reply) => {
+    const created = forces.create(parse(forceUnitInputSchema, req.body));
+    audit(operatorOf(req), 'create', created.name);
+    return reply.code(201).send(created);
+  });
+
+  app.put('/api/system/forces/:id', async (req) => {
+    const updated = forces.update(parse(idParam, req.params).id, parse(forceUnitInputSchema, req.body));
+    audit(operatorOf(req), 'update', updated.name);
+    return updated;
+  });
+
+  app.delete('/api/system/forces/:id', async (req, reply) => {
+    const removed = forces.remove(parse(idParam, req.params).id);
+    audit(operatorOf(req), 'delete', removed.name);
+    notify(['units']);
+    return reply.code(204).send();
+  });
+
+  /** Im Einsatz erfasste Einheit als Systemeinheit übernehmen */
+  app.post('/api/system/forces/adopt/:id', async (req, reply) => {
+    const adopted = forces.adopt(parse(idParam, req.params).id);
+    audit(operatorOf(req), 'adopt', adopted.name);
+    notify(['units']);
+    return reply.code(201).send(adopted);
   });
 }

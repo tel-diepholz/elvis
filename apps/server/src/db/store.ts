@@ -9,9 +9,10 @@ import type {
   MapObject,
   NewIncident,
   NewJournalEntry,
-  NewUnit,
   Unit,
+  UnitStatus,
 } from '@elvis/shared';
+import { tacticalSignSchema } from '@elvis/shared';
 import type { Db } from './index.js';
 
 type Row = Record<string, unknown>;
@@ -46,16 +47,45 @@ const toJournal = (r: Row): JournalEntry => ({
 const toUnit = (r: Row): Unit => ({
   id: r.id as number,
   incidentId: r.incident_id as number,
+  parentId: (r.parent_id as number | null) ?? null,
+  role: r.role as string,
+  sourceId: (r.source_id as number | null) ?? null,
+  name: r.name as string,
   callsign: r.callsign as string,
-  unitType: r.unit_type as string,
   organization: r.organization as string,
+  notes: r.notes as string,
+  sign: tacticalSignSchema.parse(JSON.parse(r.sign as string)),
   strength: { leaders: r.leaders as number, subLeaders: r.sub_leaders as number, crew: r.crew as number },
   section: r.section as string,
-  fmsStatus: (r.fms_status as number | null) ?? null,
-  notes: r.notes as string,
-  arrivedAt: r.arrived_at as string,
+  status: r.status as UnitStatus,
+  lat: (r.lat as number | null) ?? null,
+  lon: (r.lon as number | null) ?? null,
+  mapVisible: r.map_visible !== 0,
+  createdAt: r.created_at as string,
+  arrivedAt: (r.arrived_at as string | null) ?? null,
   releasedAt: (r.released_at as string | null) ?? null,
   updatedAt: r.updated_at as string,
+});
+
+const unitParams = (u: Omit<Unit, 'id' | 'incidentId' | 'createdAt' | 'updatedAt'>) => ({
+  parentId: u.parentId,
+  role: u.role,
+  sourceId: u.sourceId,
+  name: u.name,
+  callsign: u.callsign,
+  organization: u.organization,
+  notes: u.notes,
+  sign: JSON.stringify(u.sign),
+  leaders: u.strength.leaders,
+  subLeaders: u.strength.subLeaders,
+  crew: u.strength.crew,
+  section: u.section,
+  status: u.status,
+  lat: u.lat,
+  lon: u.lon,
+  mapVisible: u.mapVisible ? 1 : 0,
+  arrivedAt: u.arrivedAt,
+  releasedAt: u.releasedAt,
 });
 
 const toMapObject = (r: Row): MapObject =>
@@ -220,7 +250,7 @@ export class Store {
   // --- Kräfte ---
 
   units(incidentId: number): Unit[] {
-    return (this.db.prepare('SELECT * FROM units WHERE incident_id = ? ORDER BY arrived_at ASC').all(incidentId) as Row[]).map(toUnit);
+    return (this.db.prepare('SELECT * FROM units WHERE incident_id = ? ORDER BY id').all(incidentId) as Row[]).map(toUnit);
   }
 
   unit(id: number): Unit | null {
@@ -228,51 +258,27 @@ export class Store {
     return r ? toUnit(r) : null;
   }
 
-  addUnit(incidentId: number, u: NewUnit): Unit {
+  addUnit(u: Omit<Unit, 'id' | 'createdAt' | 'updatedAt'>): Unit {
     const ts = now();
-    const s = u.strength ?? { leaders: 0, subLeaders: 0, crew: 0 };
     const info = this.db
       .prepare(
-        `INSERT INTO units (incident_id, callsign, unit_type, organization, leaders, sub_leaders, crew, section, fms_status, notes, arrived_at, updated_at)
-         VALUES (@incidentId, @callsign, @unitType, @organization, @leaders, @subLeaders, @crew, @section, @fmsStatus, @notes, @ts, @ts)`,
+        `INSERT INTO units (incident_id, parent_id, role, source_id, name, callsign, organization, notes, sign, leaders, sub_leaders, crew,
+           section, status, lat, lon, map_visible, created_at, arrived_at, released_at, updated_at)
+         VALUES (@incidentId, @parentId, @role, @sourceId, @name, @callsign, @organization, @notes, @sign, @leaders, @subLeaders, @crew,
+           @section, @status, @lat, @lon, @mapVisible, @ts, @arrivedAt, @releasedAt, @ts)`,
       )
-      .run({
-        incidentId,
-        callsign: u.callsign,
-        unitType: u.unitType ?? '',
-        organization: u.organization ?? '',
-        leaders: s.leaders,
-        subLeaders: s.subLeaders,
-        crew: s.crew,
-        section: u.section ?? '',
-        fmsStatus: u.fmsStatus ?? null,
-        notes: u.notes ?? '',
-        ts,
-      });
+      .run({ ...unitParams(u), incidentId: u.incidentId, ts });
     return this.unit(Number(info.lastInsertRowid))!;
   }
 
   saveUnit(u: Unit): Unit {
     this.db
       .prepare(
-        `UPDATE units SET callsign=@callsign, unit_type=@unitType, organization=@organization, leaders=@leaders,
-         sub_leaders=@subLeaders, crew=@crew, section=@section, fms_status=@fmsStatus, notes=@notes,
-         released_at=@releasedAt, updated_at=@updatedAt WHERE id=@id`,
+        `UPDATE units SET parent_id=@parentId, role=@role, source_id=@sourceId, name=@name, callsign=@callsign, organization=@organization,
+         notes=@notes, sign=@sign, leaders=@leaders, sub_leaders=@subLeaders, crew=@crew, section=@section, status=@status, lat=@lat,
+         lon=@lon, map_visible=@mapVisible, arrived_at=@arrivedAt, released_at=@releasedAt, updated_at=@ts WHERE id=@id`,
       )
-      .run({
-        id: u.id,
-        callsign: u.callsign,
-        unitType: u.unitType,
-        organization: u.organization,
-        leaders: u.strength.leaders,
-        subLeaders: u.strength.subLeaders,
-        crew: u.strength.crew,
-        section: u.section,
-        fmsStatus: u.fmsStatus,
-        notes: u.notes,
-        releasedAt: u.releasedAt,
-        updatedAt: now(),
-      });
+      .run({ ...unitParams(u), id: u.id, ts: now() });
     return this.unit(u.id)!;
   }
 

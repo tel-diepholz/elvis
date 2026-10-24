@@ -7,14 +7,18 @@ import {
   MAP_OBJECT_COLORS,
   MAP_OBJECT_LABELS,
   SECTOR_LENGTHS,
+  UNIT_STATUS,
   objectColor,
+  unitChildren,
   type GaussSettings,
   type Incident,
   type MapObject,
+  type Unit,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Field } from '../../components/ui';
+import { TacticalSignImage } from '../../components/tactical/TacticalSign';
 import { GaussControls, NoWindWarning, fmtDistance, usePlume, type Wind } from '../../components/map/dispersion';
 
 const OPEN_KEY = 'elvis.map.objectsOpen';
@@ -79,6 +83,17 @@ function ColorPalette({ object, onPick }: { object: MapObject; onPick: (color: s
   );
 }
 
+/** Kräfte (ohne entlassene) in Baumreihenfolge mit Tiefe */
+function unitRows(units: Unit[]): { unit: Unit; depth: number }[] {
+  const children = unitChildren(units.filter((u) => u.status !== 'entlassen'));
+  const out: { unit: Unit; depth: number }[] = [];
+  const walk = (parent: number | null, depth: number) => {
+    for (const u of children.get(parent) ?? []) out.push({ unit: u, depth }), walk(u.id, depth + 1);
+  };
+  walk(null, 0);
+  return out;
+}
+
 function summary(o: MapObject): string {
   switch (o.kind) {
     case 'point':
@@ -99,24 +114,29 @@ export function ObjectList({
   incident,
   vehicle,
   objects,
+  units,
   wind,
   now,
   canEdit,
   shiftPx = 0,
   onFly,
   onMoveIncident,
+  onPlaceUnit,
 }: {
   incident: Incident;
   /** Eigenes Fahrzeug (immer erster Eintrag, nur ausblendbar); pos = null ohne GPS */
   vehicle: { name: string; pos: [number, number] | null };
   objects: MapObject[];
+  /** Kräfte des Einsatzes; ohne Position stehen sie in der Liste, bis sie gesetzt werden */
+  units: Unit[];
   wind: Wind | undefined;
   now: Date;
   canEdit: boolean;
   /** Nach unten rücken, solange darüber ein Menü offen ist (Kartenstil) */
   shiftPx?: number;
-  onFly: (target: MapObject | 'incident' | 'vehicle') => void;
+  onFly: (target: MapObject | Unit | 'incident' | 'vehicle') => void;
   onMoveIncident: () => void;
+  onPlaceUnit: (u: Unit) => void;
 }) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -151,6 +171,12 @@ export function ObjectList({
     mutationFn: () => api.updateIncident(incident.id, { lat: null, lon: null }),
     onError: (e) => toast('error', e.message),
   });
+  const patchUnit = useMutation({
+    mutationFn: ({ id, ...p }: { id: number; mapVisible?: boolean; lat?: null; lon?: null }) => api.patchUnit(id, p),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['units', incident.id] }),
+    onError: (e) => toast('error', e.message),
+  });
+  const forces = unitRows(units);
   const vehicleVisible = useMutation({
     mutationFn: (visible: boolean) => api.updateIncident(incident.id, { vehicleVisible: visible }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['incident'] }),
@@ -160,7 +186,7 @@ export function ObjectList({
   if (!open)
     return (
       <button type="button" className="map-overlay map-objects-tab" style={shift} onClick={toggleOpen} aria-label="Objektliste öffnen">
-        <ChevronLeft size={18} /> <Shapes size={18} /> {objects.length + (hasLocation ? 1 : 0) + 1}
+        <ChevronLeft size={18} /> <Shapes size={18} /> {objects.length + forces.length + (hasLocation ? 1 : 0) + 1}
       </button>
     );
 
@@ -286,6 +312,66 @@ export function ObjectList({
         })}
       </ul>
       {!objects.length && <p className="muted map-objects-empty">Weitere Objekte über „Objekte“ oder aus der Suche hinzufügen.</p>}
+      {forces.length > 0 && (
+        <>
+          <div className="map-objects-head map-objects-subhead">
+            <strong>Kräfte</strong>
+            <span className="muted">
+              {forces.filter((f) => f.unit.lat !== null).length}/{forces.length} gesetzt
+            </span>
+          </div>
+          <ul className="map-objects-list">
+            {forces.map(({ unit: u, depth }) => {
+              const placed = u.lat !== null && u.lon !== null;
+              return (
+                <li key={u.id} className={`map-object ${u.mapVisible ? '' : 'hidden'}`} style={{ paddingLeft: depth * 14 }}>
+                  <button type="button" className="map-object-main" onClick={() => (placed ? onFly(u) : canEdit && onPlaceUnit(u))} disabled={!placed && !canEdit}>
+                    <span className="map-object-icon unit">
+                      <TacticalSignImage sign={u.sign} height={22} />
+                    </span>
+                    <span className="map-object-text">
+                      <strong>{u.name}</strong>
+                      <span className="muted">
+                        {UNIT_STATUS[u.status]}
+                        {placed ? '' : ' · noch ohne Position'}
+                      </span>
+                    </span>
+                  </button>
+                  {canEdit && (
+                    <span className="map-object-actions">
+                      <button type="button" className="icon-btn" onClick={() => onPlaceUnit(u)} title={placed ? 'Verschieben' : 'Position setzen'} aria-label={`Position von ${u.name} setzen`}>
+                        <MapPin size={16} />
+                      </button>
+                      {placed && (
+                        <>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            onClick={() => patchUnit.mutate({ id: u.id, mapVisible: !u.mapVisible })}
+                            aria-label={u.mapVisible ? 'Ausblenden' : 'Einblenden'}
+                            title={u.mapVisible ? 'Ausblenden' : 'Einblenden'}
+                          >
+                            {u.mapVisible ? <Eye size={16} /> : <EyeOff size={16} />}
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            onClick={() => window.confirm(`Position von ${u.name} entfernen?`) && patchUnit.mutate({ id: u.id, lat: null, lon: null })}
+                            aria-label="Position entfernen"
+                            title="Position entfernen"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
     </aside>
   );
 }

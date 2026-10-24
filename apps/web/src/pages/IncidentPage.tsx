@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { BookOpenText, FileText, MapPin, Pencil, Siren, Users } from 'lucide-react';
-import { formatStrength, type Incident } from '@elvis/shared';
+import { formatStrength, sumStrength, type Incident } from '@elvis/shared';
 import { api } from '../lib/api';
 import { fmtDateTime, fmtDuration } from '../lib/format';
 import { useActiveIncident, useNow } from '../lib/hooks';
 import { useToast } from '../lib/toast';
 import { Card, Loading, Modal, PageHeader, Stat } from '../components/ui';
 import { IncidentForm } from './incident/IncidentForm';
-import { sumStrength } from './incident/UnitsView';
+import { deployedUnits } from './incident/UnitsView';
 
 function StartIncident() {
   const toast = useToast();
@@ -66,7 +66,8 @@ function ActiveIncident({ incident }: { incident: Incident }) {
     onError: (e) => toast('error', e.message),
   });
 
-  const active = units.filter((u) => !u.releasedAt);
+  const active = units.filter((u) => u.status !== 'entlassen');
+  const deployed = deployedUnits(units);
   const confirmClose = () => {
     const open = active.length ? `\n\n${active.length} Einheit(en) sind noch nicht entlassen.` : '';
     if (window.confirm(`Einsatz „${incident.title}“ wirklich beenden?${open}\n\nDanach sind keine Änderungen mehr möglich.`)) close.mutate();
@@ -114,7 +115,7 @@ function ActiveIncident({ incident }: { incident: Incident }) {
           </dl>
         </Card>
         <Link to="/einsatz/kraefte" className="card card-link">
-          <Stat label="Kräfte im Einsatz" value={active.length} sub={`Stärke ${formatStrength(sumStrength(active))}`} />
+          <Stat label="Kräfte im Einsatz" value={deployed.length} sub={`Stärke ${formatStrength(sumStrength(deployed))}`} />
           <span className="card-link-cta">
             <Users size={16} /> Kräfteübersicht
           </span>

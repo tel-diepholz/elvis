@@ -33,6 +33,7 @@ function useTileSummary() {
     }
     if (t.type === 'guestWifi') return String(t.config.title ?? '').trim() || 'Gastnetz des Einsatzes';
     if (t.type === 'tasks') return t.config.personal === true ? 'mit persönlichen Aufgaben' : 'ohne persönliche Aufgaben';
+    if (t.type === 'forces') return [t.config.subunits !== false ? 'mit Untereinheiten' : 'nur oberste Ebene', t.config.planned === true && 'mit geplanten'].filter(Boolean).join(', ');
     if (t.type === 'map') return `${t.config.center === 'incident' ? 'Einsatzort' : 'Fahrzeug'}${t.config.follow !== false ? ', mitgeführt' : ''}`;
     return '';
   };
@@ -246,6 +247,16 @@ export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; 
           <p className="field-hint">
             Zeigt alle offenen Aufgaben des laufenden Einsatzes nach Fälligkeit. Persönliche Aufgaben hat sich ein Benutzer selbst zugewiesen – sie erscheinen nur, wenn
             hier eingeschaltet.
+          </p>
+        </>
+      )}
+      {tile.type === 'forces' && (
+        <>
+          <Toggle label="Untereinheiten anzeigen" checked={tile.config.subunits !== false} onChange={(on) => set('subunits', on)} />
+          <Toggle label="Geplante Einheiten anzeigen" checked={tile.config.planned === true} onChange={(on) => set('planned', on)} />
+          <p className="field-hint">
+            Zeigt die Kräfte des laufenden Einsatzes nach Einsatzabschnitten mit Status und Stärke; Einheiten mit Untereinheiten mit der Summe. Entlassene erscheinen
+            nicht.
           </p>
         </>
       )}

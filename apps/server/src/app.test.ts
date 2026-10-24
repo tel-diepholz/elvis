@@ -46,16 +46,19 @@ describe('Einsatzbezogene Bereiche', () => {
   it('protokolliert Kräfte-Statuswechsel automatisch im Einsatztagebuch', async () => {
     const { body: incident } = await req<Incident>('POST', '/api/incidents', { title: 'VU' });
     const { body: unit } = await req<Unit>('POST', `/api/incidents/${incident.id}/units`, {
-      callsign: 'Florian Musterstadt 1/44-1',
-      unitType: 'HLF 20',
+      name: 'HLF 20 Musterstadt',
+      organization: 'FF Musterstadt',
       strength: { leaders: 0, subLeaders: 1, crew: 8 },
     });
-    await req('PATCH', `/api/units/${unit.id}`, { fmsStatus: 4, section: 'EA Nord' });
+    expect(unit.status).toBe('alarmiert');
+    expect(unit.lat).toBeNull();
+    const { body: arrived } = await req<Unit>('PATCH', `/api/units/${unit.id}`, { status: 'eingetroffen', section: 'EA Nord' });
+    expect(arrived.arrivedAt).not.toBeNull();
 
     const { body: journal } = await req<JournalEntry[]>('GET', `/api/incidents/${incident.id}/journal`);
     const texts = journal.map((e) => e.text);
-    expect(texts).toContain('Einheit eingetroffen: Florian Musterstadt 1/44-1 (HLF 20, Stärke 0/1/8/9)');
-    expect(texts.at(-1)).toBe('Florian Musterstadt 1/44-1: Status 4 (Am Einsatzort), Abschnitt → EA Nord');
+    expect(texts).toContain('Einheit hinzugefügt: HLF 20 Musterstadt (FF Musterstadt, Stärke 0/1/8/9), Status Alarmiert');
+    expect(texts.at(-1)).toBe('HLF 20 Musterstadt: Status Eingetroffen, Abschnitt → EA Nord');
     expect(journal.every((e) => e.author === 'Max Müller')).toBe(true);
   });
 

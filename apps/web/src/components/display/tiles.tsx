@@ -3,8 +3,25 @@ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Cctv, Clock, CloudSun, ListChecks, Map as MapIcon, Network, Repeat, Type, Video, Wifi } from 'lucide-react';
-import { DEFAULT_VEHICLE_SIGN, DISPLAY_TILE_TYPES, fmtInterval, formatDtg, taskDueAt, taskIsDue, type DisplayMapView, type DisplayTile, type DisplayTileType } from '@elvis/shared';
+import { Bell, Cctv, Clock, CloudSun, ListChecks, Map as MapIcon, Network, Repeat, Type, Users, Video, Wifi } from 'lucide-react';
+import {
+  DEFAULT_VEHICLE_SIGN,
+  DISPLAY_TILE_TYPES,
+  UNIT_STATUS,
+  fmtInterval,
+  formatDtg,
+  formatStrength,
+  isOnScene,
+  sumStrength,
+  taskDueAt,
+  taskIsDue,
+  unitChildren,
+  unitDescendants,
+  type DisplayMapView,
+  type DisplayTile,
+  type DisplayTileType,
+  type Unit,
+} from '@elvis/shared';
 import { api } from '../../lib/api';
 import { compass, fmtDate, fmtOpt, fmtTime } from '../../lib/format';
 import { useNow, useSettings } from '../../lib/hooks';
@@ -13,14 +30,15 @@ import { DISPLAY_MAP_VIEW_EVENT, useAlerts, useDevice } from '../../lib/live';
 import { loadMapView, sameMapView, saveMapView } from '../../lib/mapView';
 import { AlertList } from '../AlertPanel';
 import { CameraImage } from '../camera/CameraImage';
-import { tacticalIcon } from '../tactical/TacticalSign';
+import { TacticalSignImage, tacticalIcon } from '../tactical/TacticalSign';
 import { WindCompass } from '../WindCompass';
 import { WebRtcPlayer } from './WebRtcPlayer';
 import { MapObjectsLayer, useMapObjects } from '../map/objects';
+import { UnitsLayer, useMapUnits } from '../map/units';
 import { WifiQr } from '../WifiQr';
 import { fmtRelative } from '../tasks/taskActions';
 
-export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks };
+export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users };
 
 const date = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 const time = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -242,6 +260,7 @@ function MapTile({ tile }: { tile: DisplayTile }) {
   const icon = useMemo(() => tacticalIcon(settings?.mapSign ?? DEFAULT_VEHICLE_SIGN), [settings?.mapSign]);
   // Kartenobjekte des Einsatzes (Flächen, Punkte, Ausbreitungen) wie auf der Karte in ELVIS
   const { data: objects = [] } = useMapObjects(incident?.id);
+  const { data: units = [] } = useMapUnits(incident?.id);
   const now = useNow();
   const ws = weather?.state;
   const wind = ws && ws.windSpeedMs !== null && ws.windDirectionDeg !== null ? { windSpeedMs: ws.windSpeedMs, windDirectionDeg: ws.windDirectionDeg } : undefined;
@@ -270,6 +289,7 @@ function MapTile({ tile }: { tile: DisplayTile }) {
     >
       {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} maxZoom={source.maxZoom} />}
       <MapObjectsLayer objects={objects} wind={wind} now={now} />
+      <UnitsLayer units={units} />
       {vPos && (incident?.vehicleVisible ?? true) && <Marker position={vPos} icon={icon} />}
       {iPos && <Marker position={iPos} icon={incidentIcon} />}
       <Follow pos={tile.config.center === 'incident' ? iPos : vPos} enabled={follow} />
@@ -400,6 +420,69 @@ function TasksTile({ tile }: { tile: DisplayTile }) {
   );
 }
 
+const NO_SECTION = 'Ohne Abschnitt';
+
+/** Kräfte des Einsatzes nach Abschnitten als Baum; entlassene nie, geplante und Untereinheiten nach Einstellung */
+function ForcesTile({ tile }: { tile: DisplayTile }) {
+  const { data: incident } = useQuery({ queryKey: ['incident', 'active', 'display'], queryFn: () => api.activeIncident().catch(() => null) });
+  const { data: units } = useMapUnits(incident?.id);
+  if (!incident) return <TileEmpty text="Kein Einsatz aufgelegt" />;
+  if (!units) return <TileEmpty text="Lade Kräfte …" />;
+  const subunits = tile.config.subunits !== false;
+  const planned = tile.config.planned === true;
+  const shown = units.filter((u) => u.status !== 'entlassen' && (planned || u.status !== 'geplant'));
+  if (!shown.length) return <TileEmpty text="Keine Kräfte im Einsatz" />;
+
+  const children = unitChildren(shown);
+  const groups = new Map<string, Unit[]>();
+  for (const u of children.get(null) ?? []) groups.set(u.section || NO_SECTION, [...(groups.get(u.section || NO_SECTION) ?? []), u]);
+  const sections = [...groups.entries()].sort(([a], [b]) => (a === NO_SECTION ? 1 : b === NO_SECTION ? -1 : a.localeCompare(b)));
+  const subtree = (u: Unit) => [u, ...unitDescendants(shown, u.id)];
+  const onScene = shown.filter((u) => isOnScene(u.status));
+  const approaching = shown.filter((u) => u.status === 'alarmiert' || u.status === 'anmarsch');
+
+  const row = (u: Unit, depth: number): JSX.Element[] => {
+    const kids = children.get(u.id) ?? [];
+    return [
+      <li key={u.id} style={{ paddingLeft: `${0.4 + depth * 1.2}em` }}>
+        <span className={`tile-unit-sign ${depth ? 'sub' : ''}`}>
+          <TacticalSignImage sign={u.sign} />
+        </span>
+        <span className="tile-unit-main">
+          <span className="tile-unit-name">{u.name}</span>
+          {u.role && <span className="tile-unit-meta">{u.role}</span>}
+        </span>
+        <span className="tile-unit-strength">{formatStrength(kids.length ? sumStrength(subtree(u)) : u.strength)}</span>
+        <span className={`unit-status unit-status-${u.status}`}>{UNIT_STATUS[u.status]}</span>
+      </li>,
+      ...(subunits ? kids.flatMap((k) => row(k, depth + 1)) : []),
+    ];
+  };
+
+  return (
+    <div className="tile-forces">
+      <div className="tile-tasks-head">
+        Vor Ort <span className="mono">{formatStrength(sumStrength(onScene))}</span>
+        {approaching.length > 0 && (
+          <>
+            {' · '}Anmarsch <span className="mono">{formatStrength(sumStrength(approaching))}</span>
+          </>
+        )}
+      </div>
+      <div className="tile-forces-list">
+        {sections.map(([section, roots]) => (
+          <section key={section}>
+            <h3>
+              {section} <span className="mono">{formatStrength(sumStrength(roots.flatMap(subtree)))}</span>
+            </h3>
+            <ul>{roots.flatMap((u) => row(u, 0))}</ul>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TileEmpty({ text }: { text: string }) {
   return <div className="tile-empty">{text}</div>;
 }
@@ -427,6 +510,8 @@ export function TileView({ tile }: { tile: DisplayTile }) {
       return <GuestWifiTile tile={tile} />;
     case 'tasks':
       return <TasksTile tile={tile} />;
+    case 'forces':
+      return <ForcesTile tile={tile} />;
     default:
       return <TileEmpty text={`Unbekannte Kachel ${DISPLAY_TILE_TYPES[tile.type as DisplayTileType]?.label ?? tile.type}`} />;
   }

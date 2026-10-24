@@ -4,7 +4,7 @@ import L, { type LatLngBoundsExpression, type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ListPlus, MapPin, Printer, X } from 'lucide-react';
-import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, toMgrs, type GeocodeResult, type MapObject, type NewMapObject } from '@elvis/shared';
+import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type Unit } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useActiveIncident, useNow, useSettings } from '../lib/hooks';
 import { useAuth } from '../lib/auth';
@@ -16,6 +16,7 @@ import { tacticalIcon } from '../components/tactical/TacticalSign';
 import { useToast } from '../lib/toast';
 import { Modal } from '../components/ui';
 import { AREA_STYLE, MapObjectsLayer, objectBounds, useMapObjects } from '../components/map/objects';
+import { UnitsLayer, useMapUnits } from '../components/map/units';
 import { PrintDialog } from './map/PrintDialog';
 import { MapSearch } from './map/search';
 import { ObjectList } from './map/objectlist';
@@ -81,10 +82,13 @@ export function MapPage() {
   const weather = useDevice('weather');
   const { data: incident } = useActiveIncident();
   const { data: objects = [] } = useMapObjects(incident?.id);
+  const { data: units = [] } = useMapUnits(incident?.id);
   const queryClient = useQueryClient();
   const toast = useToast();
   const now = useNow();
   const [placing, setPlacing] = useState<PlaceKind | null>(null);
+  /** Einheit der Kräfteübersicht, deren Position gerade gesetzt wird */
+  const [placingUnit, setPlacingUnit] = useState<Unit | null>(null);
   const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null);
   const [searchHit, setSearchHit] = useState<GeocodeResult | null>(null);
   const [printing, setPrinting] = useState(false);
@@ -123,6 +127,12 @@ export function MapPage() {
     onError: (e) => toast('error', e.message),
   });
 
+  const moveUnit = useMutation({
+    mutationFn: ({ unit, lat, lon }: { unit: Unit; lat: number; lon: number }) => api.patchUnit(unit.id, { lat, lon }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['units', incident!.id] }),
+    onError: (e) => toast('error', e.message),
+  });
+
   // Fahrzeugstandort aus dem GPS der Wetterstation (Airmar); ohne GPS kein Fahrzeugmarker
   const gps = weather?.state.position ?? null;
   const vPos: [number, number] | null = gps ? [gps.lat, gps.lon] : null;
@@ -141,9 +151,10 @@ export function MapPage() {
   // Im Einsatz lässt sich das eigene Fahrzeug in der Objektliste ausblenden
   const showVehicle = !!vPos && (incident?.vehicleVisible ?? true);
 
-  const flyToObject = (target: MapObject | 'incident' | 'vehicle') => {
+  const flyToObject = (target: MapObject | Unit | 'incident' | 'vehicle') => {
     if (target === 'incident') return iPos && fly(iPos, { zoom: 16 });
     if (target === 'vehicle') return vPos && fly(vPos, { zoom: 16 });
+    if ('status' in target) return target.lat !== null && target.lon !== null && fly([target.lat, target.lon], { zoom: 17 });
     const b = objectBounds(target);
     if (target.kind === 'area') fly(b.getCenter(), { bounds: b, zoom: 16 });
     else fly([target.lat, target.lon], { zoom: target.kind === 'point' ? 17 : 14 });
@@ -161,8 +172,10 @@ export function MapPage() {
     );
   };
 
-  const place = (kind: PlaceKind, lat: number, lon: number) => {
+  const place = (kind: PlaceKind | Unit, lat: number, lon: number) => {
     setPlacing(null);
+    setPlacingUnit(null);
+    if (typeof kind === 'object') return moveUnit.mutate({ unit: kind, lat, lon });
     if (kind === 'incident') setLocation.mutate({ lat, lon });
     else if (kind === 'gauss') addObject.mutate({ kind: 'gauss', name: 'Gauß-Fahne', lat, lon, data: DEFAULT_GAUSS });
     else addObject.mutate({ kind: 'sector', name: 'Sektor 60°', lat, lon, data: { sectorM: 1000 } });
@@ -173,11 +186,12 @@ export function MapPage() {
       <MapContainer
         center={saved ? [saved.lat, saved.lon] : iPos ?? vPos ?? fallback}
         zoom={saved?.zoom ?? (iPos ? 14 : vPos ? 16 : 6)}
-        className={`map ${placing ? 'placing' : ''}`}
+        className={`map ${placing || placingUnit ? 'placing' : ''}`}
         zoomControl={false}
       >
         {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} attribution={source.attribution} maxZoom={source.maxZoom} />}
         <MapObjectsLayer objects={objects} wind={wind} now={now} />
+        <UnitsLayer units={units} onMove={canEdit ? (unit, lat, lon) => moveUnit.mutate({ unit, lat, lon }) : undefined} />
         {showVehicle && (
           <Marker position={vPos!} icon={vehicleIcon}>
             <Popup>
@@ -202,7 +216,7 @@ export function MapPage() {
             </Popup>
           </Marker>
         )}
-        <ClickToPlace active={!!placing} onPick={(lat, lon) => placing && place(placing, lat, lon)} />
+        <ClickToPlace active={!!placing || !!placingUnit} onPick={(lat, lon) => (placingUnit ?? placing) && place((placingUnit ?? placing)!, lat, lon)} />
         {searchHit && hasOutline(searchHit) && <SearchOutline osm={searchHit.osm!} />}
         {searchHit && (
           <Marker position={[searchHit.lat, searchHit.lon]} icon={searchIcon} eventHandlers={{ add: (e) => e.target.openPopup() }}>
@@ -249,7 +263,7 @@ export function MapPage() {
           enabled={canEdit}
           reason={!incident ? 'Objekte gehören zu einem Einsatz – erst einen Einsatz auflegen' : 'Zum Bearbeiten anmelden'}
           hasLocation={!!iPos}
-          onPlace={setPlacing}
+          onPlace={(k) => (setPlacingUnit(null), setPlacing(k))}
         />
         {user && (
           <button className="btn" onClick={() => setPrinting(true)} disabled={!source}>
@@ -258,15 +272,15 @@ export function MapPage() {
         )}
       </div>
 
-      {placing && (
+      {(placing || placingUnit) && (
         <div className="map-overlay map-placing" role="status">
-          <span>In die Karte tippen, um {PLACE_LABELS[placing]} zu setzen</span>
+          <span>In die Karte tippen, um {placingUnit ? placingUnit.name : PLACE_LABELS[placing!]} zu setzen</span>
           {placing !== 'incident' && iPos && (
-            <button type="button" className="btn btn-sm" onClick={() => place(placing, iPos[0], iPos[1])}>
+            <button type="button" className="btn btn-sm" onClick={() => place((placingUnit ?? placing)!, iPos[0], iPos[1])}>
               Am Einsatzort
             </button>
           )}
-          <button type="button" className="btn btn-sm" onClick={() => setPlacing(null)}>
+          <button type="button" className="btn btn-sm" onClick={() => (setPlacing(null), setPlacingUnit(null))}>
             Abbrechen
           </button>
         </div>
@@ -279,9 +293,11 @@ export function MapPage() {
           incident={incident}
           vehicle={{ name: vehicleName, pos: vPos }}
           objects={objects}
+          units={units}
           wind={wind}
           now={now}
           canEdit={canEdit}
+          onPlaceUnit={(u) => (setPlacing(null), setPlacingUnit(u))}
           shiftPx={styleMenuPx}
           onFly={flyToObject}
           onMoveIncident={() => setPlacing('incident')}
@@ -300,6 +316,7 @@ export function MapPage() {
             vehicle={vPos ? { lat: vPos[0], lon: vPos[1], name: vehicleName } : null}
             incident={incident ?? null}
             objects={objects}
+            units={units}
             wind={wind}
             weatherGustMs={ws?.windGustMs ?? null}
             onDone={() => setPrinting(false)}

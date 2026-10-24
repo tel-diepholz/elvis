@@ -19,6 +19,7 @@ import {
   type MapSource,
   type Orientation,
   type PaperFormat,
+  type Unit,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { PrinterSettings, mediaFor, usePrintForm, usePrintStatus } from '../../components/print/PrinterSettings';
@@ -29,6 +30,7 @@ import { tacticalIcon } from '../../components/tactical/TacticalSign';
 import { Field, Segmented, Toggle } from '../../components/ui';
 import { computePlume, dispersionSector, fmtDistance, fmtExp, type Wind } from '../../components/map/dispersion';
 import { MapObjectsLayer } from '../../components/map/objects';
+import { UnitsLayer, placedUnits } from '../../components/map/units';
 
 const incidentIcon = L.divIcon({ className: 'map-marker incident', html: '<span>!</span>', iconSize: [30, 30], iconAnchor: [15, 15] });
 
@@ -44,6 +46,8 @@ export interface PrintDialogProps {
   incident: Incident | null;
   /** Kartenobjekte des Einsatzes; gedruckt werden die sichtbaren */
   objects: MapObject[];
+  /** Kräfte des Einsatzes; gedruckt werden die gesetzten und eingeblendeten */
+  units: Unit[];
   /** Wind für Ausbreitung und Hinweis (nur wenn Geschwindigkeit und Richtung bekannt sind). */
   wind: Wind | undefined;
   weatherGustMs: number | null;
@@ -150,6 +154,8 @@ export function PrintDialog(props: PrintDialogProps) {
   const [withVehicle, setWithVehicle] = useState(!!props.vehicle && (incident?.vehicleVisible ?? true));
   const [withIncident, setWithIncident] = useState(hasIncidentPos);
   const [withObjects, setWithObjects] = useState(visibleObjects.length > 0);
+  const mapUnits = placedUnits(props.units);
+  const [withUnits, setWithUnits] = useState(mapUnits.length > 0);
   // Ausgabe: PDF herunterladen oder direkt auf einem Drucker des Druckservers
   const { data: printStatus } = usePrintStatus();
   const hasPrinters = !!printStatus?.printers.length;
@@ -176,6 +182,7 @@ export function PrintDialog(props: PrintDialogProps) {
     const polygons: MapPrintRequest['polygons'] = [];
     const legend: MapPrintRequest['legend'] = [];
     const notes: string[] = [];
+    if (withUnits) for (const u of mapUnits) markers.push({ kind: 'unit', lat: u.lat!, lon: u.lon!, label: u.name, sign: u.sign });
     if (withObjects) {
       const o = objectsForPrint(objects, weather, now);
       markers.push(...o.markers);
@@ -276,6 +283,7 @@ export function PrintDialog(props: PrintDialogProps) {
           <Toggle label="Fahrzeugstandort" checked={withVehicle} onChange={setWithVehicle} disabled={!vehicle} />
           <Toggle label="Einsatzort" checked={withIncident} onChange={setWithIncident} disabled={!hasIncidentPos} />
           <Toggle label={`Kartenobjekte (${visibleObjects.length})`} checked={withObjects} onChange={setWithObjects} disabled={!visibleObjects.length} />
+          <Toggle label={`Kräfte (${mapUnits.length})`} checked={withUnits} onChange={setWithUnits} disabled={!mapUnits.length} />
         </div>
         <p className="muted print-summary">
           Ausschnitt {fmtDistance(frame.widthM)} × {fmtDistance(frame.heightM)} · ca. {tileCount} Kacheln. Karte in der Vorschau verschieben, um den Ausschnitt zu wählen.
@@ -321,6 +329,7 @@ export function PrintDialog(props: PrintDialogProps) {
           <Polygon positions={mask} pathOptions={{ stroke: false, fillColor: '#000', fillOpacity: 0.4 }} interactive={false} />
           <Rectangle bounds={frameBounds} pathOptions={{ color: '#e53935', weight: 3, fill: false }} interactive={false} />
           {withObjects && <MapObjectsLayer objects={objects} wind={weather} now={previewTime} labels={false} />}
+          {withUnits && <UnitsLayer units={mapUnits} labels={false} />}
           {withVehicle && vehicle && <Marker position={[vehicle.lat, vehicle.lon]} icon={vehicleIcon} interactive={false} />}
           {withIncident && hasIncidentPos && <Marker position={[incident!.lat!, incident!.lon!]} icon={incidentIcon} interactive={false} />}
           <CenterSync onCenter={setCenter} />

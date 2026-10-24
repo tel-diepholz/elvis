@@ -3,6 +3,8 @@
  * denselben Funktionen, damit der gewählte Ausschnitt exakt dem Druck entspricht.
  */
 
+import type { TacticalSign } from './tactical';
+
 export type PaperFormat = 'A4' | 'A3' | 'A2' | 'A1';
 export type Orientation = 'portrait' | 'landscape';
 
@@ -120,8 +122,10 @@ export interface MapSource {
 }
 
 export interface PrintMarker {
-  /** Fahrzeug (taktisches Zeichen), Einsatzort, Kartenobjekt (Punkt aus der Objektliste) */
-  kind: 'vehicle' | 'incident' | 'point';
+  /** Fahrzeug (taktisches Zeichen), Einsatzort, Kartenobjekt (Punkt aus der Objektliste), Einheit der Kräfteübersicht */
+  kind: 'vehicle' | 'incident' | 'point' | 'unit';
+  /** Taktisches Zeichen einer Einheit */
+  sign?: Partial<TacticalSign>;
   /** Farbe eines Punkts (#rrggbb), sonst Blau */
   color?: string;
   lat: number;

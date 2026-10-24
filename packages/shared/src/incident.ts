@@ -1,4 +1,4 @@
-/** Einsatzführung: Einsatz, Einsatztagebuch und Kräfteübersicht. */
+/** Einsatzführung: Einsatz und Einsatztagebuch. Kräfte: forces.ts */
 
 export interface Incident {
   id: number;
@@ -75,44 +75,7 @@ export interface NewJournalEntry {
   timestamp?: string;
 }
 
-/** Stärke nach FwDV: Führer / Unterführer / Mannschaft (Gesamt wird berechnet). */
-export interface Strength {
-  leaders: number;
-  subLeaders: number;
-  crew: number;
-}
-
-export function formatStrength(s: Strength): string {
-  return `${s.leaders}/${s.subLeaders}/${s.crew}/${s.leaders + s.subLeaders + s.crew}`;
-}
-
-export interface Unit {
-  id: number;
-  incidentId: number;
-  callsign: string;
-  unitType: string;
-  organization: string;
-  strength: Strength;
-  section: string;
-  fmsStatus: number | null;
-  notes: string;
-  arrivedAt: string;
-  releasedAt: string | null;
-  updatedAt: string;
-}
-
-export interface NewUnit {
-  callsign: string;
-  unitType?: string;
-  organization?: string;
-  strength?: Strength;
-  section?: string;
-  fmsStatus?: number | null;
-  notes?: string;
-}
-
-export type UnitPatch = Partial<NewUnit> & { released?: boolean };
-
+/** FMS-Status der Funkgeräte (Kommunikation); die Kräfteübersicht führt eigene Status (forces.ts) */
 export const FMS_STATUS: Record<number, { label: string; short: string }> = {
   0: { label: 'Priorisierter Sprechwunsch', short: 'Notruf' },
   1: { label: 'Einsatzbereit über Funk', short: 'Frei Funk' },

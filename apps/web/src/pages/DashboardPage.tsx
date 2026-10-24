@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, BookOpenText, Network, Siren, Wind } from 'lucide-react';
-import { JOURNAL_CATEGORY_LABELS, formatStrength, type Incident } from '@elvis/shared';
+import { JOURNAL_CATEGORY_LABELS, formatStrength, sumStrength, type Incident } from '@elvis/shared';
 import { api } from '../lib/api';
 import { compass, fmtDuration, fmtOpt, fmtTime } from '../lib/format';
 import { useActiveIncident, useNow } from '../lib/hooks';
@@ -12,13 +12,13 @@ import { UPLINK_KIND } from '../lib/labels';
 import { AlertList } from '../components/AlertPanel';
 import { WindCompass } from '../components/WindCompass';
 import { Badge, Card, Stat } from '../components/ui';
-import { sumStrength } from './incident/UnitsView';
+import { deployedUnits } from './incident/UnitsView';
 
 function IncidentSummary({ incident }: { incident: Incident }) {
   const now = useNow();
   const { data: journal = [] } = useQuery({ queryKey: ['journal', incident.id], queryFn: () => api.journal(incident.id) });
   const { data: units = [] } = useQuery({ queryKey: ['units', incident.id], queryFn: () => api.units(incident.id) });
-  const active = units.filter((u) => !u.releasedAt);
+  const active = deployedUnits(units);
 
   return (
     <Card

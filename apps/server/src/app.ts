@@ -32,6 +32,7 @@ import { deviceRoutes } from './routes/devices.js';
 import { incidentRoutes } from './routes/incidents.js';
 import { LiveHub } from './routes/live.js';
 import { mapRoutes } from './routes/map.js';
+import { ForceService } from './services/forces.js';
 import { IncidentService } from './services/incidents.js';
 import { SettingsService } from './services/settings.js';
 import { GeocoderService, type GeocodeFetch } from './services/geocoder.js';
@@ -99,6 +100,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const sessions = new SessionStore(db);
   const roles = new RoleService(db, sessions);
   const tasks = new TaskService(db, { store, roles, notify: (t) => hub.invalidate(t) });
+  const forces = new ForceService(db, store);
   const incidents = new IncidentService(
     store,
     (topics) => {
@@ -110,6 +112,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       documents.snapshotFolders(incident.id);
       tasks.instantiate(incident);
     },
+    forces,
   );
   // Nie gespeicherte Entwürfe und alte Scans aufräumen – beim Start und danach stündlich
   const cleanup = () => {
@@ -189,7 +192,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     authRoutes(api, { users, sessions, limiter, store, roles, notify: (t) => hub.invalidate(t) });
     taskRoutes(api, { tasks, roles, store, notify: (t) => hub.invalidate(t) });
     deviceRoutes(api, devices, store, (t) => hub.invalidate(t));
-    incidentRoutes(api, incidents);
+    incidentRoutes(api, { incidents, forces, store, notify: (t) => hub.invalidate(t) });
     documentRoutes(api, { documents, templates, office, store, notify: (t) => hub.invalidate(t) });
     wopiRoutes(api, { office, documents, templates });
     printingRoutes(api, { printing, office, store, notify: (t) => hub.invalidate(t), download: opts.officeDownload });
