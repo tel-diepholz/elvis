@@ -67,12 +67,12 @@ describe('Arbeitsplatz-Addon (PXE)', () => {
     expect(daemon.byName('elvis-arbeitsplatz-job-image-3')!.spec.HostConfig?.SecurityOpt).toBeUndefined();
 
     // Erneut bauen (manuell): die Schritte nutzen das gebaute Image, nichts wird aus einer Registry gezogen
-    daemon.images.delete('elvis-addon-arbeitsplatz-builder:1.0.2');
+    daemon.images.delete('elvis-addon-arbeitsplatz-builder:1.0.3');
     expect((await req('POST', '/api/addons/arbeitsplatz/jobs/image')).status).toBe(202);
     const image = (a: InstalledAddon) => a.jobs.find((j) => j.id === 'image')!;
     const again = await waitFor('arbeitsplatz', (a) => image(a).state !== 'running' && image(a).triggeredBy !== 'Max Müller (Installation)');
     expect(image(again).state, JSON.stringify(image(again))).toBe('succeeded');
-    expect(daemon.images.has('elvis-addon-arbeitsplatz-builder:1.0.2')).toBe(true);
+    expect(daemon.images.has('elvis-addon-arbeitsplatz-builder:1.0.3')).toBe(true);
 
     // Nur den Installer neu bauen (eigener Job, das Abbild bleibt)
     expect((await req('POST', '/api/addons/arbeitsplatz/jobs/installer')).status).toBe(202);
@@ -81,7 +81,7 @@ describe('Arbeitsplatz-Addon (PXE)', () => {
     expect(daemon.byName('elvis-arbeitsplatz-job-installer-1')!.spec.Cmd).toEqual(['sh', '/data/addon/build/installer.sh']);
 
     const archive = daemon.archives.find((a) => a.volume === 'elvis-addon-arbeitsplatz-data');
-    expect(archive?.entries).toEqual(expect.arrayContaining(['addon/installer/elvis-install', 'addon/client/elvis-clientd.py', 'addon/client/sddm-theme/Main.qml']));
+    expect(archive?.entries).toEqual(expect.arrayContaining(['addon/installer/elvis-install', 'addon/client/elvis-clientd.py', 'addon/client/post-install.sh', 'addon/client/sddm-theme/Main.qml']));
 
     const pxe = daemon.byName('elvis-arbeitsplatz-pxe')!;
     expect(pxe.state).toBe('running');
