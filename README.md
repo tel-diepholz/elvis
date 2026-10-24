@@ -657,6 +657,12 @@ KDE Plasma). Man meldet sich dort mit den Benutzern und PINs aus ELVIS an.
 
   Danach folgt eine Zusammenfassung, und man muss **JA** eintippen. Bis dahin wird nichts verändert. Vor dem Löschen
   registriert sich das Notebook bei ELVIS. Ist ELVIS nicht erreichbar, bleibt die Platte unberührt.
+- **Installer-ISO** (ohne PXE): *System → Arbeitsplätze → Installer-ISO* lädt eine hybride ISO (ca. 150 MB) herunter.
+  Sie startet per BIOS und UEFI (auch mit Secure Boot) und funktioniert als CD oder auf einem USB-Stick
+  (balenaEtcher, Rufus im DD-Modus oder `dd`). Die ISO enthält nur Kernel und initrd. Installer-System und
+  Abbild lädt das Notebook per Netzwerkkabel vom Addon. Der Container `pxe` erzeugt sie bei jedem Start mit seiner
+  aktuellen Adresse (`/iso/elvis-installer.iso`). Dafür braucht er einmal einen Lauf von „Installer neu bauen“
+  (Addon ab 1.1.0).
 - **Anmeldung:** Die Anmeldemaske (SDDM-Theme) zeigt alle Benutzer aus ELVIS mit Suche, angemeldet wird mit der PIN.
   - Die PIN prüft der Dienst `elvis-clientd` über `POST /api/clients/login` mit denselben Sperren wie in ELVIS. Dabei
     entsteht keine Web-Sitzung, der Eintrag steht im Bedienprotokoll.

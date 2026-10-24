@@ -63,6 +63,7 @@ export function workstationRoutes(app: FastifyInstance, d: Deps): void {
   // --- Verwaltung (nur Admins) ---
 
   app.get('/api/system/workstations', async () => d.workstations.list());
+  app.get('/api/system/workstations/installers', async () => d.workstations.installers());
 
   app.put<{ Params: { id: string } }>('/api/system/workstations/:id', async (req) => {
     const { name } = parse(z.object({ name: z.string().trim().min(1, 'Name fehlt').max(60) }), req.body);

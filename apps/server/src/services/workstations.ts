@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { fullName, type User, type Workstation, type WorkstationIncident, type WorkstationState, type WorkstationUser } from '@elvis/shared';
+import { fullName, type User, type Workstation, type WorkstationIncident, type WorkstationInstaller, type WorkstationState, type WorkstationUser } from '@elvis/shared';
 import type { Db } from '../db/index.js';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
@@ -9,6 +9,7 @@ export interface WorkstationProvision {
   id: string;
   name: string;
   token: string;
+  installerIso?: string;
 }
 
 const hash = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -53,7 +54,14 @@ export class WorkstationService {
   ) {}
 
   setProvisions(list: WorkstationProvision[]): void {
+    const changed = JSON.stringify(list.map((p) => p.installerIso)) !== JSON.stringify(this.provisions.map((p) => p.installerIso));
     this.provisions = list;
+    if (changed) this.changed();
+  }
+
+  /** Download-Adressen der Installer-ISO (ohne Registrierungstoken) */
+  installers(): WorkstationInstaller[] {
+    return this.provisions.filter((p) => p.installerIso).map((p) => ({ id: p.id, name: p.name, isoUrl: p.installerIso! }));
   }
 
   list(): Workstation[] {

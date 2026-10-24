@@ -229,6 +229,8 @@ const workstationProvision = z.object({
   name: z.string().min(1),
   /** Gemeinsames Geheimnis, meist {{addon.secret}} */
   token: templated,
+  /** Download der Installer-ISO für den Browser, z. B. http://{{host.address}}:{{options.httpPort}}/iso/elvis-installer.iso */
+  installerIso: templated.optional(),
 });
 
 export const addonManifestSchema = z

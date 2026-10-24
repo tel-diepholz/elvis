@@ -45,6 +45,13 @@ export interface WorkstationLoginResult {
   incident: WorkstationIncident | null;
 }
 
+/** Installer-ISO eines laufenden Addons (System → Arbeitsplätze) */
+export interface WorkstationInstaller {
+  id: string;
+  name: string;
+  isoUrl: string;
+}
+
 export const MAC_PATTERN = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/;
 
 export const workstationEnrollSchema = z.object({

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { requestedPermissions, type AddonStoreEntry, type DockerHost, type InstalledAddon, type Workstation } from '@elvis/shared';
+import { requestedPermissions, type AddonStoreEntry, type DockerHost, type InstalledAddon, type Workstation, type WorkstationInstaller } from '@elvis/shared';
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
 import { adminCookie } from '../test-helpers.js';
@@ -67,12 +67,12 @@ describe('Arbeitsplatz-Addon (PXE)', () => {
     expect(daemon.byName('elvis-arbeitsplatz-job-image-3')!.spec.HostConfig?.SecurityOpt).toBeUndefined();
 
     // Erneut bauen (manuell): die Schritte nutzen das gebaute Image, nichts wird aus einer Registry gezogen
-    daemon.images.delete('elvis-addon-arbeitsplatz-builder:1.0.3');
+    daemon.images.delete('elvis-addon-arbeitsplatz-builder:1.1.0');
     expect((await req('POST', '/api/addons/arbeitsplatz/jobs/image')).status).toBe(202);
     const image = (a: InstalledAddon) => a.jobs.find((j) => j.id === 'image')!;
     const again = await waitFor('arbeitsplatz', (a) => image(a).state !== 'running' && image(a).triggeredBy !== 'Max Müller (Installation)');
     expect(image(again).state, JSON.stringify(image(again))).toBe('succeeded');
-    expect(daemon.images.has('elvis-addon-arbeitsplatz-builder:1.0.3')).toBe(true);
+    expect(daemon.images.has('elvis-addon-arbeitsplatz-builder:1.1.0')).toBe(true);
 
     // Nur den Installer neu bauen (eigener Job, das Abbild bleibt)
     expect((await req('POST', '/api/addons/arbeitsplatz/jobs/installer')).status).toBe(202);
@@ -95,5 +95,11 @@ describe('Arbeitsplatz-Addon (PXE)', () => {
     const ok = await enroll(env.ENROLL_TOKEN!);
     expect(ok.status).toBe(201);
     expect((await req<Workstation[]>('GET', '/api/system/workstations')).body.map((w) => w.hostname)).toEqual(['elvis-ap-0001']);
+
+    // Installer-ISO zum Herunterladen – ohne das Registrierungstoken
+    const installers = await req<WorkstationInstaller[]>('GET', '/api/system/workstations/installers');
+    expect(installers.body).toEqual([{ id: 'arbeitsplatz-ap', name: 'Arbeitsplätze', isoUrl: 'http://10.0.0.2:8089/iso/elvis-installer.iso' }]);
+    expect(JSON.stringify(installers.body)).not.toContain(env.ENROLL_TOKEN!);
+    expect((await req('GET', '/api/system/workstations/installers', undefined, {})).status).toBe(401);
   });
 });
