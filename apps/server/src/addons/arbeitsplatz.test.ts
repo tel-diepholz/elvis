@@ -67,12 +67,12 @@ describe('Arbeitsplatz-Addon (PXE)', () => {
     expect(daemon.byName('elvis-arbeitsplatz-job-image-3')!.spec.HostConfig?.SecurityOpt).toBeUndefined();
 
     // Erneut bauen (manuell): die Schritte nutzen das gebaute Image, nichts wird aus einer Registry gezogen
-    daemon.images.delete('elvis-addon-arbeitsplatz-builder:1.1.0');
+    daemon.images.delete('elvis-addon-arbeitsplatz-builder:1.2.0');
     expect((await req('POST', '/api/addons/arbeitsplatz/jobs/image')).status).toBe(202);
     const image = (a: InstalledAddon) => a.jobs.find((j) => j.id === 'image')!;
     const again = await waitFor('arbeitsplatz', (a) => image(a).state !== 'running' && image(a).triggeredBy !== 'Max Müller (Installation)');
     expect(image(again).state, JSON.stringify(image(again))).toBe('succeeded');
-    expect(daemon.images.has('elvis-addon-arbeitsplatz-builder:1.1.0')).toBe(true);
+    expect(daemon.images.has('elvis-addon-arbeitsplatz-builder:1.2.0')).toBe(true);
 
     // Nur den Installer neu bauen (eigener Job, das Abbild bleibt)
     expect((await req('POST', '/api/addons/arbeitsplatz/jobs/installer')).status).toBe(202);
@@ -95,6 +95,13 @@ describe('Arbeitsplatz-Addon (PXE)', () => {
     const ok = await enroll(env.ENROLL_TOKEN!);
     expect(ok.status).toBe(201);
     expect((await req<Workstation[]>('GET', '/api/system/workstations')).body.map((w) => w.hostname)).toEqual(['elvis-ap-0001']);
+
+    // apt-Cache für Updates: eigener Container, Adresse geht als Proxy an die Arbeitsplätze
+    expect(daemon.byName('elvis-arbeitsplatz-aptcache')!.spec.HostConfig).toMatchObject({ PortBindings: { '3142/tcp': [{ HostPort: '3142' }] } });
+    const ws = (await req<Workstation[]>('GET', '/api/system/workstations')).body[0]!;
+    expect((await req<Workstation[]>('POST', `/api/system/workstations/${ws.id}/update`, { apt: true })).status).toBe(200);
+    const state = await req<{ update: { aptProxy: string } }>('GET', '/api/clients/state', undefined, { authorization: `Bearer ${ok.body.token}` });
+    expect(state.body.update.aptProxy).toBe('http://10.0.0.2:3142');
 
     // Installer-ISO zum Herunterladen – ohne das Registrierungstoken
     const installers = await req<WorkstationInstaller[]>('GET', '/api/system/workstations/installers');

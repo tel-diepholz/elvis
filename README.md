@@ -679,7 +679,8 @@ KDE Plasma). Man meldet sich dort mit den Benutzern und PINs aus ELVIS an.
   - Offline gilt der zuletzt bekannte Einsatz.
   - Grenze: Wer Root-Zugriff auf die Platte hat, kann eine vierstellige PIN aus dem Verifier leicht erraten. Die
     Profile sind ohnehin unverschlüsselt.
-- **Keine Updates:** Folgendes ist entfernt bzw. maskiert, damit das System weder nach Updates sucht noch welche lädt:
+- **Keine automatischen Updates:** Folgendes ist entfernt bzw. maskiert, damit das System nicht von sich aus nach
+  Updates sucht oder welche lädt (Updates nur auf Auftrag, siehe unten):
   - entfernt: unattended-upgrades, update-notifier, Discover, PackageKit und snapd
   - maskiert: die apt-, fwupd- und motd-Timer
   - geleert: die Paketquellen (die alten liegen unter `/etc/apt/sources.disabled`)
@@ -688,6 +689,19 @@ KDE Plasma). Man meldet sich dort mit den Benutzern und PINs aus ELVIS an.
 - **Aussehen:** Fluent-Theme (vinceliuice, GPL-3.0) für Plasma, Kvantum, GTK und Symbole. Eine Taskleiste unten mit
   Start und Programmen in der Mitte, Fensterknöpfe rechts, ELVIS-Hintergrund. Das Look-and-Feel-Paket
   `de.elvis.desktop` gilt für jedes neue Profil.
+- **Updates** (*System → Arbeitsplätze*, je Gerät oder „Alle aktualisieren“): Pakete (`apt dist-upgrade`) und/oder
+  Firmware (fwupd/LVFS) auf Auftrag aus ELVIS.
+  - **Quelle:** Die Pakete kommen über den apt-Cache des Addons (Container `aptcache`, apt-cacher-ng, Option
+    „Port des apt-Caches“, Vorgabe 3142). Nur der Docker-Host braucht Internet, jedes Paket wird einmal geladen.
+    Firefox (Mozilla) und Firmware (LVFS) gehen per HTTPS ungecacht durch, nur zu diesen Zielen.
+  - **Ablauf:** Das Notebook holt den Auftrag beim Abgleich (alle 30 s) und startet erst, wenn niemand angemeldet ist,
+    sonst nach der nächsten Abmeldung. Während des Updates sperrt die Anmeldemaske. Danach werden die Paketquellen
+    wieder verworfen, und bei Bedarf (neuer Kernel, Firmware) startet das Notebook selbst neu.
+  - **Rückmeldung:** Stand, Ergebnis und Protokoll (Ende der Ausgabe) erscheinen in der Liste und im
+    Bedienprotokoll. Ein wartendes Update lässt sich zurücknehmen.
+  - **Automatisch** sucht das System weiterhin nichts.
+  - **Technik:** `POST|DELETE /api/system/workstations/:id/update` (`:id` = `all` für alle),
+    Rückmeldung `POST /api/clients/update`, Auftrag in `GET /api/clients/state`.
 - **Notfall-Admin:** Das Konto `elvisadmin` (Passwort aus den Addon-Optionen, `sudo`) meldet sich nur an der
   Textkonsole an (Strg+Alt+F3), nicht an der Anmeldemaske.
 - **Verwaltung** (*System → Arbeitsplätze*, nur Admins): Übersicht mit Rechnername, MAC-Adresse, zuletzt gesehen,

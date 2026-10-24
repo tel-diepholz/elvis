@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { fullName, type User, type Workstation, type WorkstationIncident, type WorkstationInstaller, type WorkstationState, type WorkstationUser } from '@elvis/shared';
+import { fullName, type User, type Workstation, type WorkstationIncident, type WorkstationInstaller, type WorkstationUpdate, type WorkstationUpdateRequest, type WorkstationUpdateState, type WorkstationState, type WorkstationUser } from '@elvis/shared';
 import type { Db } from '../db/index.js';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
@@ -10,7 +10,13 @@ export interface WorkstationProvision {
   name: string;
   token: string;
   installerIso?: string;
+  /** apt-Cache des Addons für Updates der Arbeitsplätze */
+  aptProxy?: string;
 }
+
+/** Ende der Ausgabe, die ELVIS je Update aufhebt */
+const UPDATE_LOG_MAX = 16_000;
+const OPEN_UPDATE: WorkstationUpdateState[] = ['pending', 'running'];
 
 const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 const sameSecret = (a: string, b: string) => timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
@@ -25,6 +31,7 @@ interface Row {
   last_seen_at: string | null;
   last_user: string | null;
   version: string;
+  update_json: string | null;
 }
 
 const toWorkstation = (r: Row): Workstation => ({
@@ -36,6 +43,7 @@ const toWorkstation = (r: Row): Workstation => ({
   lastSeenAt: r.last_seen_at,
   lastUser: r.last_user,
   version: r.version,
+  update: r.update_json ? (JSON.parse(r.update_json) as WorkstationUpdate) : null,
 });
 
 /**
@@ -139,7 +147,64 @@ export class WorkstationService {
 
   state(id: string): WorkstationState {
     const ws = this.row(id);
-    return { workstation: { id: ws.id, name: ws.name }, users: this.users(ws), incident: this.incident(), serverTime: new Date(this.now()).toISOString() };
+    const u = toWorkstation(ws).update;
+    const proxy = this.aptProxy();
+    const update = u && OPEN_UPDATE.includes(u.state) && proxy ? { id: u.id, apt: u.apt, firmware: u.firmware, aptProxy: proxy } : null;
+    return { workstation: { id: ws.id, name: ws.name }, users: this.users(ws), incident: this.incident(), serverTime: new Date(this.now()).toISOString(), update };
+  }
+
+  // --- Updates ---
+
+  private aptProxy(): string | null {
+    return this.provisions.find((p) => p.aptProxy)?.aptProxy ?? null;
+  }
+
+  private saveUpdate(id: string, update: WorkstationUpdate): void {
+    this.db.prepare('UPDATE workstations SET update_json = ? WHERE id = ?').run(JSON.stringify(update), id);
+    this.changed();
+  }
+
+  /** Update anstoßen; läuft auf dem Gerät, sobald niemand angemeldet ist */
+  requestUpdate(id: string, req: WorkstationUpdateRequest, actor: string): Workstation {
+    const ws = this.get(id);
+    if (!this.aptProxy()) throw new HttpError(409, 'Kein apt-Cache verfügbar – läuft das Addon „ELVIS Arbeitsplatz“ (ab 1.2.0)?');
+    if (ws.update?.state === 'running') throw new HttpError(409, `Auf „${ws.name}“ läuft bereits ein Update`);
+    this.saveUpdate(id, {
+      id: `upd-${randomBytes(4).toString('hex')}`,
+      apt: req.apt,
+      firmware: req.firmware,
+      state: 'pending',
+      message: 'Wartet, bis niemand angemeldet ist',
+      requestedAt: new Date(this.now()).toISOString(),
+      requestedBy: actor,
+      finishedAt: null,
+      log: '',
+    });
+    return this.get(id);
+  }
+
+  /** Noch nicht gestartetes Update zurücknehmen */
+  cancelUpdate(id: string): Workstation {
+    const ws = this.get(id);
+    if (ws.update?.state !== 'pending') throw new HttpError(409, ws.update?.state === 'running' ? 'Das Update läuft bereits' : 'Kein wartendes Update');
+    this.saveUpdate(id, { ...ws.update, state: 'cancelled', message: 'Zurückgenommen', finishedAt: new Date(this.now()).toISOString() });
+    return this.get(id);
+  }
+
+  /** Rückmeldung des Geräts; gehört sie nicht zum aktuellen Auftrag, wird sie verworfen */
+  reportUpdate(id: string, report: { id: string; state: 'running' | 'done' | 'failed'; message: string; log: string }): Workstation['update'] {
+    const u = this.get(id).update;
+    if (!u || u.id !== report.id || !OPEN_UPDATE.includes(u.state)) throw new HttpError(409, 'Update unbekannt oder bereits abgeschlossen');
+    const done = report.state !== 'running';
+    const next: WorkstationUpdate = {
+      ...u,
+      state: report.state,
+      message: report.message || u.message,
+      log: report.log ? report.log.slice(-UPDATE_LOG_MAX) : u.log,
+      finishedAt: done ? new Date(this.now()).toISOString() : null,
+    };
+    this.saveUpdate(id, next);
+    return next;
   }
 
   /** Nach erfolgreicher PIN-Prüfung: Benutzer mit Stempel und aktueller Einsatz */

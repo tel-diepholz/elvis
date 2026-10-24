@@ -231,6 +231,8 @@ const workstationProvision = z.object({
   token: templated,
   /** Download der Installer-ISO für den Browser, z. B. http://{{host.address}}:{{options.httpPort}}/iso/elvis-installer.iso */
   installerIso: templated.optional(),
+  /** apt-Proxy für Updates der Arbeitsplätze, z. B. http://{{host.address}}:{{options.aptCachePort}} */
+  aptProxy: templated.optional(),
 });
 
 export const addonManifestSchema = z

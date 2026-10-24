@@ -83,12 +83,14 @@ describe('Arbeitsplätze: Anmeldung', () => {
     expect((ok.json() as WorkstationLoginResult).user).toMatchObject({ id: user.id, lastName: 'Müller' });
     expect((await req<Workstation[]>('GET', '/api/system/workstations')).body[0]!.lastUser).toBe('Max Müller');
 
+    expect((await req('POST', '/api/clients/login', { userId: user.id, pin: '4711', purpose: 'unlock' }, asDevice(token))).status).toBe(200);
     for (let i = 0; i < 3; i++) expect((await req('POST', '/api/clients/login', { userId: user.id, pin: '0000' }, asDevice(token))).status).toBe(401);
     expect((await req('POST', '/api/clients/login', { userId: user.id, pin: '4711' }, asDevice(token))).status).toBe(429);
 
     const audit = (await req<{ action: string; target: string; success: boolean }[]>('GET', '/api/audit')).body;
     expect(audit.some((a) => a.action === 'login' && a.target.startsWith('arbeitsplatz:') && a.success)).toBe(true);
     expect(audit.some((a) => a.action === 'login' && !a.success)).toBe(true);
+    expect(audit.some((a) => a.action === 'unlock' && a.success)).toBe(true);
     expect((await req('POST', '/api/clients/login', { userId: user.id, pin: '4711' }, asDevice('unbekannt'))).status).toBe(401);
   });
 
@@ -115,5 +117,55 @@ describe('Arbeitsplätze: Anmeldung', () => {
     const [ws] = (await req<Workstation[]>('GET', '/api/system/workstations')).body;
     expect(ws).toMatchObject({ version: '1.0.0', lastUser: null });
     expect(ws!.lastSeenAt).not.toBeNull();
+  });
+});
+
+describe('Arbeitsplätze: Updates', () => {
+  const PROXY = 'http://10.0.0.2:3142';
+
+  it('stößt ein Update an, liefert den Auftrag an das Gerät und übernimmt dessen Rückmeldungen', async () => {
+    const { workstation, token } = await enroll();
+    expect((await req('POST', `/api/system/workstations/${workstation.id}/update`, { apt: true })).status).toBe(409); // ohne apt-Cache
+    app.workstations.setProvisions([{ id: 'arbeitsplatz-ap', name: 'Arbeitsplätze', token: SECRET, aptProxy: PROXY }]);
+    expect((await req('POST', `/api/system/workstations/${workstation.id}/update`, { apt: false, firmware: false })).status).toBe(400);
+    expect((await req('POST', `/api/system/workstations/${workstation.id}/update`, { apt: true }, {})).status).toBe(401);
+
+    const [requested] = (await req<Workstation[]>('POST', `/api/system/workstations/${workstation.id}/update`, { apt: true, firmware: true })).body;
+    expect(requested!.update).toMatchObject({ state: 'pending', apt: true, firmware: true, requestedBy: 'Max Müller' });
+    const id = requested!.update!.id;
+
+    const state = async () => (await req<WorkstationState>('GET', '/api/clients/state', undefined, asDevice(token))).body;
+    expect((await state()).update).toEqual({ id, apt: true, firmware: true, aptProxy: PROXY });
+
+    const report = (body: object) => req('POST', '/api/clients/update', body, asDevice(token));
+    expect((await report({ id: 'upd-falsch', state: 'running' })).status).toBe(409);
+    expect((await report({ id, state: 'running', message: 'Pakete werden geladen' })).status).toBe(200);
+    expect((await req('DELETE', `/api/system/workstations/${workstation.id}/update`)).status).toBe(409); // läuft schon
+    expect((await state()).update?.id).toBe(id);
+    expect((await report({ id, state: 'done', message: '12 Pakete aktualisiert', log: 'x'.repeat(30_000).slice(0, 20_000) })).status).toBe(200);
+
+    expect((await state()).update).toBeNull();
+    const [ws] = (await req<Workstation[]>('GET', '/api/system/workstations')).body;
+    expect(ws!.update).toMatchObject({ id, state: 'done', message: '12 Pakete aktualisiert' });
+    expect(ws!.update!.finishedAt).not.toBeNull();
+    expect(ws!.update!.log.length).toBe(16_000);
+    expect((await report({ id, state: 'done' })).status).toBe(409); // abgeschlossen
+
+    const audit = (await req<{ action: string; message: string }[]>('GET', '/api/audit')).body;
+    expect(audit.some((a) => a.action === 'update' && a.message.includes('abgeschlossen'))).toBe(true);
+  });
+
+  it('nimmt wartende Updates zurück und stößt Updates für alle an', async () => {
+    app.workstations.setProvisions([{ id: 'arbeitsplatz-ap', name: 'Arbeitsplätze', token: SECRET, aptProxy: PROXY }]);
+    const a = await enroll();
+    await enroll('aa:bb:cc:dd:ee:02', 'elvis-ap-ee02');
+    const all = (await req<Workstation[]>('POST', '/api/system/workstations/all/update', {})).body;
+    expect(all.map((w) => [w.update?.state, w.update?.apt, w.update?.firmware])).toEqual([
+      ['pending', true, false],
+      ['pending', true, false],
+    ]);
+    const cancelled = (await req<Workstation>('DELETE', `/api/system/workstations/${a.workstation.id}/update`)).body;
+    expect(cancelled.update?.state).toBe('cancelled');
+    expect((await req<WorkstationState>('GET', '/api/clients/state', undefined, asDevice(a.token))).body.update).toBeNull();
   });
 });

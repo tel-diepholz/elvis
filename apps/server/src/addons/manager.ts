@@ -886,7 +886,7 @@ export class AddonManager {
         guestPrinters.push({ id: `${r.id}-${g.id}`, name: g.name, token: renderTemplate(g.token, ctx) });
       }
       for (const w of manifest.provides.workstations ?? []) {
-        workstations.push({ id: `${r.id}-${w.id}`, name: w.name, token: renderTemplate(w.token, ctx), ...(w.installerIso && { installerIso: renderTemplate(w.installerIso, ctx) }) });
+        workstations.push({ id: `${r.id}-${w.id}`, name: w.name, token: renderTemplate(w.token, ctx), ...(w.installerIso && { installerIso: renderTemplate(w.installerIso, ctx) }), ...(w.aptProxy && { aptProxy: renderTemplate(w.aptProxy, ctx) }) });
       }
     }
     if (this.tiles.setAddonSources(sources)) this.notify(['mapSources']);

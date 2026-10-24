@@ -533,6 +533,8 @@ const MIGRATIONS: Migration[] = [
     version TEXT NOT NULL DEFAULT ''
   );
   `,
+  // Updates der Arbeitsplätze: letzter Auftrag mit Stand und Protokoll (JSON)
+  `ALTER TABLE workstations ADD COLUMN update_json TEXT;`,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

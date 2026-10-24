@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { fullName, workstationEnrollSchema, workstationHeartbeatSchema, workstationLoginSchema, type Topic, type WorkstationLoginResult, type WorkstationState } from '@elvis/shared';
+import { fullName, workstationEnrollSchema, workstationHeartbeatSchema, workstationLoginSchema, workstationUpdateReportSchema, workstationUpdateRequestSchema, type Topic, type WorkstationLoginResult, type WorkstationState } from '@elvis/shared';
 import type { LoginLimiter } from '../auth/limiter.js';
 import type { UserService } from '../auth/users.js';
 import type { Store } from '../db/store.js';
@@ -45,12 +45,12 @@ export function workstationRoutes(app: FastifyInstance, d: Deps): void {
     const user = await d.users.checkPin(body.userId, body.pin);
     if (!user) {
       const left = d.limiter.failure(body.userId, client);
-      audit('Anonym', `user:${body.userId}`, 'login', `Arbeitsplatz „${ws.name}“: PIN falsch`, false);
+      audit('Anonym', `user:${body.userId}`, body.purpose, `Arbeitsplatz „${ws.name}“: PIN falsch${body.purpose === 'unlock' ? ' (Entsperren)' : ''}`, false);
       throw new HttpError(401, left > 0 ? `PIN falsch – noch ${left} Versuch${left === 1 ? '' : 'e'}` : 'PIN falsch – Anmeldung vorübergehend gesperrt');
     }
     d.limiter.success(user.id);
     const result = d.workstations.loggedIn(ws.id, user);
-    audit(fullName(user), `arbeitsplatz:${ws.id}`, 'login', `Anmeldung am Arbeitsplatz „${ws.name}“`);
+    audit(fullName(user), `arbeitsplatz:${ws.id}`, body.purpose, body.purpose === 'unlock' ? `Arbeitsplatz „${ws.name}“ entsperrt` : `Anmeldung am Arbeitsplatz „${ws.name}“`);
     return result;
   });
 
@@ -60,7 +60,35 @@ export function workstationRoutes(app: FastifyInstance, d: Deps): void {
     return reply.code(204).send();
   });
 
+  /** Stand eines Updates vom Gerät (läuft, fertig, fehlgeschlagen) */
+  app.post('/api/clients/update', async (req) => {
+    const ws = d.workstations.require(bearer(req));
+    const report = parse(workstationUpdateReportSchema, req.body);
+    const update = d.workstations.reportUpdate(ws.id, report);
+    if (report.state !== 'running') {
+      audit('Arbeitsplatz', `arbeitsplatz:${ws.id}`, 'update', `Update auf „${ws.name}“ ${report.state === 'done' ? 'abgeschlossen' : 'fehlgeschlagen'}${report.message ? `: ${report.message}` : ''}`, report.state === 'done');
+    }
+    return update;
+  });
+
   // --- Verwaltung (nur Admins) ---
+
+  /** Update anstoßen – ein Gerät oder alle */
+  app.post<{ Params: { id: string } }>('/api/system/workstations/:id/update', async (req) => {
+    const body = parse(workstationUpdateRequestSchema, req.body ?? {});
+    const ids = req.params.id === 'all' ? d.workstations.list().filter((w) => w.update?.state !== 'running').map((w) => w.id) : [req.params.id];
+    if (!ids.length) throw new HttpError(409, 'Keine Arbeitsplätze für ein Update');
+    const what = [body.apt && 'Pakete', body.firmware && 'Firmware'].filter(Boolean).join(' und ');
+    const result = ids.map((id) => d.workstations.requestUpdate(id, body, operatorOf(req)));
+    audit(operatorOf(req), req.params.id === 'all' ? 'arbeitsplätze' : `arbeitsplatz:${req.params.id}`, 'update', `Update (${what}) angestoßen: ${result.map((w) => w.name).join(', ')}`);
+    return result;
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/system/workstations/:id/update', async (req) => {
+    const ws = d.workstations.cancelUpdate(req.params.id);
+    audit(operatorOf(req), `arbeitsplatz:${ws.id}`, 'update-cancel', `Update auf „${ws.name}“ zurückgenommen`);
+    return ws;
+  });
 
   app.get('/api/system/workstations', async () => d.workstations.list());
   app.get('/api/system/workstations/installers', async () => d.workstations.installers());

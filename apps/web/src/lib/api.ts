@@ -24,6 +24,7 @@ import {
   type DisplaySelf,
   type Workstation,
   type WorkstationInstaller,
+  type WorkstationUpdateRequest,
   type VideoSources,
   type CameraConfigInput,
   type CameraPreset,
@@ -264,6 +265,9 @@ export const api = {
   workstationInstallers: () => request<WorkstationInstaller[]>('GET', '/api/system/workstations/installers'),
   renameWorkstation: (id: string, name: string) => request<Workstation>('PUT', `/api/system/workstations/${id}`, { name }),
   removeWorkstation: (id: string) => request<void>('DELETE', `/api/system/workstations/${id}`),
+  /** id = 'all' für alle Arbeitsplätze */
+  updateWorkstation: (id: string, req: WorkstationUpdateRequest) => request<Workstation[]>('POST', `/api/system/workstations/${id}/update`, req),
+  cancelWorkstationUpdate: (id: string) => request<Workstation>('DELETE', `/api/system/workstations/${id}/update`),
   reorderDisplays: (ids: string[]) => request<DisplayDevice[]>('PUT', '/api/system/displays/order', { ids }),
   displaySelf: () => request<DisplaySelf>('GET', '/api/display/self'),
   displayStartPairing: () => request<DisplaySelf>('POST', '/api/display/pair'),
