@@ -172,6 +172,8 @@ export class FakeDocker {
       },
       pull(name: string, cb: (err: Error | null, stream?: NodeJS.ReadableStream) => void) {
         if (!self.pullable) return cb(new Error('pull access denied / no internet'));
+        // wie Docker: „build:…“ ist kein Name aus einer Registry
+        if (name.startsWith('build:')) return cb(new Error(`pull access denied for ${name.split(':')[0]}, repository does not exist`));
         self.images.add(name);
         cb(null, Readable.from(['{"status":"done"}']));
       },

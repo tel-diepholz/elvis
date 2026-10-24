@@ -66,6 +66,13 @@ describe('Arbeitsplatz-Addon (PXE)', () => {
     expect(rootfs.Cmd).toEqual(['sh', '/data/addon/build/rootfs.sh']);
     expect(daemon.byName('elvis-arbeitsplatz-job-image-3')!.spec.HostConfig?.SecurityOpt).toBeUndefined();
 
+    // Erneut bauen (manuell): die Schritte nutzen das gebaute Image, nichts wird aus einer Registry gezogen
+    daemon.images.delete('elvis-addon-arbeitsplatz-builder:1.0.0');
+    expect((await req('POST', '/api/addons/arbeitsplatz/jobs/image')).status).toBe(202);
+    const again = await waitFor('arbeitsplatz', (a) => a.jobs[0]?.state !== 'running' && a.jobs[0]?.triggeredBy !== 'Max Müller (Installation)');
+    expect(again.jobs[0]!.state, JSON.stringify(again.jobs[0])).toBe('succeeded');
+    expect(daemon.images.has('elvis-addon-arbeitsplatz-builder:1.0.0')).toBe(true);
+
     const archive = daemon.archives.find((a) => a.volume === 'elvis-addon-arbeitsplatz-data');
     expect(archive?.entries).toEqual(expect.arrayContaining(['addon/installer/elvis-install', 'addon/client/elvis-clientd.py', 'addon/client/sddm-theme/Main.qml']));
 

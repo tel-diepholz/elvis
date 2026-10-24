@@ -641,7 +641,10 @@ export class AddonManager {
         st.state = 'running';
         st.message = `Image ${step.image} bereitstellen`;
         this.notifySoon(r.id);
-        await this.ensureImage(docker, r.host_id, step.image);
+        // „build:<name>“ ist kein Registry-Image: auf dem Host bauen (vorhandenes Image derselben Version bleibt)
+        const built = /^build:(.+)$/.exec(step.image);
+        if (built) await this.buildImage(docker, manifest, built[1]!);
+        else await this.ensureImage(docker, r.host_id, step.image);
         st.message = null;
         // Voriger Lauf: Container entfernen – sein Protokoll war bis hierhin abrufbar.
         await docker.getContainer(jobStepName(r.id, jobId, i)).remove({ force: true }).catch(() => undefined);
