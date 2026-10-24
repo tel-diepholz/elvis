@@ -519,6 +519,32 @@ export class AddonManager {
     if (h !== undefined) void this.hosts.check(h).catch(() => undefined);
   }
 
+  private forget(id: string): void {
+    this.db.prepare('DELETE FROM addons WHERE id = ?').run(id);
+    this.runs.deleteForAddon(id);
+    for (const k of [...this.live.keys()]) if (k.startsWith(`${id}/`)) this.live.delete(k);
+    this.ops.delete(id);
+    this.containers.delete(id);
+    this.busy.delete(id);
+  }
+
+  /**
+   * Alle Addons eines Hosts nur aus ELVIS austragen, ohne den Host anzusprechen (Host wird entfernt, ist z. B. nicht
+   * mehr erreichbar). Container und Volumes auf dem Server bleiben unberührt. Liefert die ausgetragenen IDs.
+   */
+  forgetOnHost(hostId: number, operator: string): string[] {
+    const ids = (this.db.prepare('SELECT id FROM addons WHERE host_id = ?').all(hostId) as { id: string }[]).map((r) => r.id);
+    for (const id of ids) {
+      this.forget(id);
+      this.audit({ operator, target: `addon:${id}`, action: 'forget', params: JSON.stringify({ hostId }), success: true, message: 'mit dem Docker-Host aus ELVIS ausgetragen' });
+    }
+    if (ids.length) {
+      this.updateMapSources();
+      this.notify(['addons']);
+    }
+    return ids;
+  }
+
   async uninstall(id: string, removeData: boolean, operator: string): Promise<void> {
     const r = this.row(id);
     const manifest = JSON.parse(r.manifest) as AddonManifest;
@@ -537,12 +563,7 @@ export class AddonManager {
       } else if (removeData) {
         throw new HttpError(409, `Host „${host.name}“ nicht erreichbar – Daten können nicht gelöscht werden`);
       }
-      this.db.prepare('DELETE FROM addons WHERE id = ?').run(id);
-      this.runs.deleteForAddon(id);
-      for (const k of [...this.live.keys()]) if (k.startsWith(`${id}/`)) this.live.delete(k);
-      this.ops.delete(id);
-      this.containers.delete(id);
-      this.busy.delete(id);
+      this.forget(id);
       this.audit({ operator, target: `addon:${id}`, action: 'uninstall', params: JSON.stringify({ removeData }), success: true, message: '' });
       this.updateMapSources();
       this.refreshHostOf(id, r.host_id);

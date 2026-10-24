@@ -201,9 +201,25 @@ export class HostService {
     return this.get(id);
   }
 
+  /**
+   * Name, Adresse oder Port ändern (z. B. neue IP des Servers). Bei ELVIS-Zertifikaten stehen Adresse und Name im
+   * Serverzertifikat – dann muss der Host neu eingerichtet werden (needsSetup).
+   */
+  update(id: number, patch: { name?: string; address?: string; port?: number }): { host: DockerHost; needsSetup: boolean } {
+    const r = this.row(id);
+    const name = patch.name ?? r.name;
+    const address = patch.address ?? r.address;
+    const port = patch.port ?? r.port;
+    if (name !== r.name && this.db.prepare('SELECT 1 FROM docker_hosts WHERE name = ? AND id != ?').get(name, id)) throw new HttpError(409, `Host „${name}“ existiert bereits`);
+    this.db.prepare('UPDATE docker_hosts SET name = ?, address = ?, port = ? WHERE id = ?').run(name, address, port, id);
+    this.clients.delete(id);
+    this.notify(['dockerHosts']);
+    return { host: this.get(id), needsSetup: r.cert_mode === 'elvis' && (name !== r.name || address !== r.address) };
+  }
+
   remove(id: number, addonsOnHost: number): void {
     this.row(id);
-    if (addonsOnHost > 0) throw new HttpError(409, 'Auf dem Host sind noch Addons installiert');
+    if (addonsOnHost > 0) throw new HttpError(409, `Auf dem Host ${addonsOnHost === 1 ? 'ist noch 1 Addon' : `sind noch ${addonsOnHost} Addons`} installiert`);
     this.db.prepare('DELETE FROM docker_hosts WHERE id = ?').run(id);
     this.runtime.delete(id);
     this.clients.delete(id);

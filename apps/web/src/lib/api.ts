@@ -311,7 +311,9 @@ export const api = {
     request<HostSetup | { host: DockerHost; command: null; expiresAt: null }>('POST', '/api/docker/hosts', input),
   renewHostSetup: (id: number) => request<HostSetup>('POST', `/api/docker/hosts/${id}/setup`),
   testDockerHost: (id: number) => request<DockerHost>('POST', `/api/docker/hosts/${id}/test`),
-  removeDockerHost: (id: number) => request<void>('DELETE', `/api/docker/hosts/${id}`),
+  updateDockerHost: (id: number, patch: { name?: string; address?: string; port?: number }) =>
+    request<{ host: DockerHost; setup: HostSetup | null }>('PATCH', `/api/docker/hosts/${id}`, patch),
+  removeDockerHost: (id: number, force = false) => request<void>('DELETE', `/api/docker/hosts/${id}${force ? '?force=true' : ''}`),
 
   addonStore: () => request<AddonStoreEntry[]>('GET', '/api/addons/store'),
   refreshAddonStore: () => request<{ ok: boolean }>('POST', '/api/addons/store/refresh'),

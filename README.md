@@ -449,6 +449,15 @@ Das Skript legt die Zertifikate unter `/etc/docker/tls/` ab, ergänzt `dockerd` 
 `-H tcp://0.0.0.0:2376 --tlsverify …`, startet Docker neu und meldet sich bei ELVIS. Es ist wiederholbar, z. B. zur
 Zertifikatserneuerung. Alternativ lassen sich vorhandene Zertifikate (CA, Client-Zertifikat, Schlüssel) eintragen.
 CA und Client-Schlüssel von ELVIS liegen in `data/docker-tls/`.
+
+**Neue IP-Adresse:** Hat ein Server eine neue IP-Adresse oder einen neuen Namen bekommen, beides unter *Bearbeiten*
+am Host ändern. Installierte Addons bleiben erhalten. Bei ELVIS-Zertifikaten stehen Name und Adresse im
+Serverzertifikat. ELVIS zeigt deshalb nach dem Speichern einen neuen Einrichtungsbefehl, der auf dem Server ausgeführt
+werden muss (`PATCH /api/docker/hosts/:id`).
+
+**Host entfernen:** Ein Host, auf dem noch Addons eingetragen sind, lässt sich nach einer zweiten Bestätigung trotzdem
+entfernen (`DELETE …?force=true`), z. B. wenn der Server nicht mehr existiert. Die Addons werden dann nur aus ELVIS
+ausgetragen. Container und Volumes auf dem Server bleiben unberührt.
 **Port 2376 per Firewall nur aus dem Fahrzeug-LAN erreichbar machen.** Wer Zugriff auf die Docker-API hat, hat
 Root-Rechte auf dem Server. Die Addon- und Host-Verwaltung ist daher Admins vorbehalten. Alle Aktionen stehen im
 Bedienprotokoll.

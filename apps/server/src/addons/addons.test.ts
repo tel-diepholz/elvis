@@ -78,10 +78,48 @@ describe('Docker-Hosts', () => {
     expect((await req('GET', '/api/docker/setup/gibtsnicht.sh')).status).toBe(404);
   });
 
+  it('ändert Adresse und Port; bei ELVIS-Zertifikaten mit neuem Einrichtungsbefehl', async () => {
+    await setup();
+    const daemon = new FakeDocker();
+    const custom = await addHost('server2', '10.0.0.2', daemon);
+    // Der Server hat eine neue IP bekommen: unter der alten Adresse ist er nicht mehr erreichbar
+    daemons.delete('10.0.0.2');
+    daemons.set('10.0.0.20', daemon);
+    const moved = await req<{ host: DockerHost; setup: HostSetup | null }>('PATCH', `/api/docker/hosts/${custom.id}`, { address: '10.0.0.20', port: 2377 });
+    expect(moved.status).toBe(200);
+    expect(moved.body.host).toMatchObject({ address: '10.0.0.20', port: 2377, status: 'ready' });
+    expect(moved.body.setup).toBeNull();
+
+    const { body } = await req<HostSetup>('POST', '/api/docker/hosts', { certMode: 'elvis', name: 'server1', address: '10.0.0.1' });
+    const renamed = await req<{ host: DockerHost; setup: HostSetup | null }>('PATCH', `/api/docker/hosts/${body.host.id}`, { address: '10.0.0.11' });
+    expect(renamed.body.setup?.command).toMatch(/api\/docker\/setup\/[\w-]+\.sh/);
+    expect((await req('PATCH', `/api/docker/hosts/${body.host.id}`, { name: 'server2' })).status).toBe(409);
+    expect((await req('PATCH', `/api/docker/hosts/${body.host.id}`, { address: 'kaputt/' })).status).toBe(400);
+  });
+
   it('lässt sich ohne Addons entfernen', async () => {
     await setup();
     const host = await addHost('server2', '10.0.0.2', new FakeDocker());
     expect((await req('DELETE', `/api/docker/hosts/${host.id}`)).status).toBe(204);
+  });
+});
+
+describe('Docker-Host entfernen mit Addons', () => {
+  it('trägt mit force die Addons nur aus ELVIS aus und lässt den Server unberührt', async () => {
+    await setup();
+    const daemon = new FakeDocker();
+    const host = await addHost('server2', '10.0.0.2', daemon);
+    await req('POST', '/api/addons', { addonId: 'hello', hostId: host.id, options: { name: 'X', port: 8123 } });
+    await waitFor('hello', (a) => a.status === 'running');
+    const containers = daemon.containers.size;
+
+    expect((await req('DELETE', `/api/docker/hosts/${host.id}`)).status).toBe(409);
+    expect((await req('DELETE', `/api/docker/hosts/${host.id}?force=true`)).status).toBe(204);
+    expect((await req<DockerHost[]>('GET', '/api/docker/hosts')).body).toEqual([]);
+    expect((await req<InstalledAddon[]>('GET', '/api/addons')).body).toEqual([]);
+    expect(daemon.containers.size).toBe(containers);
+    const audit = await req<{ target: string; action: string }[]>('GET', '/api/audit');
+    expect(audit.body.some((a) => a.target === 'addon:hello' && a.action === 'forget')).toBe(true);
   });
 });
 
@@ -123,6 +161,7 @@ describe('Addon-Lebenszyklus', () => {
 
     // Host mit Addon kann nicht entfernt werden
     expect((await req('DELETE', `/api/docker/hosts/${host.id}`)).status).toBe(409);
+    expect((await req<InstalledAddon[]>('GET', '/api/addons')).body).toHaveLength(1);
 
     // Deinstallieren inkl. Daten
     expect((await req('DELETE', '/api/addons/hello?data=1')).status).toBe(204);

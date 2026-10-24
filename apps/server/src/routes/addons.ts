@@ -65,10 +65,27 @@ export function addonRoutes(
 
   app.post('/api/docker/hosts/:id/test', async (req) => hosts.check(parse(idParam, req.params).id));
 
+  /** Name, Adresse oder Port ändern; bei ELVIS-Zertifikaten mit neuer Adresse gleich den Einrichtungsbefehl liefern */
+  app.patch('/api/docker/hosts/:id', async (req) => {
+    const { id } = parse(idParam, req.params);
+    const body = parse(z.object({ name: z.string().trim().min(1).max(60).optional(), address: hostname.optional(), port: z.number().int().min(1).max(65535).optional() }), req.body);
+    const before = hosts.get(id);
+    const { needsSetup } = hosts.update(id, body);
+    audit(req, `host:${id}`, 'update', body, `${before.name}: ${before.address}:${before.port} → ${body.address ?? before.address}:${body.port ?? before.port}`);
+    const setup = needsSetup ? hosts.renewSetup(id, baseUrl(req)) : null;
+    const host = await hosts.check(id);
+    return { host, setup };
+  });
+
+  /** ?force=true: auch mit installierten Addons – sie werden nur aus ELVIS ausgetragen, der Server bleibt unberührt */
   app.delete('/api/docker/hosts/:id', async (req, reply) => {
     const { id } = parse(idParam, req.params);
+    const { force } = parse(z.object({ force: z.enum(['true', 'false']).optional() }), req.query);
+    hosts.get(id);
+    // Addons zuerst austragen (Fremdschlüssel), ohne force lehnt remove() mit 409 ab
+    const forgotten = force === 'true' ? addons.forgetOnHost(id, operatorOf(req)) : [];
     hosts.remove(id, addons.countOnHost(id));
-    audit(req, `host:${id}`, 'remove', {});
+    audit(req, `host:${id}`, 'remove', forgotten.length ? { addons: forgotten } : {});
     return reply.code(204).send();
   });
 

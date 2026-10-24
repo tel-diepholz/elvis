@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Copy, KeyRound, Plus, RefreshCw, Server, Trash2 } from 'lucide-react';
+import { Copy, KeyRound, Pencil, Plus, RefreshCw, Server, Trash2 } from 'lucide-react';
 import type { DockerHost, HostSetup } from '@elvis/shared';
-import { api } from '../lib/api';
+import { ApiError, api } from '../lib/api';
 import { fmtDate, fmtDateTime } from '../lib/format';
 import { useToast } from '../lib/toast';
 import { Badge, Card, EmptyState, Field, Loading, Modal, PageHeader, Segmented, type Tone } from '../components/ui';
@@ -143,9 +143,66 @@ function AddHostDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Name, Adresse, Port ändern – z. B. wenn der Server eine neue IP-Adresse bekommen hat */
+function EditHostDialog({ host, onClose, onSetup }: { host: DockerHost; onClose: () => void; onSetup: (s: HostSetup) => void }) {
+  const toast = useToast();
+  const [form, setForm] = useState({ name: host.name, address: host.address, port: String(host.port) });
+  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const save = useMutation({
+    mutationFn: () => api.updateDockerHost(host.id, { name: form.name.trim(), address: form.address.trim(), port: Number(form.port) || host.port }),
+    onSuccess: ({ host: h, setup }) => {
+      if (setup) {
+        onSetup(setup);
+        toast('success', `${h.name} gespeichert – Zertifikat bitte mit dem angezeigten Befehl neu einrichten`);
+      } else toast(h.status === 'ready' ? 'success' : 'error', h.status === 'ready' ? `${h.name} verbunden` : `${h.name} gespeichert, aber nicht erreichbar: ${h.error ?? ''}`);
+      onClose();
+    },
+    onError: (e) => toast('error', e.message),
+  });
+  const changesCert = host.certMode === 'elvis' && (form.address.trim() !== host.address || form.name.trim() !== host.name);
+  return (
+    <Modal open title={`${host.name} bearbeiten`} onClose={onClose}>
+      <form
+        className="form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <div className="form-grid">
+          <Field label="Name *">
+            <input value={form.name} onChange={set('name')} required maxLength={60} />
+          </Field>
+          <Field label="Adresse *" hint="IP-Adresse oder Hostname im Fahrzeug-LAN">
+            <input value={form.address} onChange={set('address')} required autoFocus />
+          </Field>
+          <Field label="TLS-Port">
+            <input type="number" value={form.port} onChange={set('port')} min={1} max={65535} />
+          </Field>
+        </div>
+        {changesCert && (
+          <p className="hint tone-warn">
+            Name und Adresse stehen im Serverzertifikat. Nach dem Speichern zeigt ELVIS einen neuen Einrichtungsbefehl – auf dem Server ausführen, dann ist der Host wieder
+            verbunden. Installierte Addons bleiben erhalten.
+          </p>
+        )}
+        <div className="form-actions">
+          <button type="button" className="btn" onClick={onClose}>
+            Abbrechen
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={save.isPending || !form.name.trim() || !form.address.trim()}>
+            Speichern
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function HostCard({ host }: { host: DockerHost }) {
   const toast = useToast();
   const [setup, setSetup] = useState<HostSetup | null>(null);
+  const [editing, setEditing] = useState(false);
   const st = STATUS[host.status];
   const certSoon = host.certExpiresAt && new Date(host.certExpiresAt).getTime() - Date.now() < CERT_WARN_MS;
 
@@ -155,7 +212,24 @@ function HostCard({ host }: { host: DockerHost }) {
     onError: (e) => toast('error', e.message),
   });
   const renew = useMutation({ mutationFn: () => api.renewHostSetup(host.id), onSuccess: setSetup, onError: (e) => toast('error', e.message) });
-  const remove = useMutation({ mutationFn: () => api.removeDockerHost(host.id), onSuccess: () => toast('success', `${host.name} entfernt`), onError: (e) => toast('error', e.message) });
+  const remove = useMutation({
+    mutationFn: async () => {
+      try {
+        await api.removeDockerHost(host.id);
+      } catch (e) {
+        // Noch Addons eingetragen (auch wenn der Host nicht erreichbar ist): nur auf ausdrückliche Bestätigung austragen
+        if (!(e instanceof ApiError) || e.status !== 409) throw e;
+        const ok = window.confirm(
+          `${e.message}.\n\nTrotzdem entfernen? Die Addons werden dann nur aus ELVIS ausgetragen – Container und Daten auf dem Server bleiben unberührt und müssen dort bei Bedarf von Hand entfernt werden.`,
+        );
+        if (!ok) return false;
+        await api.removeDockerHost(host.id, true);
+      }
+      return true;
+    },
+    onSuccess: (done) => done && toast('success', `${host.name} entfernt`),
+    onError: (e) => toast('error', e.message),
+  });
 
   return (
     <Card
@@ -192,15 +266,18 @@ function HostCard({ host }: { host: DockerHost }) {
             <KeyRound size={14} /> {host.status === 'pending' ? 'Einrichtungsbefehl' : 'Zertifikat erneuern'}
           </button>
         )}
+        <button className="btn btn-sm" onClick={() => setEditing(true)}>
+          <Pencil size={14} /> Bearbeiten
+        </button>
         <button
           className="btn btn-sm btn-danger"
-          disabled={remove.isPending || host.addonCount > 0}
-          title={host.addonCount > 0 ? 'Zuerst die Addons auf diesem Host deinstallieren' : undefined}
+          disabled={remove.isPending}
           onClick={() => window.confirm(`Host „${host.name}“ aus ELVIS entfernen? Die Docker-Konfiguration auf dem Server bleibt unverändert.`) && remove.mutate()}
         >
           <Trash2 size={14} /> Entfernen
         </button>
       </div>
+      {editing && <EditHostDialog host={host} onClose={() => setEditing(false)} onSetup={setSetup} />}
     </Card>
   );
 }
