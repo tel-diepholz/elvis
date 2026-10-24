@@ -156,6 +156,12 @@ export class WifiService implements WifiSource {
     return { ops: { ...DEFAULT_SETTINGS.ops, ...s?.ops }, guest: { ...DEFAULT_SETTINGS.guest, ...s?.guest } };
   }
 
+  /** Zugangsdaten des Betriebs-WLANs für die Arbeitsplätze (nur wenn eingeschaltet und vollständig) */
+  opsCredentials(): { ssid: string; psk: string } | null {
+    const { ops } = this.stored();
+    return ops.enabled && ops.ssid && ops.password ? { ssid: ops.ssid, psk: ops.password } : null;
+  }
+
   settings(): WifiSettings {
     const s = this.stored();
     return { ops: { enabled: s.ops.enabled, ssid: s.ops.ssid, passwordSet: s.ops.password !== '' }, guest: s.guest };

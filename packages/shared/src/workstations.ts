@@ -72,6 +72,13 @@ export interface WorkstationState {
   serverTime: string;
   /** Angestoßenes Update (pending oder running), sonst null */
   update: WorkstationUpdateOrder | null;
+  /** Betriebs-WLAN (WPA2-PSK), das der Arbeitsplatz als Verbindung hinterlegt; null = keins (Verbindung entfernen) */
+  wifi: WorkstationWifi | null;
+}
+
+export interface WorkstationWifi {
+  ssid: string;
+  psk: string;
 }
 
 export interface WorkstationLoginResult {

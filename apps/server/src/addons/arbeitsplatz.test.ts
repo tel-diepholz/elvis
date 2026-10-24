@@ -67,12 +67,12 @@ describe('Arbeitsplatz-Addon (PXE)', () => {
     expect(daemon.byName('elvis-arbeitsplatz-job-image-3')!.spec.HostConfig?.SecurityOpt).toBeUndefined();
 
     // Erneut bauen (manuell): die Schritte nutzen das gebaute Image, nichts wird aus einer Registry gezogen
-    daemon.images.delete('elvis-addon-arbeitsplatz-builder:1.2.0');
+    daemon.images.delete('elvis-addon-arbeitsplatz-builder:1.2.1');
     expect((await req('POST', '/api/addons/arbeitsplatz/jobs/image')).status).toBe(202);
     const image = (a: InstalledAddon) => a.jobs.find((j) => j.id === 'image')!;
     const again = await waitFor('arbeitsplatz', (a) => image(a).state !== 'running' && image(a).triggeredBy !== 'Max Müller (Installation)');
     expect(image(again).state, JSON.stringify(image(again))).toBe('succeeded');
-    expect(daemon.images.has('elvis-addon-arbeitsplatz-builder:1.2.0')).toBe(true);
+    expect(daemon.images.has('elvis-addon-arbeitsplatz-builder:1.2.1')).toBe(true);
 
     // Nur den Installer neu bauen (eigener Job, das Abbild bleibt)
     expect((await req('POST', '/api/addons/arbeitsplatz/jobs/installer')).status).toBe(202);

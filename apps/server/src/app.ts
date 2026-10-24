@@ -140,7 +140,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   );
   const users = new UserService(db);
   const limiter = new LoginLimiter();
-  const workstations = new WorkstationService(db, store);
+  const workstations = new WorkstationService(db, store, () => wifi.opsCredentials());
   workstations.onChange(() => hub.invalidate(['workstations']));
 
   // Docker- und Addon-Verwaltung (abschaltbar über docker.enabled)

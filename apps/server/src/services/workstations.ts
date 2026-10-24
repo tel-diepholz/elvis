@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { fullName, type User, type Workstation, type WorkstationIncident, type WorkstationInstaller, type WorkstationUpdate, type WorkstationUpdateRequest, type WorkstationUpdateState, type WorkstationState, type WorkstationUser } from '@elvis/shared';
+import { fullName, type User, type Workstation, type WorkstationIncident, type WorkstationInstaller, type WorkstationUpdate, type WorkstationUpdateRequest, type WorkstationUpdateState, type WorkstationWifi, type WorkstationState, type WorkstationUser } from '@elvis/shared';
 import type { Db } from '../db/index.js';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
@@ -58,6 +58,8 @@ export class WorkstationService {
   constructor(
     private readonly db: Db,
     private readonly store: Store,
+    /** Zugangsdaten des Betriebs-WLANs (System → WLAN), wenn eingeschaltet */
+    private readonly opsWifi: () => WorkstationWifi | null = () => null,
     private readonly now: () => number = Date.now,
   ) {}
 
@@ -150,7 +152,7 @@ export class WorkstationService {
     const u = toWorkstation(ws).update;
     const proxy = this.aptProxy();
     const update = u && OPEN_UPDATE.includes(u.state) && proxy ? { id: u.id, apt: u.apt, firmware: u.firmware, aptProxy: proxy } : null;
-    return { workstation: { id: ws.id, name: ws.name }, users: this.users(ws), incident: this.incident(), serverTime: new Date(this.now()).toISOString(), update };
+    return { workstation: { id: ws.id, name: ws.name }, users: this.users(ws), incident: this.incident(), serverTime: new Date(this.now()).toISOString(), update, wifi: this.opsWifi() };
   }
 
   // --- Updates ---

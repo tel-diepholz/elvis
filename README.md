@@ -702,6 +702,14 @@ KDE Plasma). Man meldet sich dort mit den Benutzern und PINs aus ELVIS an.
   - **Automatisch** sucht das System weiterhin nichts.
   - **Technik:** `POST|DELETE /api/system/workstations/:id/update` (`:id` = `all` für alle),
     Rückmeldung `POST /api/clients/update`, Auftrag in `GET /api/clients/state`.
+- **Betriebs-WLAN:** Ist unter *System → WLAN* das Betriebs-WLAN eingeschaltet, hinterlegt jeder Arbeitsplatz es
+  automatisch als systemweite Verbindung „ELVIS Betrieb“ (NetworkManager, WPA2, verbindet sich selbst).
+  - Änderungen an Netzname oder Passwort übernimmt das Notebook beim nächsten Abgleich (30 s). Schaltet man das
+    Betriebs-WLAN in ELVIS ab, wird die Verbindung entfernt.
+  - Die Zugangsdaten gehen über `GET /api/clients/state` an registrierte Arbeitsplätze (wie alles im Fahrzeug-LAN per
+    HTTP).
+  - Je nach polkit-Regel von Ubuntu können angemeldete Benutzer das Passwort in den Netzwerkeinstellungen sehen.
+  - Das Gast-WLAN wird nicht hinterlegt.
 - **Notfall-Admin:** Das Konto `elvisadmin` (Passwort aus den Addon-Optionen, `sudo`) meldet sich nur an der
   Textkonsole an (Strg+Alt+F3), nicht an der Anmeldemaske.
 - **Verwaltung** (*System → Arbeitsplätze*, nur Admins): Übersicht mit Rechnername, MAC-Adresse, zuletzt gesehen,

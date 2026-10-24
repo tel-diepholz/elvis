@@ -169,3 +169,18 @@ describe('Arbeitsplätze: Updates', () => {
     expect((await req<WorkstationState>('GET', '/api/clients/state', undefined, asDevice(a.token))).body.update).toBeNull();
   });
 });
+
+describe('Arbeitsplätze: Betriebs-WLAN', () => {
+  it('liefert die Zugangsdaten des Betriebs-WLANs nur, solange es eingeschaltet ist', async () => {
+    const { token } = await enroll();
+    const wifi = async () => (await req<WorkstationState>('GET', '/api/clients/state', undefined, asDevice(token))).body.wifi;
+    expect(await wifi()).toBeNull();
+    expect((await req('PUT', '/api/system/wifi/settings', { ops: { enabled: true, ssid: 'ELW Betrieb', password: 'geheim123' }, guest: { enabled: false, ssid: 'Gast' } })).status).toBe(200);
+    expect(await wifi()).toEqual({ ssid: 'ELW Betrieb', psk: 'geheim123' });
+    // Passwort bleibt beim Speichern ohne Passwort erhalten
+    await req('PUT', '/api/system/wifi/settings', { ops: { enabled: true, ssid: 'ELW Neu', password: '' }, guest: { enabled: false, ssid: 'Gast' } });
+    expect(await wifi()).toEqual({ ssid: 'ELW Neu', psk: 'geheim123' });
+    await req('PUT', '/api/system/wifi/settings', { ops: { enabled: false, ssid: 'ELW Neu', password: '' }, guest: { enabled: false, ssid: 'Gast' } });
+    expect(await wifi()).toBeNull();
+  });
+});
