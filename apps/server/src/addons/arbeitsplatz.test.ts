@@ -57,8 +57,8 @@ describe('Arbeitsplatz-Addon (PXE)', () => {
       options: { elvisUrl: 'http://10.0.0.1:8080', interface: 'eth0', adminPassword: 'notfall' },
     });
     expect(res.status, JSON.stringify(res.body)).toBe(202);
-    const done = await waitFor('arbeitsplatz', (a) => a.jobs[0]?.state === 'succeeded' && a.status === 'running');
-    expect(done.jobs[0]!.steps.map((s) => s.state)).toEqual(['done', 'done', 'done']);
+    const done = await waitFor('arbeitsplatz', (a) => a.jobs.find((j) => j.id === 'image')?.state === 'succeeded' && a.status === 'running');
+    expect(done.jobs.find((j) => j.id === 'image')!.steps.map((s) => s.state)).toEqual(['done', 'done', 'done']);
 
     // Bauschritte: mount im chroot braucht SYS_ADMIN ohne AppArmor, aber nie privilegiert
     const rootfs = daemon.byName('elvis-arbeitsplatz-job-image-1')!.spec;
@@ -67,11 +67,18 @@ describe('Arbeitsplatz-Addon (PXE)', () => {
     expect(daemon.byName('elvis-arbeitsplatz-job-image-3')!.spec.HostConfig?.SecurityOpt).toBeUndefined();
 
     // Erneut bauen (manuell): die Schritte nutzen das gebaute Image, nichts wird aus einer Registry gezogen
-    daemon.images.delete('elvis-addon-arbeitsplatz-builder:1.0.1');
+    daemon.images.delete('elvis-addon-arbeitsplatz-builder:1.0.2');
     expect((await req('POST', '/api/addons/arbeitsplatz/jobs/image')).status).toBe(202);
-    const again = await waitFor('arbeitsplatz', (a) => a.jobs[0]?.state !== 'running' && a.jobs[0]?.triggeredBy !== 'Max Müller (Installation)');
-    expect(again.jobs[0]!.state, JSON.stringify(again.jobs[0])).toBe('succeeded');
-    expect(daemon.images.has('elvis-addon-arbeitsplatz-builder:1.0.1')).toBe(true);
+    const image = (a: InstalledAddon) => a.jobs.find((j) => j.id === 'image')!;
+    const again = await waitFor('arbeitsplatz', (a) => image(a).state !== 'running' && image(a).triggeredBy !== 'Max Müller (Installation)');
+    expect(image(again).state, JSON.stringify(image(again))).toBe('succeeded');
+    expect(daemon.images.has('elvis-addon-arbeitsplatz-builder:1.0.2')).toBe(true);
+
+    // Nur den Installer neu bauen (eigener Job, das Abbild bleibt)
+    expect((await req('POST', '/api/addons/arbeitsplatz/jobs/installer')).status).toBe(202);
+    const inst = await waitFor('arbeitsplatz', (a) => a.jobs.find((j) => j.id === 'installer')?.state === 'succeeded');
+    expect(inst.jobs.find((j) => j.id === 'installer')!.steps.map((s) => s.label)).toEqual(['Installer', 'Netzwerkstart-Dateien']);
+    expect(daemon.byName('elvis-arbeitsplatz-job-installer-1')!.spec.Cmd).toEqual(['sh', '/data/addon/build/installer.sh']);
 
     const archive = daemon.archives.find((a) => a.volume === 'elvis-addon-arbeitsplatz-data');
     expect(archive?.entries).toEqual(expect.arrayContaining(['addon/installer/elvis-install', 'addon/client/elvis-clientd.py', 'addon/client/sddm-theme/Main.qml']));
