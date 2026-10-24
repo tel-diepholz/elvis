@@ -1,12 +1,9 @@
-import { createReadStream } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { JOURNAL_CATEGORY_LABELS, mapObjectPatchSchema, newMapObjectSchema, type JournalCategory } from '@elvis/shared';
 import { HttpError } from '../errors.js';
 import type { IncidentService } from '../services/incidents.js';
 import { idParam, operatorOf, parse } from './util.js';
-
-const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 
 const text = (max: number) => z.string().trim().max(max);
 const coord = (min: number, max: number) => z.number().min(min).max(max).nullable();
@@ -128,41 +125,5 @@ export function incidentRoutes(app: FastifyInstance, incidents: IncidentService)
   app.patch('/api/units/:id', async (req) => {
     const { id } = parse(idParam, req.params);
     return incidents.patchUnit(id, parse(unitPatch, req.body), operatorOf(req));
-  });
-
-  // Dokumente
-  app.get('/api/incidents/:id/documents', async (req) => incidents.documents(parse(idParam, req.params).id));
-
-  app.post('/api/incidents/:id/documents', async (req, reply) => {
-    const { id } = parse(idParam, req.params);
-    const file = await req.file({ limits: { fileSize: MAX_DOCUMENT_BYTES } });
-    if (!file) throw new HttpError(400, 'Keine Datei übermittelt');
-    const descField = file.fields.description;
-    const description = descField && !Array.isArray(descField) && descField.type === 'field' ? String(descField.value).slice(0, 500) : '';
-    const doc = await incidents.addDocument(
-      id,
-      { filename: file.filename, mimeType: file.mimetype, stream: file.file, description },
-      operatorOf(req),
-      MAX_DOCUMENT_BYTES,
-    );
-    if (file.file.truncated) throw new HttpError(413, 'Datei zu groß');
-    return reply.code(201).send(doc);
-  });
-
-  app.get('/api/documents/:id/content', async (req, reply) => {
-    const doc = incidents.document(parse(idParam, req.params).id);
-    const query = req.query as { download?: string };
-    const disposition = query.download ? 'attachment' : 'inline';
-    return reply
-      .header('content-type', doc.mimeType)
-      .header('content-disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(doc.filename)}`)
-      .header('x-content-type-options', 'nosniff')
-      .header('content-security-policy', "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'")
-      .send(createReadStream(doc.path));
-  });
-
-  app.delete('/api/documents/:id', async (req, reply) => {
-    await incidents.removeDocument(parse(idParam, req.params).id, operatorOf(req));
-    return reply.code(204).send();
   });
 }

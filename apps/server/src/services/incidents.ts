@@ -1,16 +1,9 @@
-import { randomUUID } from 'node:crypto';
-import { createWriteStream, mkdirSync } from 'node:fs';
-import { unlink } from 'node:fs/promises';
-import { join } from 'node:path';
-import { Transform, type Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
 import {
   COLORABLE_KINDS,
   FMS_STATUS,
   MAP_OBJECT_LABELS,
   formatStrength,
   type Incident,
-  type IncidentDocument,
   type IncidentPatch,
   type JournalEntry,
   type MapObject,
@@ -40,19 +33,15 @@ const fms = (s: number | null) => (s === null ? '–' : `${s} (${FMS_STATUS[s]?.
 
 /**
  * Einsatzführung. All incident-scoped data (Tagebuch, Kräfte, Dokumente) is only writable while
- * the incident is open; closed incidents remain readable as an archive.
+ * the incident is open; closed incidents remain readable as an archive. Dokumente: services/documents.ts.
  */
 export class IncidentService {
-  private readonly docsDir: string;
-
   constructor(
     private readonly store: Store,
-    dataDir: string,
     private readonly notify: (topics: Topic[]) => void,
-  ) {
-    this.docsDir = join(dataDir, 'documents');
-    if (dataDir !== ':memory:') mkdirSync(this.docsDir, { recursive: true });
-  }
+    /** Läuft beim Eröffnen innerhalb der Transaktion (z. B. Ordnerstruktur der Dokumente anlegen) */
+    private readonly onStart: (incident: Incident) => void = () => {},
+  ) {}
 
   active(): Incident | null {
     return this.store.activeIncident();
@@ -84,9 +73,10 @@ export class IncidentService {
       const created = this.store.createIncident(input);
       const desc = [created.keyword, created.title].filter(Boolean).join(' – ');
       this.system(created.id, `Einsatz eröffnet: ${desc}${created.location ? `, ${created.location}` : ''}`, operator);
+      this.onStart(created);
       return created;
     });
-    this.notify(['incident', 'journal', 'cameraPresets']);
+    this.notify(['incident', 'journal', 'cameraPresets', 'documents', 'tasks']);
     return incident;
   }
 
@@ -242,71 +232,5 @@ export class IncidentService {
     });
     this.notify(changes.length > 0 ? ['units', 'journal'] : ['units']);
     return saved;
-  }
-
-  // --- Dokumente ---
-
-  documents(id: number): IncidentDocument[] {
-    this.get(id);
-    return this.store.documents(id);
-  }
-
-  document(docId: number): IncidentDocument & { path: string } {
-    const doc = this.store.document(docId);
-    if (!doc) throw new HttpError(404, `Dokument ${docId} nicht gefunden`);
-    const { storageName, ...rest } = doc;
-    return { ...rest, path: join(this.docsDir, storageName) };
-  }
-
-  async addDocument(
-    id: number,
-    file: { filename: string; mimeType: string; stream: Readable; description: string },
-    operator: string,
-    maxBytes: number,
-  ): Promise<IncidentDocument> {
-    this.requireOpen(id);
-    const storageName = randomUUID();
-    const path = join(this.docsDir, storageName);
-    let size = 0;
-    const counter = new Transform({
-      transform(chunk: Buffer, _enc, cb) {
-        size += chunk.length;
-        if (size > maxBytes) cb(new HttpError(413, `Datei größer als ${Math.round(maxBytes / 1024 / 1024)} MB`));
-        else cb(null, chunk);
-      },
-    });
-    try {
-      await pipeline(file.stream, counter, createWriteStream(path));
-    } catch (err) {
-      await unlink(path).catch(() => {});
-      throw err;
-    }
-
-    const doc = this.store.transaction(() => {
-      const d = this.store.addDocument({
-        incidentId: id,
-        filename: file.filename,
-        storageName,
-        mimeType: file.mimeType,
-        sizeBytes: size,
-        description: file.description,
-        uploadedBy: operator,
-      });
-      this.system(id, `Dokument hinzugefügt: ${d.filename}`, operator);
-      return d;
-    });
-    this.notify(['documents', 'journal']);
-    return doc;
-  }
-
-  async removeDocument(docId: number, operator: string): Promise<void> {
-    const doc = this.document(docId);
-    this.requireOpen(doc.incidentId);
-    this.store.transaction(() => {
-      this.store.removeDocument(docId);
-      this.system(doc.incidentId, `Dokument entfernt: ${doc.filename}`, operator);
-    });
-    await unlink(doc.path).catch(() => {});
-    this.notify(['documents', 'journal']);
   }
 }

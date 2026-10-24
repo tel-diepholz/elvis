@@ -7,7 +7,12 @@ import { useSettings } from '../lib/hooks';
 import { useLive } from '../lib/live';
 import { CamerasCard } from './system/CamerasCard';
 import { DisplaysCard } from './system/DisplaysCard';
+import { DocumentFoldersCard } from './system/DocumentFoldersCard';
 import { ModulesCard } from './system/ModulesCard';
+import { PrintSettingsCard } from './system/PrintSettingsCard';
+import { ScanSettingsCard } from './system/ScanSettingsCard';
+import { RolesCard } from './system/RolesCard';
+import { TaskTemplatesCard } from './system/TaskTemplatesCard';
 import { SettingsCard } from './system/SettingsCard';
 import { WifiApsCard, WifiCard } from './system/WifiCard';
 import { useAuth } from '../lib/auth';
@@ -33,6 +38,11 @@ export function SystemPage() {
             <DisplaysCard />
             <WifiCard />
             <WifiApsCard />
+            <DocumentFoldersCard />
+            <PrintSettingsCard />
+            <ScanSettingsCard />
+            <RolesCard />
+            <TaskTemplatesCard />
           </>
         ) : (
           <Card title="Geräte & Treiber" icon={<Cpu size={18} />} className="span-2">

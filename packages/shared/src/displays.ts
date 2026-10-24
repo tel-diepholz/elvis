@@ -5,7 +5,7 @@ import { z } from 'zod';
  * Den Inhalt bestimmt ein Raster mit Kacheln, das aus ELVIS ferngesteuert wird.
  */
 
-export type DisplayTileType = 'map' | 'camera' | 'video' | 'weather' | 'clock' | 'alerts' | 'network' | 'text' | 'guestWifi';
+export type DisplayTileType = 'map' | 'camera' | 'video' | 'weather' | 'clock' | 'alerts' | 'network' | 'text' | 'guestWifi' | 'tasks';
 
 export interface DisplayTileTypeInfo {
   label: string;
@@ -24,6 +24,7 @@ export const DISPLAY_TILE_TYPES: Record<DisplayTileType, DisplayTileTypeInfo> = 
   network: { label: 'Netzwerk', description: 'Internetverbindung, Failover und SIM-Status des Routers', size: { w: 3, h: 2 } },
   text: { label: 'Freitext', description: 'Eigener Text, z. B. Hinweise oder Sammelplätze; Schrift passt sich der Kachel an', size: { w: 4, h: 2 } },
   guestWifi: { label: 'Gast-WLAN', description: 'QR-Code, Netzname und Passwort des Gastnetzes im laufenden Einsatz', size: { w: 4, h: 3 } },
+  tasks: { label: 'Aufgaben', description: 'Offene Aufgaben des laufenden Einsatzes mit Fälligkeit, fällige hervorgehoben', size: { w: 4, h: 4 } },
 };
 
 /** Höchstlänge des Freitexts */

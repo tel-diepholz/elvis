@@ -8,6 +8,7 @@ import { useAuth } from '../lib/auth';
 import { effectiveTheme, toggleTheme, useTheme } from '../lib/theme';
 import { AlertPanel } from './AlertPanel';
 import { AccountMenu } from './auth/AccountMenu';
+import { DueTasksButton, DueTasksPanel } from './tasks/DueTasks';
 import { MOBILE_PRIMARY, NAV, type NavItem } from './nav';
 
 function NavEntry({ item, locked, lockReason, onNavigate }: { item: NavItem; locked: boolean; lockReason?: string; onNavigate?: () => void }) {
@@ -107,6 +108,7 @@ export function Layout() {
             {connection === 'online' ? <Wifi size={18} /> : <WifiOff size={18} />}
             <span className="desktop-only">{connection === 'online' ? 'Live' : connection === 'connecting' ? 'Verbinde …' : 'Offline'}</span>
           </span>
+          <DueTasksButton />
           <button className={`btn btn-ghost btn-icon alert-btn tone-${alertTone}`} onClick={() => setAlertsOpen((o) => !o)} aria-label={`${alerts.length} Meldungen`}>
             <Bell size={20} />
             {alerts.length > 0 && <span className={`alert-count badge-${alertTone}`}>{alerts.length}</span>}
@@ -161,6 +163,7 @@ export function Layout() {
       )}
 
       {alertsOpen && <AlertPanel onClose={() => setAlertsOpen(false)} />}
+      <DueTasksPanel />
     </div>
   );
 }

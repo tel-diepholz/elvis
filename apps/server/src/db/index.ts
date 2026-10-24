@@ -275,6 +275,159 @@ const MIGRATIONS: Migration[] = [
     PRIMARY KEY (ap_id, mac, network)
   );
   `,
+  // Dokumente: virtuelle Ordner je Einsatz, Vorlagenbaum, Bearbeitung über WOPI (Collabora)
+  `
+  CREATE TABLE document_folders (
+    id INTEGER PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    parent_id INTEGER REFERENCES document_folders(id),
+    name TEXT NOT NULL,
+    system INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX document_folders_name ON document_folders(incident_id, COALESCE(parent_id, 0), name COLLATE NOCASE);
+
+  ALTER TABLE documents ADD COLUMN folder_id INTEGER REFERENCES document_folders(id);
+  ALTER TABLE documents ADD COLUMN template_id INTEGER;
+  ALTER TABLE documents ADD COLUMN draft INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE documents ADD COLUMN created_by_user INTEGER;
+  ALTER TABLE documents ADD COLUMN updated_at TEXT;
+  ALTER TABLE documents ADD COLUMN updated_by TEXT;
+  ALTER TABLE documents ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+  UPDATE documents SET updated_at = uploaded_at, updated_by = uploaded_by;
+
+  CREATE TABLE template_folders (
+    id INTEGER PRIMARY KEY,
+    parent_id INTEGER REFERENCES template_folders(id),
+    name TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX template_folders_name ON template_folders(COALESCE(parent_id, 0), name COLLATE NOCASE);
+
+  CREATE TABLE templates (
+    id INTEGER PRIMARY KEY,
+    folder_id INTEGER REFERENCES template_folders(id),
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    filename TEXT NOT NULL,
+    storage_name TEXT NOT NULL UNIQUE,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    target_path TEXT NOT NULL DEFAULT '',
+    filename_pattern TEXT NOT NULL DEFAULT '',
+    fill_content INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT NOT NULL
+  );
+
+  CREATE TABLE wopi_tokens (
+    token_hash TEXT PRIMARY KEY,
+    file_ref TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    user_name TEXT NOT NULL,
+    can_write INTEGER NOT NULL,
+    -- Adresse von ELVIS im Browser: Ziel für postMessage aus dem Editor
+    origin TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+  `,
+  // Laufender Einsatz bekommt die Standard-Ordnerstruktur (neue Einsätze erhalten sie beim Eröffnen)
+  (db) => {
+    const active = db.prepare('SELECT id FROM incidents WHERE closed_at IS NULL').get() as { id: number } | undefined;
+    if (!active) return;
+    const insert = db.prepare("INSERT INTO document_folders (incident_id, name, system, created_by, created_at) VALUES (?, ?, 1, 'System', ?)");
+    for (const name of ['Lagemeldungen', 'Befehle', 'Protokolle', 'Pläne', 'Fotos', 'Sonstiges']) insert.run(active.id, name, new Date().toISOString());
+  },
+  // Rollen (Admins pflegen sie, jede Sitzung übernimmt höchstens eine) und Aufgaben je Einsatz samt Vorlagen
+  `
+  CREATE TABLE roles (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    sort INTEGER NOT NULL
+  );
+  CREATE UNIQUE INDEX roles_name ON roles(name COLLATE NOCASE);
+
+  ALTER TABLE sessions ADD COLUMN role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL;
+  -- 0 direkt nach der Anmeldung: die Oberfläche fragt nach der Rolle
+  ALTER TABLE sessions ADD COLUMN role_chosen INTEGER NOT NULL DEFAULT 0;
+
+  CREATE TABLE tasks (
+    id INTEGER PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    summary TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    document_template_id INTEGER REFERENCES templates(id) ON DELETE SET NULL,
+    -- beide NULL = alle Benutzer
+    assignee_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    assignee_role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL,
+    -- NULL = einmalig
+    interval_minutes INTEGER,
+    due_at TEXT,
+    snoozed_until TEXT,
+    done_at TEXT,
+    done_by TEXT,
+    last_done_at TEXT,
+    last_done_by TEXT,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX tasks_incident ON tasks(incident_id);
+
+  CREATE TABLE task_templates (
+    id INTEGER PRIMARY KEY,
+    summary TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    document_template_id INTEGER REFERENCES templates(id) ON DELETE SET NULL,
+    role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL,
+    interval_minutes INTEGER,
+    -- Minuten nach Einsatzbeginn; NULL = ohne Termin (nur einmalige)
+    offset_minutes INTEGER,
+    sort INTEGER NOT NULL
+  );
+  `,
+  // Druckserver: Aufträge an die Drucker der Addons (CUPS), auch von anonymen Arbeitsplätzen
+  `
+  CREATE TABLE print_jobs (
+    ref TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL,
+    printer TEXT NOT NULL,
+    printer_name TEXT NOT NULL,
+    ipp_job_id INTEGER,
+    filename TEXT NOT NULL,
+    copies INTEGER NOT NULL,
+    options TEXT NOT NULL,
+    state TEXT NOT NULL,
+    state_message TEXT NOT NULL DEFAULT '',
+    submitted_by TEXT NOT NULL,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+    archived_path TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX print_jobs_created ON print_jobs(created_at);
+  `,
+  // Scan-Eingang: per „Scan an E-Mail“ empfangene PDFs
+  `
+  CREATE TABLE scans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    storage_name TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    sender TEXT NOT NULL DEFAULT '',
+    subject TEXT NOT NULL DEFAULT '',
+    source_ip TEXT NOT NULL DEFAULT '',
+    received_at TEXT NOT NULL,
+    incident_id INTEGER REFERENCES incidents(id) ON DELETE SET NULL,
+    document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+    archived_path TEXT,
+    assigned_by TEXT,
+    assigned_at TEXT,
+    message TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX scans_received ON scans(received_at);
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

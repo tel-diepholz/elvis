@@ -39,17 +39,32 @@ import { TileService } from './services/tiles.js';
 import type { UbusHttp } from './services/openwrt.js';
 import { WifiService } from './services/wifi.js';
 import { wifiRoutes } from './routes/wifi.js';
+import { documentRoutes } from './routes/documents.js';
+import { wopiRoutes } from './routes/wopi.js';
+import { DocumentService } from './services/documents.js';
+import { OfficeService, type DiscoveryFetch } from './services/office.js';
+import { TemplateService } from './services/templates.js';
+import { RoleService } from './services/roles.js';
+import { TaskService } from './services/tasks.js';
+import { taskRoutes } from './routes/tasks.js';
+import { printingRoutes, type OfficeDownload } from './routes/printing.js';
+import { PrintService, type IppTransport } from './services/printing.js';
+import { scanningRoutes } from './routes/scanning.js';
+import { ScanService } from './services/scanning.js';
 
 export interface App {
   server: FastifyInstance;
   devices: DeviceManager;
   docker: { hosts: HostService; repos: RepoService; addons: AddonManager } | null;
   wifi: WifiService;
+  office: OfficeService;
+  printing: PrintService;
+  scanning: ScanService;
   start(): Promise<void>;
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; wifiHttp?: UbusHttp } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -76,18 +91,38 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const displays = new DisplayService(db);
   displays.onChange(() => hub.invalidate(['displays']));
   hub.attachDisplays({ identify: (req) => displays.resolve(req.cookies[DISPLAY_COOKIE])?.id ?? null, setOnline: (id, on) => displays.setOnline(id, on) });
-  const incidents = new IncidentService(store, config.dataDir, (topics) => {
-    hub.invalidate(topics);
-    // Gastnetz folgt dem Einsatz
-    if (topics.includes('incident')) wifi.incidentChanged();
-  });
+  const templates = new TemplateService(db, config.dataDir, (t) => hub.invalidate(t));
+  const documents = new DocumentService(store, config.dataDir, { templates, vehicle: () => settings.get().vehicle, notify: (t) => hub.invalidate(t) });
+  const office = new OfficeService(db, () => hub.invalidate(['office']), opts.officeFetch);
+  const printing = new PrintService(store, { documents, notify: (t) => hub.invalidate(t), transport: opts.ippTransport });
+  const scanning = new ScanService(store, config.dataDir, { documents, notify: (t) => hub.invalidate(t) });
+  const sessions = new SessionStore(db);
+  const roles = new RoleService(db, sessions);
+  const tasks = new TaskService(db, { store, roles, notify: (t) => hub.invalidate(t) });
+  const incidents = new IncidentService(
+    store,
+    (topics) => {
+      hub.invalidate(topics);
+      // Gastnetz folgt dem Einsatz
+      if (topics.includes('incident')) wifi.incidentChanged();
+    },
+    (incident) => {
+      documents.snapshotFolders(incident.id);
+      tasks.instantiate(incident);
+    },
+  );
+  // Nie gespeicherte Entwürfe und alte Scans aufräumen – beim Start und danach stündlich
+  const cleanup = () => {
+    void documents.cleanupDrafts().catch((err) => server.log.warn({ err }, 'Entwürfe aufräumen fehlgeschlagen'));
+    void scanning.cleanup().catch((err) => server.log.warn({ err }, 'Scan-Eingang aufräumen fehlgeschlagen'));
+  };
+  let cleanupTimer: NodeJS.Timeout | null = null;
   const tiles = new TileService(config.map, config.dataDir);
   const geocoder = new GeocoderService(
     { onlineUrl: config.map.geocoderUrl, outlineUrl: config.map.outlineUrl, dataDir: config.dataDir, userAgent: config.map.userAgent },
     opts.geocodeFetch,
   );
   const users = new UserService(db);
-  const sessions = new SessionStore(db);
   const limiter = new LoginLimiter();
 
   // Docker- und Addon-Verwaltung (abschaltbar über docker.enabled)
@@ -104,6 +139,8 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     });
     addons.attachVideos(videos);
     addons.attachGeocoder(geocoder);
+    addons.attachOffice(office);
+    addons.attachPrinting(printing);
     docker = { hosts, repos, addons };
   }
 
@@ -113,9 +150,13 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
 
   // Anmeldung: Sitzung aus dem Cookie auflösen und Zugriffsregeln durchsetzen (siehe auth/access.ts).
   server.decorateRequest('user', null);
+  server.decorateRequest('roleId', null);
+  server.decorateRequest('roleChosen', false);
   server.addHook('onRequest', async (req) => {
-    const userId = sessions.resolve(req.cookies[SESSION_COOKIE]);
-    req.user = userId ? users.find(userId) : null;
+    const session = sessions.resolve(req.cookies[SESSION_COOKIE]);
+    req.user = session ? users.find(session.userId) : null;
+    req.roleId = req.user ? session!.roleId : null;
+    req.roleChosen = req.user ? session!.roleChosen : false;
     const level = accessLevel(req.method, req.url);
     if (level === 'public') return;
     // Gekoppelte Bildschirme dürfen einzelne Einsatzdaten lesen (z. B. Einsatzort für die Lagekarte)
@@ -145,9 +186,14 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       const limit = Math.min(1000, Number((req.query as { limit?: string }).limit) || 200);
       return store.audit(limit);
     });
-    authRoutes(api, { users, sessions, limiter, store, notify: (t) => hub.invalidate(t) });
+    authRoutes(api, { users, sessions, limiter, store, roles, notify: (t) => hub.invalidate(t) });
+    taskRoutes(api, { tasks, roles, store, notify: (t) => hub.invalidate(t) });
     deviceRoutes(api, devices, store, (t) => hub.invalidate(t));
     incidentRoutes(api, incidents);
+    documentRoutes(api, { documents, templates, office, store, notify: (t) => hub.invalidate(t) });
+    wopiRoutes(api, { office, documents, templates });
+    printingRoutes(api, { printing, office, store, notify: (t) => hub.invalidate(t), download: opts.officeDownload });
+    scanningRoutes(api, { scanning, store, notify: (t) => hub.invalidate(t) });
     displayRoutes(api, { displays, hub, store, notify: (t) => hub.invalidate(t) });
     api.get('/api/video/sources', async () => videos.list());
     cameraRoutes(api, { cameras, presets: cameraPresets, devices, incidents, store, notify: (t) => hub.invalidate(t) });
@@ -185,24 +231,35 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     devices,
     docker,
     wifi,
+    office,
+    printing,
+    scanning,
     async start() {
       await devices.start();
       videos.start();
       wifi.start();
+      cleanup();
+      cleanupTimer = setInterval(cleanup, 3600_000);
       if (docker) {
         await docker.repos.refresh();
         docker.hosts.start();
         docker.addons.start();
       }
       await server.listen({ host: config.host, port: config.port });
+      await scanning.start(config.scan.smtpPort);
+      const scan = scanning.status();
+      if (scan.error) server.log.warn(`Scan-Eingang (SMTP) nicht gestartet: ${scan.error}`);
+      else if (scan.listening) server.log.info(`Scan-Eingang (SMTP) auf Port ${scan.port}`);
     },
     async close() {
       hub.closeAll();
       videos.stop();
       wifi.stop();
+      if (cleanupTimer) clearInterval(cleanupTimer);
       docker?.hosts.stop();
       docker?.addons.stop();
       await devices.stop();
+      await scanning.stop();
       await server.close();
       db.close();
     },

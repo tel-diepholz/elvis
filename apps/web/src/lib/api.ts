@@ -28,8 +28,21 @@ import {
   type CameraTestResult,
   type DeviceModuleConfig,
   type SerialPortInfo,
+  type DocumentFolder,
+  type DocumentListing,
+  type DocumentPatch,
+  type DocumentTemplate,
+  type FolderSpec,
   type Incident,
   type IncidentDocument,
+  type NewBlankDocument,
+  type NewFolder,
+  type OfficeSession,
+  type OfficeStatus,
+  type TemplateFolder,
+  type TemplateFolderInput,
+  type TemplateMeta,
+  type TemplateTree,
   type IncidentPatch,
   type JournalEntry,
   type GeoOutline,
@@ -52,6 +65,24 @@ import {
   type WifiOverview,
   type WifiSettings,
   type WifiSettingsInput,
+  type Role,
+  type RoleInfo,
+  type RoleInput,
+  type SnoozeInput,
+  type Task,
+  type TaskInput,
+  type TaskTemplate,
+  type TaskTemplateInput,
+  type PrintJob,
+  type PrintOptionsInput,
+  type PrintSettings,
+  type PrintSettingsInput,
+  type PrintStatus,
+  type ScanAssign,
+  type ScanInbox,
+  type ScanItem,
+  type ScanSettings,
+  type ScanSettingsInput,
 } from '@elvis/shared';
 
 export class ApiError extends Error {
@@ -104,16 +135,86 @@ export const api = {
   addUnit: (id: number, unit: NewUnit) => request<Unit>('POST', `/api/incidents/${id}/units`, unit),
   patchUnit: (unitId: number, patch: UnitPatch) => request<Unit>('PATCH', `/api/units/${unitId}`, patch),
 
-  documents: (id: number) => request<IncidentDocument[]>('GET', `/api/incidents/${id}/documents`),
-  uploadDocument: (id: number, file: File, description: string) => {
+  documents: (id: number) => request<DocumentListing>('GET', `/api/incidents/${id}/documents`),
+  uploadDocument: (id: number, file: File, description: string, folderId: number | null) => {
     const form = new FormData();
     // Fields must precede the file so the server sees them while streaming.
     form.append('description', description);
+    if (folderId !== null) form.append('folderId', String(folderId));
     form.append('file', file);
     return request<IncidentDocument>('POST', `/api/incidents/${id}/documents`, form);
   },
+  createFolder: (id: number, folder: NewFolder) => request<DocumentFolder>('POST', `/api/incidents/${id}/folders`, folder),
+  removeFolder: (folderId: number) => request<void>('DELETE', `/api/document-folders/${folderId}`),
+  createBlankDocument: (id: number, input: NewBlankDocument) => request<IncidentDocument>('POST', `/api/incidents/${id}/documents/blank`, input),
+  createFromTemplate: (id: number, templateId: number) => request<IncidentDocument>('POST', `/api/incidents/${id}/documents/from-template`, { templateId }),
+  patchDocument: (docId: number, patch: DocumentPatch) => request<IncidentDocument>('PATCH', `/api/documents/${docId}`, patch),
   removeDocument: (docId: number) => request<void>('DELETE', `/api/documents/${docId}`),
   documentUrl: (docId: number, download = false) => `/api/documents/${docId}/content${download ? '?download=1' : ''}`,
+  editDocument: (docId: number) => request<OfficeSession>('POST', `/api/documents/${docId}/edit`),
+  office: () => request<OfficeStatus>('GET', '/api/office'),
+
+  printing: () => request<PrintStatus>('GET', '/api/printing'),
+  printPdf: (file: File, options: PrintOptionsInput) => {
+    const form = new FormData();
+    // Optionen vor der Datei, damit der Server sie beim Streamen schon kennt
+    form.append('options', JSON.stringify(options));
+    form.append('file', file);
+    return request<PrintJob>('POST', '/api/printing/jobs', form);
+  },
+  printOffice: (url: string, filename: string, options: PrintOptionsInput) => request<PrintJob>('POST', '/api/printing/office', { url, filename, options }),
+  printJob: (ref: string) => request<PrintJob>('GET', `/api/printing/jobs/${ref}`),
+  printSettings: () => request<{ settings: PrintSettings; jobs: PrintJob[] }>('GET', '/api/system/printing'),
+  savePrintSettings: (input: PrintSettingsInput) => request<PrintSettings>('PUT', '/api/system/printing', input),
+  scans: () => request<ScanInbox>('GET', '/api/scans'),
+  assignScan: (id: number, input: ScanAssign) => request<ScanItem>('POST', `/api/scans/${id}/assign`, input),
+  removeScan: (id: number) => request<void>('DELETE', `/api/scans/${id}`),
+  scanSettings: () => request<ScanSettings>('GET', '/api/system/scanning'),
+  saveScanSettings: (input: ScanSettingsInput) => request<ScanSettings>('PUT', '/api/system/scanning', input),
+
+  templates: () => request<TemplateTree>('GET', '/api/templates'),
+  templateUrl: (id: number, download = false) => `/api/templates/${id}/content${download ? '?download=1' : ''}`,
+  uploadTemplate: (meta: TemplateMeta, file: File) => {
+    const form = new FormData();
+    form.append('meta', JSON.stringify(meta));
+    form.append('file', file);
+    return request<DocumentTemplate>('POST', '/api/templates', form);
+  },
+  updateTemplate: (id: number, meta: TemplateMeta) => request<DocumentTemplate>('PUT', `/api/templates/${id}`, meta),
+  replaceTemplateFile: (id: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<DocumentTemplate>('PUT', `/api/templates/${id}/file`, form);
+  },
+  removeTemplate: (id: number) => request<void>('DELETE', `/api/templates/${id}`),
+  editTemplate: (id: number) => request<OfficeSession>('POST', `/api/templates/${id}/edit`),
+  createTemplateFolder: (input: TemplateFolderInput) => request<TemplateFolder>('POST', '/api/template-folders', input),
+  updateTemplateFolder: (id: number, input: TemplateFolderInput) => request<TemplateFolder>('PUT', `/api/template-folders/${id}`, input),
+  removeTemplateFolder: (id: number) => request<void>('DELETE', `/api/template-folders/${id}`),
+
+  documentFolderSpec: () => request<{ folders: FolderSpec[]; updatedAt: string | null; updatedBy: string | null }>('GET', '/api/system/document-folders'),
+  saveDocumentFolderSpec: (folders: FolderSpec[]) =>
+    request<{ folders: FolderSpec[]; updatedAt: string | null; updatedBy: string | null }>('PUT', '/api/system/document-folders', { folders }),
+
+  tasks: (incidentId: number) => request<Task[]>('GET', `/api/incidents/${incidentId}/tasks`),
+  createTask: (incidentId: number, input: TaskInput) => request<Task>('POST', `/api/incidents/${incidentId}/tasks`, input),
+  updateTask: (id: number, input: TaskInput) => request<Task>('PUT', `/api/tasks/${id}`, input),
+  taskDone: (id: number, final = false) => request<Task>('POST', `/api/tasks/${id}/done`, { final }),
+  reopenTask: (id: number) => request<Task>('POST', `/api/tasks/${id}/reopen`),
+  snoozeTask: (id: number, input: SnoozeInput) => request<Task>('POST', `/api/tasks/${id}/snooze`, input),
+  removeTask: (id: number) => request<void>('DELETE', `/api/tasks/${id}`),
+
+  roles: () => request<RoleInfo[]>('GET', '/api/roles'),
+  chooseRole: (roleId: number | null) => request<{ role: Role | null }>('PUT', '/api/auth/role', { roleId }),
+  createRole: (input: RoleInput) => request<Role>('POST', '/api/system/roles', input),
+  updateRole: (id: number, input: RoleInput) => request<Role>('PUT', `/api/system/roles/${id}`, input),
+  removeRole: (id: number) => request<void>('DELETE', `/api/system/roles/${id}`),
+  reorderRoles: (ids: number[]) => request<Role[]>('PUT', '/api/system/roles/order', { ids }),
+  taskTemplates: () => request<TaskTemplate[]>('GET', '/api/system/task-templates'),
+  createTaskTemplate: (input: TaskTemplateInput) => request<TaskTemplate>('POST', '/api/system/task-templates', input),
+  updateTaskTemplate: (id: number, input: TaskTemplateInput) => request<TaskTemplate>('PUT', `/api/system/task-templates/${id}`, input),
+  removeTaskTemplate: (id: number) => request<void>('DELETE', `/api/system/task-templates/${id}`),
+  reorderTaskTemplates: (ids: number[]) => request<TaskTemplate[]>('PUT', '/api/system/task-templates/order', { ids }),
 
   audit: (limit = 200) => request<AuditEntry[]>('GET', `/api/audit?limit=${limit}`),
 

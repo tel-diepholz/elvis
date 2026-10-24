@@ -136,14 +136,3 @@ export interface AuditEntry {
   success: boolean;
   message: string;
 }
-
-export interface IncidentDocument {
-  id: number;
-  incidentId: number;
-  filename: string;
-  mimeType: string;
-  sizeBytes: number;
-  description: string;
-  uploadedBy: string;
-  uploadedAt: string;
-}

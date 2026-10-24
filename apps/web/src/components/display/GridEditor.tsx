@@ -32,6 +32,7 @@ function useTileSummary() {
       return text ? (text.length > 40 ? `${text.slice(0, 40)} …` : text) : 'kein Text';
     }
     if (t.type === 'guestWifi') return String(t.config.title ?? '').trim() || 'Gastnetz des Einsatzes';
+    if (t.type === 'tasks') return t.config.personal === true ? 'mit persönlichen Aufgaben' : 'ohne persönliche Aufgaben';
     if (t.type === 'map') return `${t.config.center === 'incident' ? 'Einsatzort' : 'Fahrzeug'}${t.config.follow !== false ? ', mitgeführt' : ''}`;
     return '';
   };
@@ -237,6 +238,15 @@ export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; 
             <input value={String(tile.config.title ?? '')} onChange={(e) => set('title', e.target.value.slice(0, 60))} maxLength={60} />
           </Field>
           <p className="field-hint">Zeigt Netzname, Passwort und QR-Code des Gastnetzes, solange ein Einsatz läuft. Einrichten unter System → WLAN.</p>
+        </>
+      )}
+      {tile.type === 'tasks' && (
+        <>
+          <Toggle label="Persönliche Aufgaben anzeigen" checked={tile.config.personal === true} onChange={(on) => set('personal', on)} />
+          <p className="field-hint">
+            Zeigt alle offenen Aufgaben des laufenden Einsatzes nach Fälligkeit. Persönliche Aufgaben hat sich ein Benutzer selbst zugewiesen – sie erscheinen nur, wenn
+            hier eingeschaltet.
+          </p>
         </>
       )}
       {(tile.type === 'clock' || tile.type === 'weather' || tile.type === 'alerts' || tile.type === 'network') && <p className="muted">Keine weiteren Einstellungen.</p>}

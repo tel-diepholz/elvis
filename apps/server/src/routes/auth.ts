@@ -1,16 +1,20 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { fullName, PIN_PATTERN, type AuthStatus, type Topic, type User } from '@elvis/shared';
+import { fullName, PIN_PATTERN, roleChoiceSchema, type AuthStatus, type Topic, type User } from '@elvis/shared';
 import type { LoginLimiter } from '../auth/limiter.js';
 import { SESSION_COOKIE, SESSION_MAX_MS, type SessionStore } from '../auth/sessions.js';
 import type { UserService } from '../auth/users.js';
 import type { Store } from '../db/store.js';
+import type { RoleService } from '../services/roles.js';
 import { HttpError } from '../errors.js';
 import { idParam, parse } from './util.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
     user: User | null;
+    /** Rolle der Sitzung (null = ohne Rolle) */
+    roleId: number | null;
+    roleChosen: boolean;
   }
 }
 
@@ -24,7 +28,7 @@ export function requireUser(req: FastifyRequest): User {
 
 export function authRoutes(
   app: FastifyInstance,
-  deps: { users: UserService; sessions: SessionStore; limiter: LoginLimiter; store: Store; notify: (t: Topic[]) => void },
+  deps: { users: UserService; sessions: SessionStore; limiter: LoginLimiter; store: Store; roles: RoleService; notify: (t: Topic[]) => void },
 ): void {
   const { users, sessions, limiter, store } = deps;
   const audit = (operator: string, action: string, target: string, success = true, message = '') => {
@@ -36,7 +40,23 @@ export function authRoutes(
     reply.setCookie(SESSION_COOKIE, token, { path: '/', httpOnly: true, sameSite: 'strict', maxAge: SESSION_MAX_MS / 1000 });
   };
 
-  app.get('/api/auth/status', async (req): Promise<AuthStatus> => ({ hasUsers: users.hasUsers(), user: req.user }));
+  app.get('/api/auth/status', async (req): Promise<AuthStatus> => ({
+    hasUsers: users.hasUsers(),
+    user: req.user,
+    role: req.user && req.roleId !== null ? deps.roles.find(req.roleId) : null,
+    roleChosen: req.roleChosen,
+  }));
+
+  // Rolle der eigenen Sitzung übernehmen oder abgeben (nach der Anmeldung und über das Profilmenü)
+  app.put('/api/auth/role', async (req) => {
+    const user = requireUser(req);
+    const { roleId } = parse(roleChoiceSchema, req.body);
+    const role = roleId === null ? null : deps.roles.get(roleId);
+    sessions.setRole(req.cookies[SESSION_COOKIE]!, roleId);
+    audit(fullName(user), 'role', `user:${user.id}`, true, role ? `Rolle: ${role.name}` : 'ohne Rolle');
+    deps.notify(['roles', 'tasks']);
+    return { role };
+  });
 
   // Namensauswahl für die Anmeldung – absichtlich ohne Anmeldung abrufbar.
   app.get('/api/auth/candidates', async () => users.candidates());
@@ -69,6 +89,8 @@ export function authRoutes(
     const token = req.cookies[SESSION_COOKIE];
     if (token) sessions.revoke(token);
     if (req.user) audit(fullName(req.user), 'logout', `user:${req.user.id}`);
+    // Eine übernommene Rolle wird frei – Aufgaben dafür gehen an alle
+    if (req.roleId !== null) deps.notify(['roles', 'tasks']);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return reply.code(204).send();
   });
@@ -102,7 +124,10 @@ export function authRoutes(
     const body = parse(z.object({ firstName: name.optional(), lastName: name.optional(), isAdmin: z.boolean().optional(), pin: pin.optional() }), req.body);
     const before = users.get(id);
     const user = await users.update(id, body, actor);
-    if (body.pin !== undefined || (body.isAdmin === false && before.isAdmin)) sessions.revokeUser(id);
+    if (body.pin !== undefined || (body.isAdmin === false && before.isAdmin)) {
+      sessions.revokeUser(id);
+      deps.notify(['roles', 'tasks']);
+    }
     const changes = [
       body.pin !== undefined && 'PIN zurückgesetzt',
       before.isAdmin !== user.isAdmin && (user.isAdmin ? 'Admin-Rechte erteilt' : 'Admin-Rechte entzogen'),
@@ -118,7 +143,8 @@ export function authRoutes(
     const { id } = parse(idParam, req.params);
     const user = users.remove(id, actor);
     audit(fullName(actor), 'delete', `user:${id}`, true, fullName(user));
-    deps.notify(['users']);
+    // Sitzungen enden, eigene Aufgaben gehen an alle
+    deps.notify(['users', 'roles', 'tasks']);
     return reply.code(204).send();
   });
 }

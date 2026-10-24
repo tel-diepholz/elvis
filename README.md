@@ -488,11 +488,100 @@ provides:                                 # Integration in ELVIS
   Eine Registry ist nicht nötig.
 - Laufende Addons mit `provides.mapSources` erscheinen automatisch als Kartenstil auf der Karte und im Druck.
   `provides.geocoders` (`{ id, name, type: photon|nominatim, url }`) ersetzt den öffentlichen Suchdienst der
-  Ortssuche; bei Nominatim auch für Umrisse. `shmSize` (z. B. `"1g"`) vergrößert `/dev/shm`, etwa für PostgreSQL.
+  Ortssuche; bei Nominatim auch für Umrisse. `provides.office` (`{ id, name, url, wopiBase }`) meldet einen
+  Office-Server mit WOPI (Collabora) für die Dokumentbearbeitung. `shmSize` (z. B. `"1g"`) vergrößert `/dev/shm`, etwa für PostgreSQL.
 
 **Labor:** `npm run test:lab` startet ELVIS und zwei Docker-Daemons (dind) und prüft den kompletten Ablauf gegen
 echte Docker-APIs: TLS, Installation, Neukonfiguration, Job, Protokolle, Image-Übertragung, Deinstallation.
 Voraussetzung: Docker und Node auf dem Entwicklungsrechner.
+
+## Dokumente, Vorlagen und Collabora
+
+- **Ordner je Einsatz:** Beim Eröffnen erhält jeder Einsatz eine Ordnerstruktur, die Admins unter *System →
+  Ordnervorgabe für Dokumente* festlegen. Die Struktur ist virtuell: Ordner gibt es nur in der Datenbank, die Dateien
+  liegen flach unter `data/documents/<uuid>`. Benutzer können Ordner ergänzen, aber keine löschen. Admins dürfen nur
+  leere, selbst angelegte Ordner entfernen, etwa zur Korrektur eines Tippfehlers. Spätere Änderungen an der Vorgabe
+  gelten nur für neue Einsätze.
+- **Vorlagen** (*Verwaltung → Vorlagen*, nur Admins): Vorlagen liegen in einem eigenen Ordnerbaum. Jede Vorlage legt
+  fest:
+  - einen **Ablageort** im Einsatz, etwa `Lagemeldungen/{{datum.iso}}`; fehlende Ordner werden angelegt
+  - einen **Dateinamen**, etwa `Lagemeldung {{ordner.laufnummer}}`
+  - ob Platzhalter auch **im Dokument** ersetzt werden (docx, xlsx, pptx, odt, ods, odp). Word zerlegt Platzhalter
+    oft in mehrere Textläufe; das wird berücksichtigt. Unbekannte Platzhalter bleiben im Text stehen.
+
+  Verfügbare Platzhalter: `einsatz.*`, `datum.*`, `benutzer.name`, `fahrzeug.*` und `ordner.laufnummer`. Die
+  vollständige Liste steht in `packages/shared/src/documents.ts` und im Formular.
+- **Arbeiten im Einsatz** (*Einsatz → Dokumente*):
+  - **Aus Vorlage:** Vorlage suchen (Name, Beschreibung, Ordner) und öffnen. ELVIS legt eine Kopie am Ablageort an
+    und öffnet sie in Collabora.
+  - **Neues Dokument:** Text, Tabelle, Präsentation oder Zeichnung, mit frei gewähltem Ordner.
+  - **Hochladen:** in den gewählten Ordner, wie bisher.
+  - Neu erstellte Dokumente sind **Entwürfe**: Nur der Ersteller sieht sie, bis Collabora sie zum ersten Mal speichert.
+    Ab dann sehen alle das Dokument und können es gleichzeitig bearbeiten. Nie gespeicherte Entwürfe verfallen nach
+    24 h.
+- **Collabora (Addon „Office (Collabora)“):**
+  - ELVIS ist der WOPI-Host (`/api/wopi/files/…`). Collabora holt und speichert die Dateien dort mit einem
+    Zugriffstoken. Das Token gilt für eine Datei und einen Benutzer, 10 h lang.
+  - Bei abgeschlossenen Einsätzen ist nur Lesen möglich.
+  - Die Option **Adresse von ELVIS** muss vom Docker-Host aus erreichbar sein. Der Browser lädt den Editor direkt vom
+    Docker-Host (Port 9980). Läuft ELVIS künftig über HTTPS, braucht auch Collabora TLS, sonst blockiert der Browser
+    den gemischten Inhalt.
+  - Ohne laufendes Addon bleiben Hochladen, Anzeigen und Herunterladen möglich; „Neues Dokument“ und die Bearbeitung
+    im Browser sind dann gesperrt.
+
+## Druckserver
+
+- **Addon „Druckserver (CUPS)“:** Es betreibt die Drucker, entweder im Fahrzeug-LAN oder per USB (Option „USB-Drucker
+  durchreichen“). Drucker richtet man auf zwei Wegen ein:
+  - in der CUPS-Verwaltung unter `http://<Docker-Host>:631/admin` (Benutzer `admin`, Passwort aus den Addon-Optionen), auch mit Treiber
+  - über die Option **Drucker** (`Name=ipp://192.168.1.50/ipp/print, …`). Fehlende Drucker legt das Addon beim Start als IPP-Everywhere-Drucker an.
+
+  Drucker und PPDs liegen im Volume `elvis-addon-druckserver-config`. Die `cupsd.conf` schreibt das Addon bei jedem Start neu.
+- **Drucken** (*Fahrzeug → Drucken*, auch ohne Anmeldung): PDF hochladen (max. 50 MB) und in der Vorschau prüfen. Dann
+  Drucker, Kopien, Papier, Seitenbereich, ein- oder beidseitig, Farbe/Graustufen, Ausrichtung, Seiten pro Blatt und
+  „An Papiergröße anpassen“ wählen. ELVIS bietet nur an, was der Drucker meldet, und prüft das auch auf dem Server.
+  Danach zeigt die Seite den Status des Auftrags.
+- **Lagekarte:** Läuft ein Druckserver, bietet der Druckdialog der Karte die Ausgabe „Drucker“ neben „PDF herunterladen“.
+  ELVIS wählt das Papier passend zum Kartenformat (A4–A1). Kennt der Drucker das Format nicht, wird die Karte auf sein
+  Standardpapier verkleinert.
+- **Collabora:** Der Druck-Knopf im Editor öffnet den ELVIS-Druckdialog (WOPI `DownloadAsPostMessage`). ELVIS lädt das
+  PDF vom Office-Server, auch mit noch nicht gespeicherten Änderungen, und druckt es unter dem Dokumentnamen
+  (`POST /api/printing/office`, nur angemeldet und nur von der Adresse des laufenden Office-Servers). Ohne Drucker
+  lässt sich das PDF im Browser öffnen. Export und Präsentation laufen wie bisher im Browser.
+- Gedruckte Lagekarten und Dokumente landen wie jeder Druck im eingestellten Ablageordner.
+- **Technik:** ELVIS spricht IPP direkt mit CUPS (`apps/server/src/services/ipp.ts`) und braucht dafür keine weitere
+  Bibliothek. Addons melden Druckserver über `provides.printServers` (`{ id, name, url }`). Endpunkte:
+  `GET /api/printing`, `POST /api/printing/jobs` (Multipart: `options` als JSON, dann `file`) und
+  `GET /api/printing/jobs/:ref`.
+- **Ablage** (*System → Druckserver*, nur Admins): Ist ein Einsatz eröffnet, landet jeder Druck als PDF in dessen
+  Dokumentverwaltung. Der Ablageort lässt sich mit Platzhaltern wie bei Vorlagen festlegen (Vorgabe `Drucke`), fehlende
+  Ordner werden angelegt. Jeder Druck steht im Bedienprotokoll, die Ablage zusätzlich im Einsatztagebuch. Ohne offenen
+  Einsatz wird gedruckt, aber nichts abgelegt. Die Karte zeigt außerdem die letzten Aufträge und den vorausgewählten Drucker.
+- **Sicherheit:** Drucken über CUPS ist im Netz ohne Anmeldung möglich, die CUPS-Verwaltung braucht ein Passwort.
+  Port 631 sollte nur aus dem Fahrzeug-LAN erreichbar sein.
+
+## Scannen (Scan-Eingang)
+
+Multifunktionsgeräte wie der HP Color LaserJet Pro MFP 3302sdwg schicken Scans per **Scan an E-Mail** direkt an ELVIS.
+ELVIS betreibt dafür einen eigenen SMTP-Empfänger (Port 2525, `scan.smtpPort` in der Konfiguration bzw.
+`ELVIS_SCAN_PORT`, `off` schaltet ihn ab). Weitere Dienste braucht es nicht.
+
+- **Scan-Eingang** (*Fahrzeug → Scan-Eingang*, angemeldet): Jeder PDF-Anhang wird ein Scan mit Absender, Betreff und
+  Zeit. Ansehen, herunterladen, aus dem Eingang löschen oder nachträglich im laufenden Einsatz ablegen. Scans im Eingang
+  werden nach der eingestellten Frist (Vorgabe 14 Tage) gelöscht; abgelegte Dokumente bleiben im Einsatz.
+- **Ablage:** Ist ein Einsatz eröffnet, legt ELVIS jeden Scan zusätzlich in dessen Dokumentverwaltung ab (Vorgabe
+  `Scans/{{datum.iso}}`, Platzhalter wie bei Vorlagen) und vermerkt das im Einsatztagebuch.
+- **Einstellungen** (*System → Scannen*, nur Admins): Annahme an/aus, Ablage, erlaubte Geräte (IP-Adressen) und
+  optional SMTP-Anmeldung (PLAIN/LOGIN). Mails ohne PDF-Anhang lehnt ELVIS ab, das Gerät zeigt dann einen Fehler.
+- **HP-Drucker einrichten:** Embedded Web Server des Druckers öffnen → *Scannen* → *Scan an E-Mail* → *Ausgehende
+  E-Mail-Profile*: SMTP-Server = Adresse des ELVIS-Servers, Port 2525, SSL/TLS aus, ggf. Authentifizierung mit den
+  Zugangsdaten aus ELVIS. Absender beliebig (z. B. `scanner@elvis`), im Adressbuch einen Empfänger wie `scan@elvis`
+  anlegen (die Adresse selbst spielt keine Rolle) und als Dateityp PDF wählen.
+- **Sicherheit:** Der SMTP-Empfänger nimmt nur Scans an und leitet nichts weiter. Ohne STARTTLS gehen Scans und
+  Anmeldung unverschlüsselt durchs Netz – Port 2525 sollte nur aus dem Fahrzeug-LAN erreichbar sein, am besten nur
+  für die IP des Druckers freigegeben.
+- **Technik:** `smtp-server` und `mailparser` (`apps/server/src/services/scanning.ts`). Endpunkte: `GET /api/scans`,
+  `GET /api/scans/:id/file`, `POST /api/scans/:id/assign`, `DELETE /api/scans/:id`, `GET|PUT /api/system/scanning`.
 
 ## Offene Punkte / nächste Schritte
 

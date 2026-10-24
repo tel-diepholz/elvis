@@ -10,6 +10,8 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+      # Scan-Eingang: SMTP für „Scan an E-Mail“ der Multifunktionsgeräte
+      - "2525:2525"
     volumes:
       - elvis-data:/data
       - elvis-config:/config

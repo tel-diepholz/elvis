@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { renderPlaceholders, type PlaceholderBags } from './template';
 
 /**
  * Addon-Manifest (addon.yaml). Client (Formular) und Server (Installation) prüfen mit
@@ -187,6 +188,24 @@ const geocoderProvision = z.object({
   url: templated,
 });
 
+/** Office-Server mit WOPI (Collabora Online): Dokumente im Browser bearbeiten */
+const officeProvision = z.object({
+  id: slug,
+  name: z.string().min(1),
+  /** Adresse, unter der Browser den Office-Server erreichen, z. B. http://{{host.address}}:9980 */
+  url: templated,
+  /** Adresse von ELVIS aus Sicht des Office-Servers (WOPI-Rückrufe), z. B. {{options.elvisUrl}} */
+  wopiBase: templated,
+});
+
+/** Druckserver mit IPP (CUPS): ELVIS listet dessen Drucker und reicht Druckaufträge weiter */
+const printServerProvision = z.object({
+  id: slug,
+  name: z.string().min(1),
+  /** IPP-Adresse aus Sicht von ELVIS, z. B. http://{{host.address}}:{{options.port}} */
+  url: templated,
+});
+
 export const addonManifestSchema = z
   .object({
     id: slug,
@@ -204,6 +223,8 @@ export const addonManifestSchema = z
         mapSources: z.array(mapSourceProvision).default([]),
         videoSources: z.array(videoSourceProvision).default([]),
         geocoders: z.array(geocoderProvision).default([]),
+        office: z.array(officeProvision).default([]),
+        printServers: z.array(printServerProvision).default([]),
       })
       .default({}),
     /**
@@ -354,12 +375,7 @@ export interface TemplateContext {
 
 /** Ersetzt {{options.x}}, {{addon.id}}, {{host.address}} …; unbekannte Platzhalter sind ein Fehler. */
 export function renderTemplate(template: string, ctx: TemplateContext): string {
-  return template.replace(/\{\{\s*([a-zA-Z]+)\.([a-zA-Z0-9_]+)\s*\}\}/g, (match, scope: string, key: string) => {
-    const bag = (ctx as unknown as Record<string, Record<string, unknown> | undefined>)[scope];
-    const value = bag?.[key];
-    if (value === undefined) throw new Error(`Unbekannter Platzhalter ${match}`);
-    return Array.isArray(value) ? value.join(',') : String(value);
-  });
+  return renderPlaceholders(template, ctx as unknown as PlaceholderBags);
 }
 
 // --- Rechte ---

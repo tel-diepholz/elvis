@@ -12,3 +12,8 @@ export * from './displays';
 export * from './geocode';
 export * from './mapobjects';
 export * from './wifi';
+export * from './documents';
+export * from './template';
+export * from './tasks';
+export * from './printing';
+export * from './scanning';

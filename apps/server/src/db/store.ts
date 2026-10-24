@@ -1,5 +1,6 @@
 import type {
   AuditEntry,
+  DocumentFolder,
   Incident,
   IncidentDocument,
   IncidentPatch,
@@ -75,6 +76,7 @@ const toMapObject = (r: Row): MapObject =>
 const toDocument = (r: Row): IncidentDocument & { storageName: string } => ({
   id: r.id as number,
   incidentId: r.incident_id as number,
+  folderId: (r.folder_id as number | null) ?? null,
   filename: r.filename as string,
   storageName: r.storage_name as string,
   mimeType: r.mime_type as string,
@@ -82,6 +84,22 @@ const toDocument = (r: Row): IncidentDocument & { storageName: string } => ({
   description: r.description as string,
   uploadedBy: r.uploaded_by as string,
   uploadedAt: r.uploaded_at as string,
+  templateId: (r.template_id as number | null) ?? null,
+  draft: r.draft === 1,
+  createdByUserId: (r.created_by_user as number | null) ?? null,
+  updatedAt: (r.updated_at as string | null) ?? (r.uploaded_at as string),
+  updatedBy: (r.updated_by as string | null) ?? (r.uploaded_by as string),
+  version: r.version as number,
+});
+
+const toFolder = (r: Row): DocumentFolder => ({
+  id: r.id as number,
+  incidentId: r.incident_id as number,
+  parentId: (r.parent_id as number | null) ?? null,
+  name: r.name as string,
+  system: r.system === 1,
+  createdBy: r.created_by as string,
+  createdAt: r.created_at as string,
 });
 
 const toAudit = (r: Row): AuditEntry => ({
@@ -293,9 +311,12 @@ export class Store {
 
   // --- Dokumente ---
 
-  documents(incidentId: number): IncidentDocument[] {
+  /** Dokumente des Einsatzes; Entwürfe nur die des angegebenen Benutzers */
+  documents(incidentId: number, viewerId: number | null = null): IncidentDocument[] {
     return (
-      this.db.prepare('SELECT * FROM documents WHERE incident_id = ? ORDER BY uploaded_at DESC').all(incidentId) as Row[]
+      this.db
+        .prepare('SELECT * FROM documents WHERE incident_id = ? AND (draft = 0 OR created_by_user = ?) ORDER BY filename COLLATE NOCASE')
+        .all(incidentId, viewerId ?? -1) as Row[]
     ).map((r) => {
       const { storageName: _, ...doc } = toDocument(r);
       return doc;
@@ -307,19 +328,92 @@ export class Store {
     return r ? toDocument(r) : null;
   }
 
-  addDocument(d: Omit<IncidentDocument, 'id' | 'uploadedAt'> & { storageName: string }): IncidentDocument {
+  /** Dokumente (ohne Entwürfe anderer) im Ordner – für die laufende Nummer */
+  documentCount(incidentId: number, folderId: number | null): number {
+    return (
+      this.db.prepare('SELECT COUNT(*) AS n FROM documents WHERE incident_id = ? AND folder_id IS ?').get(incidentId, folderId) as { n: number }
+    ).n;
+  }
+
+  documentNameTaken(incidentId: number, folderId: number | null, filename: string, exceptId = 0): boolean {
+    return !!this.db
+      .prepare('SELECT 1 FROM documents WHERE incident_id = ? AND folder_id IS ? AND filename = ? COLLATE NOCASE AND id != ?')
+      .get(incidentId, folderId, filename, exceptId);
+  }
+
+  addDocument(
+    d: Pick<IncidentDocument, 'incidentId' | 'folderId' | 'filename' | 'mimeType' | 'sizeBytes' | 'description' | 'uploadedBy'> &
+      Partial<Pick<IncidentDocument, 'templateId' | 'draft' | 'createdByUserId'>> & { storageName: string },
+  ): IncidentDocument {
+    const ts = now();
     const info = this.db
       .prepare(
-        `INSERT INTO documents (incident_id, filename, storage_name, mime_type, size_bytes, description, uploaded_by, uploaded_at)
-         VALUES (@incidentId, @filename, @storageName, @mimeType, @sizeBytes, @description, @uploadedBy, @uploadedAt)`,
+        `INSERT INTO documents (incident_id, folder_id, filename, storage_name, mime_type, size_bytes, description, uploaded_by, uploaded_at,
+                                template_id, draft, created_by_user, updated_at, updated_by)
+         VALUES (@incidentId, @folderId, @filename, @storageName, @mimeType, @sizeBytes, @description, @uploadedBy, @ts,
+                 @templateId, @draft, @createdByUserId, @ts, @uploadedBy)`,
       )
-      .run({ ...d, uploadedAt: now() });
+      .run({ templateId: null, createdByUserId: null, ...d, draft: d.draft ? 1 : 0, ts });
     const { storageName: _, ...doc } = this.document(Number(info.lastInsertRowid))!;
     return doc;
   }
 
+  patchDocument(id: number, p: { folderId?: number | null; filename?: string; description?: string }): void {
+    const doc = this.document(id)!;
+    this.db
+      .prepare('UPDATE documents SET folder_id = ?, filename = ?, description = ? WHERE id = ?')
+      .run(p.folderId !== undefined ? p.folderId : doc.folderId, p.filename ?? doc.filename, p.description ?? doc.description, id);
+  }
+
+  /** Neuer Inhalt aus dem Office-Server; ein Entwurf wird damit zum regulären Dokument */
+  savedDocument(id: number, sizeBytes: number, by: string): IncidentDocument {
+    this.db.prepare('UPDATE documents SET size_bytes = ?, updated_at = ?, updated_by = ?, version = version + 1, draft = 0 WHERE id = ?').run(sizeBytes, now(), by, id);
+    const { storageName: _, ...doc } = this.document(id)!;
+    return doc;
+  }
+
+  /** Entwürfe, die vor `before` angelegt und nie gespeichert wurden */
+  staleDrafts(before: string): (IncidentDocument & { storageName: string })[] {
+    return (this.db.prepare('SELECT * FROM documents WHERE draft = 1 AND uploaded_at < ?').all(before) as Row[]).map(toDocument);
+  }
+
   removeDocument(id: number): void {
     this.db.prepare('DELETE FROM documents WHERE id = ?').run(id);
+  }
+
+  // --- Dokumentordner ---
+
+  folders(incidentId: number): DocumentFolder[] {
+    return (this.db.prepare('SELECT * FROM document_folders WHERE incident_id = ? ORDER BY name COLLATE NOCASE').all(incidentId) as Row[]).map(toFolder);
+  }
+
+  folder(id: number): DocumentFolder | null {
+    const r = this.db.prepare('SELECT * FROM document_folders WHERE id = ?').get(id) as Row | undefined;
+    return r ? toFolder(r) : null;
+  }
+
+  findFolder(incidentId: number, parentId: number | null, name: string): DocumentFolder | null {
+    const r = this.db
+      .prepare('SELECT * FROM document_folders WHERE incident_id = ? AND parent_id IS ? AND name = ? COLLATE NOCASE')
+      .get(incidentId, parentId, name) as Row | undefined;
+    return r ? toFolder(r) : null;
+  }
+
+  addFolder(f: Pick<DocumentFolder, 'incidentId' | 'parentId' | 'name' | 'system' | 'createdBy'>): DocumentFolder {
+    const info = this.db
+      .prepare('INSERT INTO document_folders (incident_id, parent_id, name, system, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(f.incidentId, f.parentId, f.name, f.system ? 1 : 0, f.createdBy, now());
+    return this.folder(Number(info.lastInsertRowid))!;
+  }
+
+  folderEmpty(id: number): boolean {
+    return (
+      !this.db.prepare('SELECT 1 FROM documents WHERE folder_id = ?').get(id) && !this.db.prepare('SELECT 1 FROM document_folders WHERE parent_id = ?').get(id)
+    );
+  }
+
+  removeFolder(id: number): void {
+    this.db.prepare('DELETE FROM document_folders WHERE id = ?').run(id);
   }
 
   // --- Bedienprotokoll ---

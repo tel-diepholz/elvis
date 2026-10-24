@@ -87,6 +87,12 @@ const configSchema = z.object({
       repositories: z.array(z.string().url()).default([]),
     })
     .default({}),
+  scan: z
+    .object({
+      /** Port des SMTP-Empfängers für „Scan an E-Mail“; null = aus. Über 1024, da der Container nicht als root läuft. */
+      smtpPort: z.coerce.number().int().min(0).max(65535).nullable().default(2525),
+    })
+    .default({}),
   alerts: z
     .object({
       stormWarnMs: z.number().default(17),
@@ -109,6 +115,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ElvisConfig {
     ...(env.PORT && { port: env.PORT }),
     ...(env.ELVIS_DATA_DIR && { dataDir: env.ELVIS_DATA_DIR }),
     ...(env.ELVIS_WEB_DIST && { webDist: env.ELVIS_WEB_DIST }),
+    ...(env.ELVIS_SCAN_PORT && { scan: { ...fromFile.scan, smtpPort: env.ELVIS_SCAN_PORT === 'off' ? null : env.ELVIS_SCAN_PORT } }),
     ...((env.ELVIS_ADDONS_DIR || env.ELVIS_ADDON_REPOSITORIES) && {
       addons: {
         ...fromFile.addons,

@@ -26,6 +26,8 @@ import { describeError, type HostService } from '../docker/hosts.js';
 import type { TileService } from '../services/tiles.js';
 import { JobRuns, followLogs, type JobRunRow } from './jobs.js';
 import type { GeocoderProvision, GeocoderService } from '../services/geocoder.js';
+import type { OfficeProvision, OfficeService } from '../services/office.js';
+import type { PrintServerProvision, PrintService } from '../services/printing.js';
 import type { VideoProvision, VideoSourceService } from '../services/videos.js';
 import { createProgressParser, nextScheduledRun, overallPercent } from './progress.js';
 import type { RepoService } from './repos.js';
@@ -774,10 +776,28 @@ export class AddonManager {
     this.updateMapSources();
   }
 
+  private office: OfficeService | null = null;
+
+  /** Office-Server laufender Addons (provides.office) an diesen Dienst melden */
+  attachOffice(office: OfficeService): void {
+    this.office = office;
+    this.updateMapSources();
+  }
+
+  private printing: PrintService | null = null;
+
+  /** Druckserver laufender Addons (provides.printServers) an diesen Dienst melden */
+  attachPrinting(printing: PrintService): void {
+    this.printing = printing;
+    this.updateMapSources();
+  }
+
   private updateMapSources(): void {
     const sources: MapSourceConfig[] = [];
     const videos: VideoProvision[] = [];
     const geocoders: GeocoderProvision[] = [];
+    const offices: OfficeProvision[] = [];
+    const printServers: PrintServerProvision[] = [];
     for (const r of this.rows()) {
       if (r.status !== 'running') continue;
       const manifest = JSON.parse(r.manifest) as AddonManifest;
@@ -807,9 +827,17 @@ export class AddonManager {
       for (const g of manifest.provides.geocoders ?? []) {
         geocoders.push({ id: `${r.id}-${g.id}`, name: g.name, type: g.type, url: renderTemplate(g.url, ctx) });
       }
+      for (const o of manifest.provides.office ?? []) {
+        offices.push({ id: `${r.id}-${o.id}`, name: o.name, url: renderTemplate(o.url, ctx), wopiBase: renderTemplate(o.wopiBase, ctx) });
+      }
+      for (const p of manifest.provides.printServers ?? []) {
+        printServers.push({ id: `${r.id}-${p.id}`, name: p.name, url: renderTemplate(p.url, ctx) });
+      }
     }
     if (this.tiles.setAddonSources(sources)) this.notify(['mapSources']);
     if (this.videos?.setProvisions(videos)) this.notify(['videoSources']);
     this.geocoder?.setProvisions(geocoders);
+    this.office?.setProvisions(offices);
+    this.printing?.setProvisions(printServers);
   }
 }

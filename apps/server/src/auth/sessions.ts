@@ -14,6 +14,16 @@ interface SessionRow {
   user_id: number;
   created_at: string;
   last_seen_at: string;
+  role_id: number | null;
+  role_chosen: number;
+}
+
+export interface SessionInfo {
+  userId: number;
+  /** Übernommene Rolle (siehe services/roles.ts) */
+  roleId: number | null;
+  /** false direkt nach der Anmeldung, bis der Benutzer eine Rolle (oder keine) gewählt hat */
+  roleChosen: boolean;
 }
 
 /** Sitzungen in SQLite (überstehen Neustarts); gespeichert wird nur der Hash des Tokens. */
@@ -30,8 +40,8 @@ export class SessionStore {
     return token;
   }
 
-  /** Liefert die Benutzer-ID einer gültigen Sitzung und verlängert sie (gleitend). */
-  resolve(token: string | undefined): number | null {
+  /** Liefert Benutzer und Rolle einer gültigen Sitzung und verlängert sie (gleitend). */
+  resolve(token: string | undefined): SessionInfo | null {
     if (!token) return null;
     const row = this.db.prepare('SELECT * FROM sessions WHERE token_hash = ?').get(hash(token)) as SessionRow | undefined;
     if (!row) return null;
@@ -42,7 +52,24 @@ export class SessionStore {
       return null;
     }
     if (t - lastSeen > TOUCH_INTERVAL_MS) this.db.prepare('UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?').run(new Date(t).toISOString(), row.token_hash);
-    return row.user_id;
+    return { userId: row.user_id, roleId: row.role_id, roleChosen: row.role_chosen === 1 };
+  }
+
+  setRole(token: string, roleId: number | null): void {
+    this.db.prepare('UPDATE sessions SET role_id = ?, role_chosen = 1 WHERE token_hash = ?').run(roleId, hash(token));
+  }
+
+  /** Wer welche Rolle in einer noch gültigen Sitzung übernommen hat */
+  roleHolders(): { roleId: number; userId: number; name: string }[] {
+    const t = this.now();
+    return this.db
+      .prepare(
+        `SELECT DISTINCT s.role_id AS roleId, u.id AS userId, u.first_name || ' ' || u.last_name AS name
+         FROM sessions s JOIN users u ON u.id = s.user_id
+         WHERE s.role_id IS NOT NULL AND s.last_seen_at > ? AND s.created_at > ?
+         ORDER BY u.last_name COLLATE NOCASE, u.first_name COLLATE NOCASE`,
+      )
+      .all(new Date(t - SESSION_IDLE_MS).toISOString(), new Date(t - SESSION_MAX_MS).toISOString()) as { roleId: number; userId: number; name: string }[];
   }
 
   revoke(token: string): void {

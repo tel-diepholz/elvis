@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, Marker, Polygon, Rectangle, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { useMutation } from '@tanstack/react-query';
-import { FileDown } from 'lucide-react';
+import { FileDown, Printer } from 'lucide-react';
 import {
   DEFAULT_VEHICLE_SIGN,
   KLUG_MANIER,
@@ -21,6 +21,7 @@ import {
   type PaperFormat,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
+import { PrinterSettings, mediaFor, usePrintForm, usePrintStatus } from '../../components/print/PrinterSettings';
 import { compass, fmtDtg, fmtNum } from '../../lib/format';
 import { useToast } from '../../lib/toast';
 import { useSettings } from '../../lib/hooks';
@@ -149,6 +150,13 @@ export function PrintDialog(props: PrintDialogProps) {
   const [withVehicle, setWithVehicle] = useState(!!props.vehicle && (incident?.vehicleVisible ?? true));
   const [withIncident, setWithIncident] = useState(hasIncidentPos);
   const [withObjects, setWithObjects] = useState(visibleObjects.length > 0);
+  // Ausgabe: PDF herunterladen oder direkt auf einem Drucker des Druckservers
+  const { data: printStatus } = usePrintStatus();
+  const hasPrinters = !!printStatus?.printers.length;
+  const [target, setTarget] = useState<'pdf' | 'printer' | null>(null);
+  const output = target ?? (hasPrinters ? 'printer' : 'pdf');
+  const { form, setForm, printer, valid: printerValid } = usePrintForm(printStatus);
+  const media = mediaFor(printer, paper);
 
   const frame = useMemo(() => printFrame(center, zoom, paper, orientation), [center, zoom, paper, orientation]);
   const b = frame.bounds;
@@ -196,11 +204,19 @@ export function PrintDialog(props: PrintDialogProps) {
   };
 
   const print = useMutation({
-    mutationFn: () => api.printMap(buildRequest()),
-    onSuccess: ({ pdf, filename, missingTiles }) => {
-      download(pdf, filename);
-      if (missingTiles) toast('error', `PDF erstellt, aber ${missingTiles} Kartenkachel(n) fehlen (offline?)`);
-      else toast('success', 'Lagekarte als PDF erstellt');
+    mutationFn: async () => {
+      const map = await api.printMap(buildRequest());
+      if (output === 'pdf') return { ...map, job: null };
+      // Format und Ausrichtung legt das PDF fest; passendes Papier wählen, sonst auf die Vorgabe des Druckers anpassen
+      const file = new File([map.pdf], map.filename, { type: 'application/pdf' });
+      const job = await api.printPdf(file, { ...form, media, orientation: 'auto', pageRanges: '', numberUp: 1 });
+      return { ...map, job };
+    },
+    onSuccess: ({ pdf, filename, missingTiles, job }) => {
+      if (!job) download(pdf, filename);
+      const what = job ? `Lagekarte an ${job.printerName} gesendet${job.archivedPath ? ` und unter „${job.archivedPath}“ abgelegt` : ''}` : 'Lagekarte als PDF erstellt';
+      if (missingTiles) toast('error', `${what}, aber ${missingTiles} Kartenkachel(n) fehlen (offline?)`);
+      else toast('success', what);
       props.onDone();
     },
     onError: (e) => toast('error', e.message),
@@ -264,9 +280,39 @@ export function PrintDialog(props: PrintDialogProps) {
         <p className="muted print-summary">
           Ausschnitt {fmtDistance(frame.widthM)} × {fmtDistance(frame.heightM)} · ca. {tileCount} Kacheln. Karte in der Vorschau verschieben, um den Ausschnitt zu wählen.
         </p>
-        <button className="btn btn-primary btn-lg" disabled={print.isPending} onClick={() => print.mutate()}>
-          <FileDown size={18} /> {print.isPending ? 'PDF wird erstellt …' : `PDF erzeugen (${paper})`}
-        </button>
+        {hasPrinters && (
+          <Field label="Ausgabe">
+            <Segmented
+              label="Ausgabe"
+              value={output}
+              onChange={setTarget}
+              options={[
+                { value: 'printer', label: 'Drucker' },
+                { value: 'pdf', label: 'PDF herunterladen' },
+              ]}
+            />
+          </Field>
+        )}
+        {output === 'printer' && printStatus && (
+          <>
+            <PrinterSettings status={printStatus} form={form} onChange={setForm} fixedLayout />
+            {printer && !media && (
+              <p className="muted">
+                {printer.info} kennt kein {paper}
+                {form.fitToPage ? ' – die Karte wird auf das Standardpapier des Druckers verkleinert.' : '.'}
+              </p>
+            )}
+          </>
+        )}
+        {output === 'printer' ? (
+          <button className="btn btn-primary btn-lg" disabled={print.isPending || !printerValid} onClick={() => print.mutate()}>
+            <Printer size={18} /> {print.isPending ? 'Wird gedruckt …' : `Drucken (${paper})`}
+          </button>
+        ) : (
+          <button className="btn btn-primary btn-lg" disabled={print.isPending} onClick={() => print.mutate()}>
+            <FileDown size={18} /> {print.isPending ? 'PDF wird erstellt …' : `PDF erzeugen (${paper})`}
+          </button>
+        )}
       </div>
 
       <div className="print-preview">

@@ -2227,6 +2227,74 @@ input[type='checkbox'] {
   width: min(420px, 100%);
   text-align: left;
 }
+/* Drucken */
+.print-drop {
+  min-height: 260px;
+  justify-content: center;
+}
+.pdf-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.print-file {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+.pdf-preview iframe {
+  width: 100%;
+  height: min(70vh, 720px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+.print-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.print-submit {
+  width: 100%;
+  margin-top: 12px;
+}
+.print-form input.invalid {
+  border-color: var(--alarm);
+}
+.print-archive {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 0;
+}
+.print-archive svg {
+  flex: none;
+  margin-top: 2px;
+}
+.print-jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.print-jobs li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.print-jobs li:last-child {
+  border-bottom: none;
+}
+.print-job-name {
+  overflow-wrap: anywhere;
+}
+.print-job-name .cell-sub {
+  display: block;
+}
 .doc-list {
   list-style: none;
   margin: 0;
@@ -2253,6 +2321,202 @@ input[type='checkbox'] {
 .doc-name {
   font-weight: 650;
   overflow-wrap: anywhere;
+}
+.doc-desc {
+  display: block;
+}
+.doc-pick {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 12px 8px;
+  border-radius: var(--radius-sm);
+}
+.doc-pick:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.doc-pick .doc-main > span {
+  display: block;
+}
+.link-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.link-button:hover {
+  text-decoration: underline;
+}
+.docs-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 240px;
+  border: 2px dashed transparent;
+  border-radius: var(--radius);
+}
+.docs-pane.dragging {
+  border-color: var(--info);
+  background: var(--info-bg);
+}
+.docs-hint {
+  font-size: 12px;
+  margin: 12px 0 0;
+}
+
+/* Ordnerbaum */
+.tree,
+.tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tree-row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+.tree-row.active {
+  background: var(--info-bg);
+}
+.tree-row:hover:not(.active) {
+  background: var(--bg-hover);
+}
+.tree-toggle {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 32px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+.tree-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0 8px 0 0;
+}
+.tree-label > svg {
+  flex: none;
+  color: var(--text-muted);
+}
+.tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--muted-bg);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+/* Vorlagenauswahl */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.picker-body {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 16px;
+  min-height: 300px;
+}
+.picker-body:has(> .picker-list:only-child) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.picker-tree,
+.picker-list {
+  max-height: min(60dvh, 520px);
+  overflow-y: auto;
+}
+@media (max-width: 700px) {
+  .picker-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .picker-tree {
+    max-height: 200px;
+  }
+}
+
+/* Platzhalter-Hilfe, Ordnervorgabe */
+.placeholder-help summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.placeholder-help ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.spec-tree,
+.spec-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.spec-tree ul {
+  padding-left: 24px;
+  border-left: 1px solid var(--border);
+  margin-left: 12px;
+}
+.spec-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+}
+.spec-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Office-Editor (Collabora) */
+.office-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--topbar-h) - 48px);
+  min-height: 480px;
+}
+.office-frame {
+  flex: 1;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+@media (max-width: 900px) {
+  .office-page {
+    height: calc(100dvh - var(--topbar-h) - var(--bottombar-h) - 40px);
+  }
 }
 
 /* ---------- Addons & Docker-Hosts ---------- */
@@ -3915,4 +4179,304 @@ html.display-mode body {
   margin: 0 0 8px;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+/* ---------- Rollen und Aufgaben ---------- */
+.operator-name {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+.operator-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.role-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.role-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.role-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.role-option:hover {
+  background: var(--bg-hover);
+}
+.role-option.active {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.role-option > svg {
+  flex: none;
+  color: var(--text-muted);
+}
+.role-option.active > svg {
+  color: var(--accent);
+}
+.role-option-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.role-option-holders {
+  flex: none;
+  max-width: 40%;
+  text-align: right;
+}
+
+.simple-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.simple-list > li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.simple-list > li:last-child {
+  border-bottom: 0;
+}
+
+.interval-input {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.interval-input input[type='number'] {
+  width: 80px;
+}
+
+.task-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.task {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+}
+.task:last-child {
+  border-bottom: 0;
+}
+.task-due {
+  background: linear-gradient(90deg, var(--alarm-bg), transparent 70%);
+  box-shadow: inset 3px 0 0 var(--alarm);
+}
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 6px;
+}
+.task-check {
+  flex: none;
+  border-radius: 50%;
+}
+.task-due .task-check {
+  border-color: var(--alarm);
+  color: var(--alarm);
+}
+.task-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.task-summary {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.task-done .task-summary {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.task-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.task-meta .tone-alarm {
+  color: var(--alarm);
+  font-weight: 600;
+}
+.task-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.task-snooze,
+.task-detail {
+  padding: 8px 0 4px 56px;
+}
+.task-desc {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.due-panel {
+  position: fixed;
+  /* links unten im Inhaltsbereich – rechts unten erscheinen die Toasts */
+  left: calc(var(--sidebar-w) + 16px);
+  bottom: 16px;
+  z-index: 40;
+  width: min(360px, calc(100vw - 32px));
+  background: var(--bg-card);
+  border: 1px solid var(--alarm);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+}
+.due-panel-collapsed {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--alarm);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.due-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--alarm);
+}
+.due-panel-head strong {
+  flex: 1;
+}
+.due-list {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+}
+.due-list > li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.due-summary {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.due-list .btn-row {
+  margin-top: 6px;
+}
+.due-more {
+  font-size: 13px;
+  color: var(--accent);
+}
+@media (max-width: 900px) {
+  .due-panel {
+    left: 16px;
+    bottom: calc(var(--bottombar-h) + 12px);
+  }
+  .task-snooze,
+  .task-detail {
+    padding-left: 8px;
+  }
+}
+
+/* Kachel „Aufgaben“ */
+.tile-tasks {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 3cqmin 4cqmin;
+  font-size: clamp(13px, 5cqmin, 28px);
+}
+.tile-tasks-head {
+  flex: none;
+  font-size: 0.8em;
+  font-weight: 650;
+  color: var(--text-muted);
+  margin-bottom: 0.4em;
+}
+.tile-tasks ul {
+  flex: 1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+.tile-tasks li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  padding: 0.35em 0.4em;
+  border-bottom: 1px solid var(--border);
+}
+.tile-tasks li.due {
+  background: var(--alarm-bg);
+  box-shadow: inset 0.2em 0 0 var(--alarm);
+}
+.tile-task-time {
+  flex: none;
+  min-width: 3.2em;
+  font-family: var(--mono);
+  font-weight: 700;
+}
+.tile-tasks li.due .tile-task-time {
+  color: var(--alarm);
+}
+.tile-task-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tile-task-summary {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.tile-task-meta {
+  font-size: 0.7em;
+  color: var(--text-muted);
+}
+.tile-task-meta svg {
+  vertical-align: -0.1em;
 }

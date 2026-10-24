@@ -15,14 +15,18 @@ import { ArchivedIncidentPage, ArchivePage } from './pages/ArchivePage';
 import { CommsPage } from './pages/CommsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { DockerHostsPage } from './pages/DockerHostsPage';
-import { DocumentsPage, JournalPage, UnitsPage } from './pages/IncidentAreaPages';
+import { DocumentsPage, JournalPage, TasksPage, UnitsPage } from './pages/IncidentAreaPages';
 import { IncidentPage } from './pages/IncidentPage';
 import { MapPage } from './pages/MapPage';
 import { CamerasPage } from './pages/CamerasPage';
 import { DisplayScreenPage } from './pages/DisplayScreenPage';
 import { DisplaysPage } from './pages/DisplaysPage';
 import { MediaPage } from './pages/MediaPage';
+import { DocumentEditorPage, TemplateEditorPage } from './pages/OfficeEditorPage';
+import { TemplatesPage } from './pages/TemplatesPage';
 import { SignGeneratorPage } from './pages/SignGeneratorPage';
+import { PrintPage } from './pages/PrintPage';
+import { ScanPage } from './pages/ScanPage';
 import { SystemPage } from './pages/SystemPage';
 import { UsersPage } from './pages/UsersPage';
 import { VehiclePage } from './pages/VehiclePage';
@@ -61,16 +65,22 @@ createRoot(document.getElementById('root')!).render(
                 {/* Einsatzbereich – Unterseiten erst mit aufgelegtem Einsatz */}
                 <Route path="einsatz" element={<RequireLogin><IncidentPage /></RequireLogin>} />
                 <Route path="einsatz/tagebuch" element={<RequireLogin><JournalPage /></RequireLogin>} />
+                <Route path="einsatz/aufgaben" element={<RequireLogin><TasksPage /></RequireLogin>} />
                 <Route path="einsatz/kraefte" element={<RequireLogin><UnitsPage /></RequireLogin>} />
                 <Route path="einsatz/dokumente" element={<RequireLogin><DocumentsPage /></RequireLogin>} />
+                <Route path="dokument/:id" element={<RequireLogin><DocumentEditorPage /></RequireLogin>} />
                 {/* Verwaltung */}
                 <Route path="archiv" element={<RequireLogin><ArchivePage /></RequireLogin>} />
                 <Route path="archiv/:id" element={<RequireLogin><ArchivedIncidentPage /></RequireLogin>} />
                 <Route path="addons" element={<RequireLogin admin><AddonsPage /></RequireLogin>} />
                 <Route path="addons/:id" element={<RequireLogin admin><AddonDetailPage /></RequireLogin>} />
                 <Route path="docker-hosts" element={<RequireLogin admin><DockerHostsPage /></RequireLogin>} />
+                <Route path="vorlagen" element={<RequireLogin admin><TemplatesPage /></RequireLogin>} />
+                <Route path="vorlagen/:id/bearbeiten" element={<RequireLogin admin><TemplateEditorPage /></RequireLogin>} />
                 <Route path="benutzer" element={<RequireLogin><UsersPage /></RequireLogin>} />
                 <Route path="zeichen" element={<SignGeneratorPage />} />
+                <Route path="drucken" element={<PrintPage />} />
+                <Route path="scans" element={<RequireLogin><ScanPage /></RequireLogin>} />
                 <Route path="system" element={<RequireLogin><SystemPage /></RequireLogin>} />
                 <Route path="*" element={<EmptyState title="Seite nicht gefunden" />} />
               </Route>

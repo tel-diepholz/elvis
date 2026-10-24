@@ -38,6 +38,9 @@
   "addons": {
     "repositories": ["https://raw.githubusercontent.com/tel-diepholz/elvis-addons/main"]
   },
+  "scan": {
+    "smtpPort": 2525
+  },
   "alerts": {
     "batteryWarnPercent": 40,
     "batteryAlarmPercent": 20,

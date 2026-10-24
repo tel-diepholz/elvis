@@ -40,7 +40,7 @@ async function createUser(cookie: string, firstName: string, pin = '1111', isAdm
 
 describe('Ersteinrichtung und Anmeldung', () => {
   it('legt beim ersten Start den ersten Admin an – danach nicht mehr', async () => {
-    expect((await call<AuthStatus>('GET', '/api/auth/status')).body).toEqual({ hasUsers: false, user: null });
+    expect((await call<AuthStatus>('GET', '/api/auth/status')).body).toEqual({ hasUsers: false, user: null, role: null, roleChosen: false });
     admin = await adminCookie(app);
     const status = await call<AuthStatus>('GET', '/api/auth/status', admin);
     expect(status.body.user).toMatchObject({ firstName: 'Max', lastName: 'Müller', isAdmin: true, createdBy: 'Ersteinrichtung' });
@@ -173,8 +173,18 @@ describe('Zugriffsregeln', () => {
     expect(accessLevel('GET', '/api/docker/hosts')).toBe('admin');
     expect(accessLevel('GET', '/api/addons?x=1')).toBe('admin');
     expect(accessLevel('POST', '/api/auth/pin')).toBe('user');
+    expect(accessLevel('PUT', '/api/auth/role')).toBe('user');
+    expect(accessLevel('POST', '/api/system/task-templates')).toBe('admin');
+    expect(accessLevel('GET', '/api/roles')).toBe('user');
     expect(accessLevel('GET', '/einsatz/tagebuch')).toBe('public');
     expect(accessLevel('GET', '/api/irgendwas-neues')).toBe('user');
+    // Dokumente: WOPI prüft sein Token selbst, Vorlagen pflegen nur Admins, Ordnervorgabe unter /api/system/
+    expect(accessLevel('POST', '/api/wopi/files/d1/contents?access_token=x')).toBe('public');
+    expect(accessLevel('GET', '/api/templates')).toBe('user');
+    expect(accessLevel('POST', '/api/templates/1/edit')).toBe('admin');
+    expect(accessLevel('DELETE', '/api/template-folders/1')).toBe('admin');
+    expect(accessLevel('PUT', '/api/system/document-folders')).toBe('admin');
+    expect(accessLevel('POST', '/api/incidents/1/documents/from-template')).toBe('user');
   });
 });
 

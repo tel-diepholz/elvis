@@ -3,10 +3,10 @@ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Cctv, Clock, CloudSun, Map as MapIcon, Network, Type, Video, Wifi } from 'lucide-react';
-import { DEFAULT_VEHICLE_SIGN, DISPLAY_TILE_TYPES, formatDtg, type DisplayMapView, type DisplayTile, type DisplayTileType } from '@elvis/shared';
+import { Bell, Cctv, Clock, CloudSun, ListChecks, Map as MapIcon, Network, Repeat, Type, Video, Wifi } from 'lucide-react';
+import { DEFAULT_VEHICLE_SIGN, DISPLAY_TILE_TYPES, fmtInterval, formatDtg, taskDueAt, taskIsDue, type DisplayMapView, type DisplayTile, type DisplayTileType } from '@elvis/shared';
 import { api } from '../../lib/api';
-import { compass, fmtOpt } from '../../lib/format';
+import { compass, fmtDate, fmtOpt, fmtTime } from '../../lib/format';
 import { useNow, useSettings } from '../../lib/hooks';
 import { autoSource } from '../../lib/mapSources';
 import { DISPLAY_MAP_VIEW_EVENT, useAlerts, useDevice } from '../../lib/live';
@@ -18,8 +18,9 @@ import { WindCompass } from '../WindCompass';
 import { WebRtcPlayer } from './WebRtcPlayer';
 import { MapObjectsLayer, useMapObjects } from '../map/objects';
 import { WifiQr } from '../WifiQr';
+import { fmtRelative } from '../tasks/taskActions';
 
-export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi };
+export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks };
 
 const date = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 const time = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -356,6 +357,49 @@ function GuestWifiTile({ tile }: { tile: DisplayTile }) {
   );
 }
 
+/** Offene Aufgaben des Einsatzes nach Fälligkeit; persönliche (einem Benutzer zugewiesene) nur auf Wunsch */
+function TasksTile({ tile }: { tile: DisplayTile }) {
+  const now = useNow();
+  const { data: incident } = useQuery({ queryKey: ['incident', 'active', 'display'], queryFn: () => api.activeIncident().catch(() => null) });
+  const { data: tasks } = useQuery({ queryKey: ['tasks', incident?.id ?? 0, 'display'], queryFn: () => api.tasks(incident!.id), enabled: !!incident });
+  if (!incident) return <TileEmpty text="Kein Einsatz aufgelegt" />;
+  if (!tasks) return <TileEmpty text="Lade Aufgaben …" />;
+  const personal = tile.config.personal === true;
+  const open = tasks.filter((t) => !t.doneAt && (personal || t.assignee.kind !== 'user'));
+  if (!open.length) return <TileEmpty text="Keine offenen Aufgaben" />;
+  const dueCount = open.filter((t) => taskIsDue(t, now)).length;
+  return (
+    <div className="tile-tasks">
+      <div className="tile-tasks-head">
+        {open.length} offen{dueCount > 0 && <span className="tone-alarm"> · {dueCount} fällig</span>}
+      </div>
+      <ul>
+        {open.map((t) => {
+          const due = taskDueAt(t);
+          const today = due && new Date(due).toDateString() === now.toDateString();
+          return (
+            <li key={t.id} className={taskIsDue(t, now) ? 'due' : undefined}>
+              <span className="tile-task-time">{due ? (today ? fmtTime(due) : `${fmtDate(due).slice(0, 6)} ${fmtTime(due)}`) : '–'}</span>
+              <span className="tile-task-main">
+                <span className="tile-task-summary">{t.summary}</span>
+                <span className="tile-task-meta">
+                  {[due && fmtRelative(due, now), t.assigneeName ?? 'Alle', t.snoozedUntil && 'geschoben'].filter(Boolean).join(' · ')}
+                  {t.intervalMinutes !== null && (
+                    <>
+                      {' · '}
+                      <Repeat size="1em" /> {fmtInterval(t.intervalMinutes)}
+                    </>
+                  )}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function TileEmpty({ text }: { text: string }) {
   return <div className="tile-empty">{text}</div>;
 }
@@ -381,6 +425,8 @@ export function TileView({ tile }: { tile: DisplayTile }) {
       return <TextTile tile={tile} />;
     case 'guestWifi':
       return <GuestWifiTile tile={tile} />;
+    case 'tasks':
+      return <TasksTile tile={tile} />;
     default:
       return <TileEmpty text={`Unbekannte Kachel ${DISPLAY_TILE_TYPES[tile.type as DisplayTileType]?.label ?? tile.type}`} />;
   }

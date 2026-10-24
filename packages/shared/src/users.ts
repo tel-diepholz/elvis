@@ -1,3 +1,5 @@
+import type { Role } from './tasks';
+
 /** Benutzerverwaltung: Anmeldung per Namensauswahl und 4-stelliger PIN. */
 
 export interface User {
@@ -21,6 +23,10 @@ export interface AuthStatus {
   /** false beim allerersten Start – dann wird der erste Admin angelegt. */
   hasUsers: boolean;
   user: User | null;
+  /** Rolle der aktuellen Sitzung (siehe tasks.ts) */
+  role: Role | null;
+  /** false direkt nach der Anmeldung: die Oberfläche fragt dann nach der Rolle */
+  roleChosen: boolean;
 }
 
 export interface NewUser {

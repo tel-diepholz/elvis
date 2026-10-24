@@ -50,7 +50,7 @@ function ActiveIncident({ incident }: { incident: Incident }) {
   const [editing, setEditing] = useState(false);
   const { data: units = [] } = useQuery({ queryKey: ['units', incident.id], queryFn: () => api.units(incident.id) });
   const { data: journal = [] } = useQuery({ queryKey: ['journal', incident.id], queryFn: () => api.journal(incident.id) });
-  const { data: docs = [] } = useQuery({ queryKey: ['documents', incident.id], queryFn: () => api.documents(incident.id) });
+  const { data: docs = [] } = useQuery({ queryKey: ['documents', incident.id], queryFn: () => api.documents(incident.id), select: (l) => l.documents.filter((d) => !d.draft) });
 
   const update = useMutation({
     mutationFn: (input: Parameters<typeof api.updateIncident>[1]) => api.updateIncident(incident.id, input),

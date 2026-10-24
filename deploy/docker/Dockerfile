@@ -31,7 +31,8 @@ COPY addons addons
 RUN mkdir -p /data /config && chown node:node /data /config
 USER node
 VOLUME ["/data", "/config"]
-EXPOSE 8080
+# 2525: SMTP-Empfänger für „Scan an E-Mail“ (Scan-Eingang)
+EXPOSE 8080 2525
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD node -e "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "apps/server/dist/index.js"]
