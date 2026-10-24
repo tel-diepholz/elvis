@@ -519,6 +519,20 @@ const MIGRATIONS: Migration[] = [
   );
   CREATE INDEX guest_print_jobs_received ON guest_print_jobs(received_at);
   `,
+  // Arbeitsplätze: per PXE installierte Notebooks mit Gerätetoken (nur der Hash)
+  `
+  CREATE TABLE workstations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    hostname TEXT NOT NULL,
+    mac TEXT NOT NULL UNIQUE,
+    token_hash TEXT NOT NULL UNIQUE,
+    enrolled_at TEXT NOT NULL,
+    last_seen_at TEXT,
+    last_user TEXT,
+    version TEXT NOT NULL DEFAULT ''
+  );
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

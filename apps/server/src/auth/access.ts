@@ -24,6 +24,8 @@ export function accessLevel(method: string, rawUrl: string): AccessLevel {
 
   // Bildschirme: Gerätesicht (/api/display/…) prüft das Gerätecookie selbst; die Liste ist lesbar wie der Fahrzeugzustand
   if (url.startsWith('/api/display/')) return 'public';
+  // Arbeitsplätze (Addon „ELVIS Arbeitsplatz“): Installer und Client-Dienst weisen sich per Bearer-Token aus
+  if (url.startsWith('/api/clients/')) return 'public';
   if (read && (url === '/api/displays' || url === '/api/video/sources')) return 'public';
 
   // Druckserver: PDFs drucken dürfen auch anonyme Arbeitsplätze (Einstellungen unter /api/system/)

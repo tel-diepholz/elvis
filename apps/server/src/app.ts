@@ -19,6 +19,8 @@ import { DeviceConfigStore } from './devices/config-store.js';
 import { cameraRoutes } from './routes/cameras.js';
 import { displayRoutes } from './routes/displays.js';
 import { DISPLAY_COOKIE, DisplayService } from './services/displays.js';
+import { WorkstationService } from './services/workstations.js';
+import { workstationRoutes } from './routes/workstations.js';
 import { VideoSourceService } from './services/videos.js';
 import { CameraConfigStore, CameraPresetStore } from './services/cameras.js';
 import { DeviceManager } from './devices/manager.js';
@@ -64,6 +66,7 @@ export interface App {
   office: OfficeService;
   printing: PrintService;
   scanning: ScanService;
+  workstations: WorkstationService;
   start(): Promise<void>;
   close(): Promise<void>;
 }
@@ -137,6 +140,8 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   );
   const users = new UserService(db);
   const limiter = new LoginLimiter();
+  const workstations = new WorkstationService(db, store);
+  workstations.onChange(() => hub.invalidate(['workstations']));
 
   // Docker- und Addon-Verwaltung (abschaltbar über docker.enabled)
   let docker: { hosts: HostService; repos: RepoService; addons: AddonManager } | null = null;
@@ -154,6 +159,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     addons.attachGeocoder(geocoder);
     addons.attachOffice(office);
     addons.attachPrinting(printing);
+    addons.attachWorkstations(workstations);
     docker = { hosts, repos, addons };
   }
 
@@ -208,6 +214,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     printingRoutes(api, { printing, office, store, notify: (t) => hub.invalidate(t), download: opts.officeDownload });
     scanningRoutes(api, { scanning, store, notify: (t) => hub.invalidate(t) });
     displayRoutes(api, { displays, hub, store, notify: (t) => hub.invalidate(t) });
+    workstationRoutes(api, { workstations, users, limiter, store, notify: (t) => hub.invalidate(t) });
     api.get('/api/video/sources', async () => videos.list());
     cameraRoutes(api, { cameras, presets: cameraPresets, devices, incidents, store, notify: (t) => hub.invalidate(t) });
     wifiRoutes(api, { wifi, store, notify: (t) => hub.invalidate(t) });
@@ -248,6 +255,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     office,
     printing,
     scanning,
+    workstations,
     async start() {
       await devices.start();
       videos.start();

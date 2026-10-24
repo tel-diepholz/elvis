@@ -71,6 +71,7 @@ function baseSpec(m: AddonManifest, run: AddonContainer | AddonJobStep, ctx: Tem
       // NVIDIA: alle GPUs mit Video-Encoder (NVIDIA Container Toolkit auf dem Host)
       DeviceRequests: gpu ? [{ Driver: 'nvidia', Count: -1, Capabilities: [['gpu', 'video', 'compute', 'utility']] }] : undefined,
       ShmSize: run.shmSize ? parseShmSize(r(run.shmSize)) : undefined,
+      SecurityOpt: run.apparmor === 'unconfined' ? ['apparmor=unconfined'] : undefined,
       Privileged: false,
       LogConfig: { Type: 'json-file', Config: { 'max-size': '10m', 'max-file': '3' } },
     },

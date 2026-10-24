@@ -17,6 +17,7 @@ import { RolesCard } from './system/RolesCard';
 import { TaskTemplatesCard } from './system/TaskTemplatesCard';
 import { SettingsCard } from './system/SettingsCard';
 import { WifiApsCard, WifiCard } from './system/WifiCard';
+import { WorkstationsCard } from './system/WorkstationsCard';
 import { useAuth } from '../lib/auth';
 import { applyTheme, useTheme, type Theme } from '../lib/theme';
 import { Badge, Card, Dot, PageHeader, Segmented } from '../components/ui';
@@ -38,6 +39,7 @@ export function SystemPage() {
             <ModulesCard />
             <CamerasCard />
             <DisplaysCard />
+            <WorkstationsCard />
             <WifiCard />
             <WifiApsCard />
             <MonitoringCard />

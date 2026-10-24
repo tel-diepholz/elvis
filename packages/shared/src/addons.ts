@@ -71,6 +71,8 @@ const runSpec = {
   gpus: z.object({ when: whenSchema.optional() }).optional(),
   /** Größe von /dev/shm, z. B. "1g" oder "{{options.shm}}" (Docker-Vorgabe 64 MB; PostgreSQL braucht oft mehr) */
   shmSize: templated.optional(),
+  /** AppArmor-Profil des Containers: „unconfined“ z. B. für Systemabbilder (mount im chroot) – wird vor der Installation angezeigt */
+  apparmor: z.enum(['default', 'unconfined']).default('default'),
 };
 
 const containerSchema = z.object({
@@ -139,6 +141,7 @@ const jobSchema = z
     volumes: runSpec.volumes,
     network: runSpec.network,
     capabilities: runSpec.capabilities,
+    apparmor: runSpec.apparmor,
     devices: runSpec.devices,
     gpus: runSpec.gpus,
     shmSize: runSpec.shmSize,
@@ -217,6 +220,17 @@ const guestPrinterProvision = z.object({
   token: templated,
 });
 
+/**
+ * Arbeitsplätze: der PXE-Installer des Addons registriert neue Notebooks bei ELVIS
+ * (POST /api/clients/enroll mit „Authorization: Bearer <token>“).
+ */
+const workstationProvision = z.object({
+  id: slug,
+  name: z.string().min(1),
+  /** Gemeinsames Geheimnis, meist {{addon.secret}} */
+  token: templated,
+});
+
 export const addonManifestSchema = z
   .object({
     id: slug,
@@ -237,6 +251,7 @@ export const addonManifestSchema = z
         office: z.array(officeProvision).default([]),
         printServers: z.array(printServerProvision).default([]),
         guestPrinters: z.array(guestPrinterProvision).default([]),
+        workstations: z.array(workstationProvision).default([]),
       })
       .default({}),
     /**
@@ -286,7 +301,7 @@ export type AddonProgressSpec = z.infer<typeof progressSchema>;
 /** Schritte eines Jobs – ein einfacher Job ist ein einzelner Schritt. */
 export function jobSteps(j: AddonJob): AddonJobStep[] {
   if (j.steps) return j.steps;
-  return [{ label: j.label, image: j.image!, command: j.command, env: j.env, volumes: j.volumes, network: j.network, capabilities: j.capabilities, devices: j.devices, gpus: j.gpus, shmSize: j.shmSize, weight: 1, progress: j.progress }];
+  return [{ label: j.label, image: j.image!, command: j.command, env: j.env, volumes: j.volumes, network: j.network, capabilities: j.capabilities, devices: j.devices, gpus: j.gpus, shmSize: j.shmSize, apparmor: j.apparmor, weight: 1, progress: j.progress }];
 }
 
 /** Versionsvergleich „1.2.3“ (Zusätze wie „-beta“ zählen niedriger als die reine Version): <0, 0, >0 */
@@ -394,7 +409,7 @@ export function renderTemplate(template: string, ctx: TemplateContext): string {
 // --- Rechte ---
 
 export interface RequestedPermission {
-  kind: 'host-network' | 'capability' | 'port' | 'device' | 'gpu' | 'build';
+  kind: 'host-network' | 'capability' | 'apparmor' | 'port' | 'device' | 'gpu' | 'build';
   detail: string;
 }
 
@@ -408,6 +423,7 @@ export function requestedPermissions(m: AddonManifest): RequestedPermission[] {
   for (const r of runs) {
     if (r.network === 'host') out.push({ kind: 'host-network', detail: `${r.label}: Netzwerk des Hosts` });
     for (const cap of r.capabilities) out.push({ kind: 'capability', detail: `${r.label}: ${cap}` });
+    if (r.apparmor === 'unconfined') out.push({ kind: 'apparmor', detail: `${r.label}: ohne AppArmor-Profil` });
     for (const p of r.ports) out.push({ kind: 'port', detail: `${r.label}: Port ${p.host}/${p.protocol} → ${p.container}` });
     const cond = (w?: AddonCondition) => (w ? ` (wenn ${w.option} = ${Array.isArray(w.equals) ? w.equals.join('/') : w.equals})` : '');
     for (const d of r.devices) out.push({ kind: 'device', detail: `${r.label}: Gerät ${d.path}${cond(d.when)}` });

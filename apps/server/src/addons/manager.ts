@@ -29,6 +29,7 @@ import { JobRuns, followLogs, type JobRunRow } from './jobs.js';
 import type { GeocoderProvision, GeocoderService } from '../services/geocoder.js';
 import type { OfficeProvision, OfficeService } from '../services/office.js';
 import type { GuestPrinterProvision, PrintServerProvision, PrintService } from '../services/printing.js';
+import type { WorkstationProvision, WorkstationService } from '../services/workstations.js';
 import type { VideoProvision, VideoSourceService } from '../services/videos.js';
 import { createProgressParser, nextScheduledRun, overallPercent } from './progress.js';
 import type { RepoService } from './repos.js';
@@ -806,6 +807,14 @@ export class AddonManager {
     this.updateMapSources();
   }
 
+  private workstations: WorkstationService | null = null;
+
+  /** Registrierungstoken laufender Addons (provides.workstations) an die Arbeitsplatzverwaltung melden */
+  attachWorkstations(workstations: WorkstationService): void {
+    this.workstations = workstations;
+    this.updateMapSources();
+  }
+
   private updateMapSources(): void {
     const sources: MapSourceConfig[] = [];
     const videos: VideoProvision[] = [];
@@ -813,6 +822,7 @@ export class AddonManager {
     const offices: OfficeProvision[] = [];
     const printServers: PrintServerProvision[] = [];
     const guestPrinters: GuestPrinterProvision[] = [];
+    const workstations: WorkstationProvision[] = [];
     for (const r of this.rows()) {
       if (r.status !== 'running') continue;
       const manifest = JSON.parse(r.manifest) as AddonManifest;
@@ -851,11 +861,15 @@ export class AddonManager {
       for (const g of manifest.provides.guestPrinters ?? []) {
         guestPrinters.push({ id: `${r.id}-${g.id}`, name: g.name, token: renderTemplate(g.token, ctx) });
       }
+      for (const w of manifest.provides.workstations ?? []) {
+        workstations.push({ id: `${r.id}-${w.id}`, name: w.name, token: renderTemplate(w.token, ctx) });
+      }
     }
     if (this.tiles.setAddonSources(sources)) this.notify(['mapSources']);
     if (this.videos?.setProvisions(videos)) this.notify(['videoSources']);
     this.geocoder?.setProvisions(geocoders);
     this.office?.setProvisions(offices);
     this.printing?.setProvisions(printServers, guestPrinters);
+    this.workstations?.setProvisions(workstations);
   }
 }

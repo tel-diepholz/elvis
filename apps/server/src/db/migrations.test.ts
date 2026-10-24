@@ -41,6 +41,7 @@ describe('Migrationen', () => {
       legacy.exec(BEFORE_FORCES); // v22
       legacy.exec('DROP TABLE monitoring_targets'); // v23
       legacy.exec('DROP TABLE guest_print_jobs'); // v24
+      legacy.exec('DROP TABLE workstations'); // v25
       legacy.exec('DROP TABLE document_folders');
       legacy.pragma('user_version = 4');
       legacy.close();
@@ -61,7 +62,7 @@ describe('Migrationen', () => {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
       legacy.exec(BEFORE_FORCES);
-      legacy.exec('DROP TABLE monitoring_targets; DROP TABLE guest_print_jobs');
+      legacy.exec('DROP TABLE monitoring_targets; DROP TABLE guest_print_jobs; DROP TABLE workstations');
       legacy.exec("INSERT INTO incidents (id, title, started_at) VALUES (1, 'Brand', 't0')");
       legacy.exec(`INSERT INTO units (incident_id, callsign, unit_type, crew, fms_status, arrived_at, released_at, updated_at) VALUES
         (1, 'Florian 1/44-1', 'HLF 20', 8, 4, 't1', NULL, 't1'), (1, 'Florian 1/19-1', 'LF 10 Sonderausführung', 5, 1, 't2', 't3', 't3')`);
