@@ -38,6 +38,8 @@ import { ForceService } from './services/forces.js';
 import { IncidentService } from './services/incidents.js';
 import { SettingsService } from './services/settings.js';
 import { GeocoderService, type GeocodeFetch } from './services/geocoder.js';
+import { WeatherAlertWatch, WeatherService, type WeatherFetch } from './services/weather.js';
+import { weatherRoutes } from './routes/weather.js';
 import { TileService } from './services/tiles.js';
 import type { UbusHttp } from './services/openwrt.js';
 import { WifiService } from './services/wifi.js';
@@ -73,7 +75,7 @@ export interface App {
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; weatherFetch?: WeatherFetch; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -140,6 +142,18 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const geocoder = new GeocoderService(
     { onlineUrl: config.map.geocoderUrl, outlineUrl: config.map.outlineUrl, dataDir: config.dataDir, userAgent: config.map.userAgent },
     opts.geocodeFetch,
+  );
+  const weather = new WeatherService({ ...config.weather, userAgent: config.map.userAgent }, opts.weatherFetch);
+  // Unwetter am Fahrzeugstandort (GPS der Wetterstation, sonst Einsatzort) erscheinen als Meldung
+  const weatherWatch = new WeatherAlertWatch(
+    weather,
+    () => {
+      const gps = devices.adapter('weather')?.getState().position;
+      if (gps) return gps;
+      const incident = store.activeIncident();
+      return incident?.lat != null && incident.lon != null ? { lat: incident.lat, lon: incident.lon } : null;
+    },
+    (alerts) => devices.setExtraAlerts('weather', alerts),
   );
   const users = new UserService(db);
   const limiter = new LoginLimiter();
@@ -224,6 +238,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     monitoringRoutes(api, { monitoring, store, notify: (t) => hub.invalidate(t) });
     bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
     mapRoutes(api, tiles, store, settings, () => hub.invalidate(['audit']), geocoder);
+    weatherRoutes(api, weather, weatherWatch);
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
       const parsed = settingsInputSchema.safeParse(req.body);
@@ -264,6 +279,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       await devices.start();
       videos.start();
       wifi.start();
+      weatherWatch.start();
       cleanup();
       cleanupTimer = setInterval(cleanup, 3600_000);
       if (docker) {
@@ -281,6 +297,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       hub.closeAll();
       videos.stop();
       wifi.stop();
+      weatherWatch.stop();
       if (cleanupTimer) clearInterval(cleanupTimer);
       docker?.hosts.stop();
       docker?.addons.stop();

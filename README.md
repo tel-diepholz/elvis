@@ -8,7 +8,7 @@ Einsatzführung (Einsatztagebuch, Kräfte, Dokumente) in einer Anwendung zusamme
 
 | Bereich | Verfügbarkeit | Inhalt |
 | --- | --- | --- |
-| **Fahrzeug** | immer | Übersicht, Fahrzeugzustand, Karte, Wetterstation, Netzwerk, Medien |
+| **Fahrzeug** | immer | Übersicht, Fahrzeugzustand, Karte, Wetter, Netzwerk, Medien |
 | **Einsatz** | Unterseiten erst mit aufgelegtem Einsatz | Einsatztagebuch, Kräfteübersicht, Dokumente |
 | **Verwaltung** | immer | Einsatzarchiv (schreibgeschützt); nur Admins: Bedienprotokoll, Einstellungen |
 
@@ -86,6 +86,25 @@ Zustand aus `packages/shared/src/devices.ts`. Für einen echten Treiber:
 Typische Schnittstellen: Victron/Modbus-TCP (Energie), CAN/FMS-Gateway (Fahrgestell), Relais-/SPS-I/O
 (Licht, Mast), TETRA-PEI (Funk), Router-API/SNMP (Netzwerk), RS-232/IP (Videomatrix), ONVIF (Kameras).
 Befehle mit dem Präfix `sim.` gibt es nur im Simulator.
+
+## Wetter
+
+Die Seite „Wetter“ zeigt für den Fahrzeugstandort (GPS der Wetterstation, ohne GPS der Einsatzort) die
+**amtlichen Warnungen des DWD** (Gemeinde-Warngebiet, über [Bright Sky](https://brightsky.dev)) und eine
+**Prognose** von [Open-Meteo](https://open-meteo.com): aktuelle Lage, die nächsten 24 Stunden und 7 Tage.
+Böen ab 70 % bzw. 100 % von `alerts.stormWarnMs` werden hervorgehoben. Darunter stehen die Live-Werte der
+Wetterstation, sofern das Modul aktiv ist.
+
+Das Backend fragt beide Dienste ab (Standort auf ca. 1 km gerundet) und hält die Antworten vor – Prognose
+15 Minuten, Warnungen 5 Minuten. Ist ein Dienst nicht erreichbar, bleibt der letzte Stand bis zu 12 Stunden sichtbar.
+Unwetterwarnungen (Stufe 3, Stufe 4 als Alarm) erscheinen zusätzlich unter „Meldungen“; Bildschirme zeigen
+Warnungen und Prognose in den Kacheln „Wetter“ und „Wettervorhersage“.
+
+```json
+"weather": { "forecastUrl": "https://api.open-meteo.com", "warningsUrl": "https://api.brightsky.dev" }
+```
+
+`null` schaltet den jeweiligen Dienst ab.
 
 ## Ausbreitungsberechnung (Karte)
 
@@ -279,7 +298,7 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
   per Schloss schützen; sie lässt sich dann weder überschreiben noch löschen (umbenennen und aufrufen geht weiter). Sie bleiben unabhängig vom Einsatz erhalten,
   und jede Aktion landet im Bedienprotokoll. Beim Entkoppeln eines Bildschirms werden seine Szenen gelöscht.
 - **Kacheln:** Lagekarte (Fahrzeug und Einsatzort, Kartenstil, Mittelpunkt, Mitführen, Zoom), Kamera (Livebild),
-  Wetter, Uhr (DTG), Meldungen, Netzwerk (Router/Failover), Gast-WLAN (QR-Code, Netzname und Passwort des Gastnetzes
+  Wetter (mit amtlichen Warnungen), Wettervorhersage (24 Stunden und/oder 7 Tage), Uhr (DTG), Meldungen, Netzwerk (Router/Failover), Gast-WLAN (QR-Code, Netzname und Passwort des Gastnetzes
   im laufenden Einsatz, siehe „WLAN“). Eine mitgeführte Karte folgt Fahrzeug bzw. Einsatzort und
   lässt sich nicht verschieben. Ohne Mitführen lässt sie sich am Bildschirm per Touch und unter „Bildschirme“ direkt in
   der Vorschau verschieben und zoomen – der Bildschirm folgt und behält den Ausschnitt, auch nach „Neu laden“.

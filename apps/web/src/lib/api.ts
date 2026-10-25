@@ -54,6 +54,8 @@ import {
   type IncidentPatch,
   type JournalEntry,
   type GeoOutline,
+  type WeatherReport,
+  type WeatherWarnings,
   type GeocodeResponse,
   type MapObject,
   type MapObjectPatch,
@@ -353,6 +355,9 @@ export const api = {
   mapOutline: (osm: string) => request<GeoOutline>('GET', `/api/map/outline/${osm}`),
   mapSearch: (q: string, focus: { lat: number; lon: number } | null) =>
     request<GeocodeResponse>('GET', `/api/map/search?${new URLSearchParams({ q, ...(focus && { lat: focus.lat.toFixed(4), lon: focus.lon.toFixed(4) }) })}`),
+  vehicleWeather: () => request<WeatherReport | null>('GET', '/api/weather/vehicle'),
+  vehicleWeatherWarnings: () => request<WeatherWarnings | null>('GET', '/api/weather/warnings'),
+  weather: (pos: { lat: number; lon: number }) => request<WeatherReport>('GET', `/api/weather?lat=${pos.lat}&lon=${pos.lon}`),
   /** Liefert das PDF als Blob; Fehler kommen wie bei den übrigen Aufrufen als ApiError. */
   printMap: async (req: MapPrintRequest): Promise<{ pdf: Blob; filename: string; missingTiles: number }> => {
     let res: Response;

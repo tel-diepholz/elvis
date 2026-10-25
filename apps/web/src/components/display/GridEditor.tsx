@@ -34,6 +34,7 @@ function useTileSummary() {
     if (t.type === 'guestWifi') return String(t.config.title ?? '').trim() || 'Gastnetz des Einsatzes';
     if (t.type === 'tasks') return t.config.personal === true ? 'mit persönlichen Aufgaben' : 'ohne persönliche Aufgaben';
     if (t.type === 'forces') return [t.config.subunits !== false ? 'mit Untereinheiten' : 'nur oberste Ebene', t.config.planned === true && 'mit geplanten'].filter(Boolean).join(', ');
+    if (t.type === 'forecast') return t.config.range === '24h' ? '24 Stunden' : t.config.range === '7d' ? '7 Tage' : '24 Stunden und 7 Tage';
     if (t.type === 'map') return `${t.config.center === 'incident' ? 'Einsatzort' : 'Fahrzeug'}${t.config.follow !== false ? ', mitgeführt' : ''}`;
     return '';
   };
@@ -239,6 +240,23 @@ export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; 
             <input value={String(tile.config.title ?? '')} onChange={(e) => set('title', e.target.value.slice(0, 60))} maxLength={60} />
           </Field>
           <p className="field-hint">Zeigt Netzname, Passwort und QR-Code des Gastnetzes, solange ein Einsatz läuft. Einrichten unter Einstellungen → WLAN-Accesspoints.</p>
+        </>
+      )}
+      {tile.type === 'forecast' && (
+        <>
+          <Field label="Zeitraum">
+            <Segmented
+              label="Zeitraum"
+              value={tile.config.range === '24h' || tile.config.range === '7d' ? tile.config.range : 'both'}
+              onChange={(v) => set('range', v)}
+              options={[
+                { value: 'both', label: 'Beides' },
+                { value: '24h', label: '24 Stunden' },
+                { value: '7d', label: '7 Tage' },
+              ]}
+            />
+          </Field>
+          <p className="field-hint">Prognose von Open-Meteo am Fahrzeugstandort (GPS der Wetterstation, sonst Einsatzort). Böen über der Sturmwarnschwelle sind rot.</p>
         </>
       )}
       {tile.type === 'tasks' && (

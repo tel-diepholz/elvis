@@ -71,6 +71,14 @@ const configSchema = z.object({
       outlineUrl: z.string().url().nullable().default('https://nominatim.openstreetmap.org'),
     })
     .default({}),
+  weather: z
+    .object({
+      /** Open-Meteo für die Wetterprognose am Fahrzeugstandort; null = aus. */
+      forecastUrl: z.string().url().nullable().default('https://api.open-meteo.com'),
+      /** Bright Sky für die amtlichen Warnungen des DWD (nur Deutschland); null = aus. */
+      warningsUrl: z.string().url().nullable().default('https://api.brightsky.dev'),
+    })
+    .default({}),
   docker: z
     .object({
       /** Docker- und Addon-Verwaltung in ELVIS anbieten. */

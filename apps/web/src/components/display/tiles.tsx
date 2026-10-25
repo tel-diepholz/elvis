@@ -3,11 +3,12 @@ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Cctv, Clock, CloudSun, ListChecks, Map as MapIcon, Network, Repeat, Type, Users, Video, Wifi } from 'lucide-react';
+import { Bell, Cctv, CalendarDays, Clock, CloudSun, ListChecks, Map as MapIcon, Network, Repeat, Type, Users, Video, Wifi } from 'lucide-react';
 import {
   DEFAULT_VEHICLE_SIGN,
   DISPLAY_TILE_TYPES,
   UNIT_STATUS,
+  WARNING_LEVEL,
   fmtInterval,
   formatDtg,
   formatStrength,
@@ -24,7 +25,7 @@ import {
 } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { compass, fmtDate, fmtOpt, fmtTime } from '../../lib/format';
-import { useNow, useSettings } from '../../lib/hooks';
+import { useInfo, useNow, useSettings } from '../../lib/hooks';
 import { autoSource } from '../../lib/mapSources';
 import { DISPLAY_MAP_VIEW_EVENT, useAlerts, useDevice } from '../../lib/live';
 import { loadMapView, sameMapView, saveMapView } from '../../lib/mapView';
@@ -32,13 +33,14 @@ import { AlertList } from '../AlertPanel';
 import { CameraImage } from '../camera/CameraImage';
 import { TacticalSignImage, tacticalIcon } from '../tactical/TacticalSign';
 import { WindCompass } from '../WindCompass';
+import { WeatherIcon, WindArrow, gustTone } from '../WeatherIcon';
 import { WebRtcPlayer } from './WebRtcPlayer';
 import { MapObjectsLayer, useMapObjects } from '../map/objects';
 import { UnitsLayer, useMapUnits } from '../map/units';
 import { WifiQr } from '../WifiQr';
 import { fmtRelative } from '../tasks/taskActions';
 
-export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users };
+export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, forecast: CalendarDays, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users };
 
 const date = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 const time = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -54,29 +56,120 @@ function ClockTile() {
   );
 }
 
+/** Amtliche Warnungen am Fahrzeugstandort; mehrere als Laufliste, schwerste zuerst */
+function WeatherWarningsBanner() {
+  const { data } = useQuery({ queryKey: ['vehicleWeatherWarnings'], queryFn: api.vehicleWeatherWarnings, refetchInterval: 60_000 });
+  const items = data?.items ?? [];
+  if (!items.length) return null;
+  return (
+    <ul className="tile-wx-warnings">
+      {items.map((w) => (
+        <li key={w.id} className={`sev-${w.severity}`}>
+          <strong>{w.event.charAt(0) + w.event.slice(1).toLowerCase()}</strong>
+          <span>
+            Stufe {WARNING_LEVEL[w.severity].level}
+            {w.expires && ` · bis ${fmtTime(w.expires)}`}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function WeatherTile() {
   const w = useDevice('weather')?.state;
-  if (!w) return <TileEmpty text="Wetterstation nicht aktiviert" />;
+  if (!w)
+    return (
+      <div className="tile-weather-wrap">
+        <WeatherWarningsBanner />
+        <TileEmpty text="Wetterstation nicht aktiviert" />
+      </div>
+    );
   const dir = w.windDirectionDeg;
   return (
-    <div className="tile-weather">
-      <WindCompass directionDeg={dir} size={160} />
-      <dl>
-        <dt>Wind</dt>
-        <dd>
-          {fmtOpt(w.windSpeedMs)} <small>m/s</small>
-        </dd>
-        <dt>Böen</dt>
-        <dd>
-          {fmtOpt(w.windGustMs)} <small>m/s</small>
-        </dd>
-        <dt>aus / nach</dt>
-        <dd>{dir === null ? '–' : `${compass(dir)} → ${compass((dir + 180) % 360)}`}</dd>
-        <dt>Temperatur</dt>
-        <dd>
-          {fmtOpt(w.temperatureC)} <small>°C</small>
-        </dd>
-      </dl>
+    <div className="tile-weather-wrap">
+      <WeatherWarningsBanner />
+      <div className="tile-weather">
+        <WindCompass directionDeg={dir} size={160} />
+        <dl>
+          <dt>Wind</dt>
+          <dd>
+            {fmtOpt(w.windSpeedMs)} <small>m/s</small>
+          </dd>
+          <dt>Böen</dt>
+          <dd>
+            {fmtOpt(w.windGustMs)} <small>m/s</small>
+          </dd>
+          <dt>aus / nach</dt>
+          <dd>{dir === null ? '–' : `${compass(dir)} → ${compass((dir + 180) % 360)}`}</dd>
+          <dt>Temperatur</dt>
+          <dd>
+            {fmtOpt(w.temperatureC)} <small>°C</small>
+          </dd>
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+const fcDay = new Intl.DateTimeFormat('de-DE', { weekday: 'short' });
+const deg = (t: number | null) => (t === null ? '–' : `${Math.round(t)}°`);
+
+/** Prognose am Fahrzeugstandort: 24 Stunden (alle 2 bzw. 3 Stunden) und/oder 7 Tage als Spalten */
+function ForecastTile({ tile }: { tile: DisplayTile }) {
+  const { data, isLoading } = useQuery({ queryKey: ['vehicleWeather'], queryFn: api.vehicleWeather, refetchInterval: 5 * 60_000 });
+  const limit = useInfo().data?.limits.stormWarnMs ?? 17;
+  const range = tile.config.range === '24h' || tile.config.range === '7d' ? tile.config.range : 'both';
+  if (isLoading) return <TileEmpty text="Lade Prognose …" />;
+  if (data === null) return <TileEmpty text="Kein Standort: GPS der Wetterstation fehlt, kein Einsatzort" />;
+  const fc = data?.forecast;
+  if (!fc) return <TileEmpty text={`Keine Prognose${data?.forecastError ? ` – ${data.forecastError}` : ''}`} />;
+  const tone = (gust: number | null) => {
+    const t = gustTone(gust, limit);
+    return t ? `tone-${t}` : 'muted';
+  };
+  const hours = fc.hourly.filter((_, i) => i % (range === 'both' ? 3 : 2) === 0);
+  return (
+    <div className={`tile-fc range-${range}`}>
+      {range !== '7d' && (
+        <section>
+          <h4>24 Stunden</h4>
+          <div className="tile-fc-cols">
+            {hours.map((h) => (
+              <div key={h.time}>
+                <span className="muted">{fmtTime(h.time)}</span>
+                <WeatherIcon code={h.weatherCode} isDay={h.isDay} />
+                <strong>{deg(h.temperatureC)}</strong>
+                <span className="tile-fc-rain">{h.precipitationProbability === null ? '' : `${h.precipitationProbability} %`}</span>
+                <span>
+                  <WindArrow deg={h.windDirectionDeg} /> {fmtOpt(h.windSpeedMs, 0)}
+                </span>
+                <span className={tone(h.windGustMs)}>{fmtOpt(h.windGustMs, 0)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      {range !== '24h' && (
+        <section>
+          <h4>7 Tage</h4>
+          <div className="tile-fc-cols">
+            {fc.daily.map((d, i) => (
+              <div key={d.date}>
+                <span className="muted">{i === 0 ? 'Heute' : fcDay.format(new Date(d.date))}</span>
+                <WeatherIcon code={d.weatherCode} />
+                <strong>{deg(d.tempMaxC)}</strong>
+                <span className="muted">{deg(d.tempMinC)}</span>
+                <span className="tile-fc-rain">{d.precipitationMm === null ? '' : `${fmtOpt(d.precipitationMm)} mm`}</span>
+                <span className={tone(d.windGustMaxMs)}>
+                  <WindArrow deg={d.windDirectionDeg} /> {fmtOpt(d.windGustMaxMs, 0)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      <p className="tile-fc-legend muted">{range === '7d' ? 'Höchst-/Tiefstwert, Niederschlag, Böen in m/s' : 'Regenwahrscheinlichkeit, Wind und Böen in m/s'}</p>
     </div>
   );
 }
@@ -494,6 +587,8 @@ export function TileView({ tile }: { tile: DisplayTile }) {
       return <ClockTile />;
     case 'weather':
       return <WeatherTile />;
+    case 'forecast':
+      return <ForecastTile tile={tile} />;
     case 'alerts':
       return <AlertsTile />;
     case 'network':

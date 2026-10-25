@@ -1381,6 +1381,184 @@ input[type='checkbox'] {
   background: var(--alarm);
 }
 
+/* ---------- Wetter (Prognose und Warnungen) ---------- */
+.small {
+  font-size: 13px;
+}
+.pre-line {
+  white-space: pre-line;
+}
+/* Warnstufen in den Farben des DWD: gelb, orange, rot, violett */
+.wx-warnings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.wx-warning {
+  --sev: #e3c400;
+  border-left: 5px solid var(--sev);
+  background: color-mix(in srgb, var(--sev) 12%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+.wx-warning.sev-moderate {
+  --sev: #f08c00;
+}
+.wx-warning.sev-severe {
+  --sev: #e03131;
+}
+.wx-warning.sev-extreme {
+  --sev: #9c36b5;
+}
+.wx-warning p {
+  margin: 4px 0 0;
+}
+.wx-warning details {
+  margin-top: 6px;
+}
+.wx-warning summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.wx-warning-head {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 2px;
+}
+.wx-level {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.wx-nowarn {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.wx-now {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.wx-now-temp {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.wx-hours {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 62px;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+/* „Aktuell“ und „Nächste 24 Stunden“ stehen nebeneinander gleich hoch; die Stundenspalten füllen die Höhe */
+.wx-stretch {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.wx-stretch > .card-body {
+  flex: 1;
+}
+.wx-stretch .wx-hours {
+  flex: 1;
+}
+.wx-hour {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 4px;
+  padding: 8px 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  font-variant-numeric: tabular-nums;
+}
+.wx-rain {
+  color: var(--info);
+  min-height: 1em;
+}
+.wx-arrow {
+  vertical-align: -2px;
+  color: var(--text-muted);
+}
+.wx-days {
+  display: grid;
+}
+.wx-day {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1.4fr) minmax(140px, 1fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.wx-day:first-child {
+  border-top: none;
+}
+.wx-day-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.wx-day-sky {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.wx-day-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wx-temps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wx-bar {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-input);
+}
+.wx-bar span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--info), var(--warn));
+}
+.wx-credits {
+  margin-top: 16px;
+}
+@media (max-width: 720px) {
+  .wx-day {
+    grid-template-columns: 90px minmax(0, 1fr) minmax(110px, 1fr);
+    row-gap: 2px;
+  }
+  .wx-day > .wx-rain,
+  .wx-day > .small {
+    grid-column: 2 / -1;
+  }
+  .wx-day-text {
+    display: none;
+  }
+}
+
 /* ---------- Karte ---------- */
 .map-page {
   position: relative;
@@ -3883,6 +4061,114 @@ html.display-mode body {
   gap: 4cqmin;
   height: 100%;
   padding: 4cqmin;
+}
+.tile-weather-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.tile-weather-wrap > .tile-weather,
+.tile-weather-wrap > .tile-empty {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+/* Farben der Warnstufen wie auf der Seite „Wetter“ */
+.tile-wx-warnings {
+  list-style: none;
+  margin: 0;
+  padding: 2cqmin 2cqmin 0;
+  display: grid;
+  gap: 1cqmin;
+  font-size: clamp(11px, min(4.5cqmin, 3cqw), 32px);
+}
+.tile-wx-warnings li {
+  --sev: #e3c400;
+  display: flex;
+  justify-content: space-between;
+  gap: 2cqmin;
+  padding: 1cqmin 2cqmin;
+  border-left: 0.6em solid var(--sev);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--sev) 18%, transparent);
+  white-space: nowrap;
+}
+.tile-wx-warnings li span {
+  color: var(--text-muted);
+}
+.tile-wx-warnings .sev-moderate {
+  --sev: #f08c00;
+}
+.tile-wx-warnings .sev-severe {
+  --sev: #e03131;
+}
+.tile-wx-warnings .sev-extreme {
+  --sev: #9c36b5;
+}
+.tile-fc {
+  display: flex;
+  flex-direction: column;
+  gap: 2cqmin;
+  height: 100%;
+  padding: 3cqmin 3cqmin 2cqmin;
+  font-size: clamp(10px, min(4cqmin, 2.4cqw), 30px);
+  font-variant-numeric: tabular-nums;
+}
+.tile-fc.range-both {
+  font-size: clamp(10px, min(3.2cqmin, 2.4cqw), 26px);
+}
+.tile-fc section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tile-fc h4 {
+  margin: 0 0 1cqmin;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.tile-fc-cols {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 1cqmin;
+}
+.tile-fc-cols > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  min-width: 0;
+  padding: 1cqmin 0;
+  border-radius: 6px;
+  background: var(--bg-input);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tile-fc-cols svg {
+  width: 2em;
+  height: 2em;
+}
+.tile-fc-cols .wx-arrow {
+  width: 0.9em;
+  height: 0.9em;
+}
+.tile-fc-cols strong {
+  font-size: 1.3em;
+}
+.tile-fc-rain {
+  color: var(--info);
+  min-height: 1.2em;
+}
+.tile-fc-legend {
+  margin: 0;
+  font-size: 0.75em;
+  text-align: right;
 }
 .tile-weather .compass {
   width: min(45cqw, 85cqh);

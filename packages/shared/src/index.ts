@@ -21,3 +21,4 @@ export * from './tasks';
 export * from './printing';
 export * from './scanning';
 export * from './workstations';
+export * from './weather';

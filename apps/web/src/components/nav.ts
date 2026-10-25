@@ -53,7 +53,7 @@ export const NAV: NavGroup[] = [
       { to: '/', label: 'Übersicht', icon: LayoutDashboard },
       { to: '/fahrzeug', label: 'Fahrzeugzustand', icon: Gauge },
       { to: '/karte', label: 'Karte', icon: Map },
-      { to: '/wetter', label: 'Wetterstation', icon: CloudSun },
+      { to: '/wetter', label: 'Wetter', icon: CloudSun },
       { to: '/energie', label: 'Energie', icon: BatteryCharging },
       { to: '/netzwerk', label: 'Netzwerk', icon: Network },
       { to: '/monitoring', label: 'Monitoring', icon: Activity },

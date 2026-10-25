@@ -8,7 +8,7 @@ import {
   type DeviceStateMap,
 } from '@elvis/shared';
 import type { ElvisConfig } from '../config.js';
-import { evaluateAlerts } from '../alerts.js';
+import { evaluateAlerts, sortAlerts, type AlertDraft } from '../alerts.js';
 import { CommandError, type AdapterContext, type DeviceAdapter, type Logger } from './adapter.js';
 import { DeviceConfigStore } from './config-store.js';
 import { DEVICE_DEFINITIONS, type DriverDefinition, type DriverDeps } from './drivers.js';
@@ -30,6 +30,8 @@ export class DeviceManager {
   private readonly updatedAt = new Map<DeviceId, string>();
   private alerts: Alert[] = [];
   private alertKey = '';
+  /** Meldungen anderer Dienste (z. B. Unwetterwarnungen), je Quelle */
+  private readonly extraAlerts = new Map<string, AlertDraft[]>();
   private started = false;
   /** Änderungen nacheinander abarbeiten, damit sich Starts und Stopps nicht überholen. */
   private queue: Promise<void> = Promise.resolve();
@@ -184,6 +186,12 @@ export class DeviceManager {
     return () => this.removedListeners.delete(l);
   }
 
+  /** Meldungen einer Quelle außerhalb der Fahrzeugmodule ersetzen (leere Liste = keine) */
+  setExtraAlerts(source: string, alerts: AlertDraft[]): void {
+    this.extraAlerts.set(source, alerts);
+    this.recomputeAlerts();
+  }
+
   onAlerts(l: Listener<Alert[]>): () => void {
     this.alertListeners.add(l);
     return () => this.alertListeners.delete(l);
@@ -237,7 +245,7 @@ export class DeviceManager {
     const offline = DEVICE_IDS.filter((id) => this.running.has(id) && !this.running.get(id)!.adapter.isOnline());
     const now = new Date().toISOString();
     const previous = new Map(this.alerts.map((a) => [a.id, a]));
-    const next = evaluateAlerts(get, offline, this.config.alerts).map((a) => ({
+    const next = sortAlerts([...evaluateAlerts(get, offline, this.config.alerts), ...[...this.extraAlerts.values()].flat()]).map((a) => ({
       ...a,
       since: previous.get(a.id)?.since ?? now,
     }));

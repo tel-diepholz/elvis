@@ -7,13 +7,14 @@ import type { AddonOption, OptionValues } from './addons';
 import type { BluetoothState } from './bluetooth';
 import type { MonitoringState } from './monitoring';
 
-export type SystemId = 'energy' | 'vehicle' | 'comms' | 'media';
+export type SystemId = 'energy' | 'vehicle' | 'comms' | 'media' | 'weather';
 
 export const SYSTEM_LABELS: Record<SystemId, string> = {
   energy: 'Energie',
   vehicle: 'Fahrzeug',
   comms: 'Kommunikation',
   media: 'Medien',
+  weather: 'Wetter',
 };
 
 export interface GeoPosition {

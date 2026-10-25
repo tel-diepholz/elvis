@@ -5,7 +5,7 @@ import { z } from 'zod';
  * Den Inhalt bestimmt ein Raster mit Kacheln, das aus ELVIS ferngesteuert wird.
  */
 
-export type DisplayTileType = 'map' | 'camera' | 'video' | 'weather' | 'clock' | 'alerts' | 'network' | 'text' | 'guestWifi' | 'tasks' | 'forces';
+export type DisplayTileType = 'map' | 'camera' | 'video' | 'weather' | 'forecast' | 'clock' | 'alerts' | 'network' | 'text' | 'guestWifi' | 'tasks' | 'forces';
 
 export interface DisplayTileTypeInfo {
   label: string;
@@ -19,6 +19,7 @@ export const DISPLAY_TILE_TYPES: Record<DisplayTileType, DisplayTileTypeInfo> = 
   camera: { label: 'Kamera', description: 'Livebild einer Kamera', size: { w: 4, h: 3 } },
   video: { label: 'Video (NDI)', description: 'Videostrom eines Gateways, z. B. NDI-Quelle über das Addon „NDI-Gateway“', size: { w: 4, h: 3 } },
   weather: { label: 'Wetter', description: 'Wind, Böen, Ausbreitungsrichtung, Temperatur', size: { w: 3, h: 3 } },
+  forecast: { label: 'Wettervorhersage', description: 'Prognose am Fahrzeugstandort für die nächsten 24 Stunden und 7 Tage', size: { w: 6, h: 4 } },
   clock: { label: 'Uhr', description: 'Datum-Zeit-Gruppe, Uhrzeit und Datum', size: { w: 3, h: 2 } },
   alerts: { label: 'Meldungen', description: 'Aktuelle Meldungen des Fahrzeugs', size: { w: 3, h: 3 } },
   network: { label: 'Netzwerk', description: 'Internetverbindung, Failover und SIM-Status des Routers', size: { w: 3, h: 2 } },
