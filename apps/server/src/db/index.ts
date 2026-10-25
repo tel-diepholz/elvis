@@ -535,6 +535,20 @@ const MIGRATIONS: Migration[] = [
   `,
   // Updates der Arbeitsplätze: letzter Auftrag mit Stand und Protokoll (JSON)
   `ALTER TABLE workstations ADD COLUMN update_json TEXT;`,
+  // Bluetooth-Geräte (z. B. Victron-Batterien), deren Werbepakete das Modul „Bluetooth“ mitliest
+  `
+  CREATE TABLE bluetooth_devices (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    address TEXT NOT NULL,
+    key TEXT NOT NULL DEFAULT '',
+    warn_below_v REAL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    sort INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

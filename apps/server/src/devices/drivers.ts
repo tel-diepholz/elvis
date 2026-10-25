@@ -1,6 +1,8 @@
 import type { AddonOption, DeviceId, OptionValues, SystemId } from '@elvis/shared';
 import type { DeviceAdapter } from './adapter.js';
+import { BluezScanner } from './bluetooth/bluez.js';
 import { AirmarAdapter } from './drivers/airmar.js';
+import { BluetoothAdapter, SimScanner, type BluetoothSource } from './drivers/bluetooth.js';
 import { CamerasAdapter, type CameraSource } from './drivers/cameras.js';
 import { MonitoringAdapter, type MonitoringSource } from './drivers/monitoring.js';
 import { OpenWrtWifiAdapter, type WifiSource } from './drivers/openwrt.js';
@@ -26,6 +28,8 @@ export interface DriverDeps {
   wifi: WifiSource;
   /** Ziele des Monitorings aus den Systemeinstellungen */
   monitoring: MonitoringSource;
+  /** Bluetooth-Geräte aus den Systemeinstellungen */
+  bluetooth: BluetoothSource;
 }
 
 export interface DeviceDefinition<K extends DeviceId> {
@@ -136,6 +140,36 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
           pollSeconds: { type: 'int', label: 'Abfrageintervall (Sekunden)', required: false, default: 30, min: 10, max: 600 },
         },
         create: (o, deps) => new MonitoringAdapter(deps.monitoring, Number(o.pollSeconds || 30) * 1000),
+      },
+    },
+  },
+  bluetooth: {
+    name: 'Bluetooth',
+    system: 'energy',
+    drivers: {
+      sim: {
+        label: 'Simulation',
+        description: 'Simuliert Victron-Lithium-Batterien (mit „Shunt“ im Namen einen SmartShunt) für die eingetragenen Geräte und zeigt drei Geräte „in der Nähe“.',
+        options: { staleSeconds: { type: 'int', label: 'Kein Empfang nach (Sekunden)', required: false, default: 60, min: 10, max: 3600 } },
+        create: (o, deps) => new BluetoothAdapter('sim', deps.bluetooth, new SimScanner(deps.bluetooth), { staleMs: Number(o.staleSeconds || 60) * 1000 }),
+      },
+      bluez: {
+        label: 'Bluetooth-Adapter des Servers (BlueZ)',
+        description:
+          'Liest über den Bluetooth-Dongle des Servers die Werbepakete der eingetragenen Geräte mit (Victron Instant Readout: Lithium-Batterien, SmartShunt/BMV, MPPT, Orion, Ladegeräte). Nutzt BlueZ (bluetoothd) des Hosts über den D-Bus-System-Bus; nur lesend, ohne Kopplung.',
+        options: {
+          adapter: { type: 'string', label: 'Bluetooth-Adapter', required: true, default: 'hci0', pattern: '^hci\\d{1,2}$', help: 'Mit „bluetoothctl list“ bzw. „hciconfig“ auf dem Server ermitteln. Meist hci0.' },
+          staleSeconds: {
+            type: 'int',
+            label: 'Kein Empfang nach (Sekunden)',
+            required: false,
+            default: 60,
+            min: 10,
+            max: 3600,
+            help: 'So lange darf ein Gerät schweigen, bevor ELVIS „kein Empfang“ meldet. Victron sendet etwa jede Sekunde.',
+          },
+        },
+        create: (o, deps) => new BluetoothAdapter('bluez', deps.bluetooth, new BluezScanner(String(o.adapter || 'hci0')), { staleMs: Number(o.staleSeconds || 60) * 1000 }),
       },
     },
   },

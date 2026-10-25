@@ -1,4 +1,4 @@
-import type { Alert, AlertSeverity, DeviceId, DeviceStateMap } from '@elvis/shared';
+import { VICTRON_STATE_LABELS, type Alert, type AlertSeverity, type DeviceId, type DeviceStateMap } from '@elvis/shared';
 import type { ElvisConfig } from './config.js';
 import { DEVICE_DEFINITIONS } from './devices/drivers.js';
 
@@ -73,6 +73,36 @@ export function evaluateAlerts(get: StateGetter, offline: DeviceId[], limits: El
       for (const m of t.metrics) {
         if (m.severity === 'ok') continue;
         add({ id: `monitoring:${t.id}:${m.id}`, severity: m.severity, system: 'comms', title: `${t.name}: ${m.label}`, detail: m.problem && m.problem !== m.text ? `${m.text} – ${m.problem}` : m.text });
+      }
+    }
+  }
+
+  const bluetooth = get('bluetooth');
+  if (bluetooth && !offline.includes('bluetooth')) {
+    const volts = (v: number) => `${v.toFixed(2).replace('.', ',')} V`;
+    for (const d of bluetooth.devices) {
+      const id = `bluetooth:${d.id}`;
+      if (d.stale) {
+        add({ id, severity: 'warn', system: 'energy', title: `${d.name}: kein Empfang`, detail: d.seenAt ? 'Werte sind die zuletzt empfangenen' : 'Seit dem Start nichts empfangen – Adresse und Reichweite prüfen' });
+        continue;
+      }
+      if (d.error) add({ id: `${id}:error`, severity: 'warn', system: 'energy', title: `${d.name}: ${d.error}` });
+      const r = d.readout;
+      if (!r) continue;
+      if (r.type === 'lithium') {
+        if (r.errorFlags) add({ id: `${id}:bms`, severity: 'alarm', system: 'energy', title: `${d.name}: Batteriefehler`, detail: `Fehlercode 0x${r.errorFlags.toString(16)} – in VictronConnect prüfen` });
+        if (r.cells.includes('low')) add({ id: `${id}:cell-low`, severity: 'alarm', system: 'energy', title: `${d.name}: Zellspannung zu niedrig`, detail: 'unter 2,61 V' });
+        if (r.cells.includes('high')) add({ id: `${id}:cell-high`, severity: 'alarm', system: 'energy', title: `${d.name}: Zellspannung zu hoch`, detail: 'über 3,85 V' });
+      }
+      if (r.type === 'battery-monitor') {
+        for (const a of r.alarms) add({ id: `${id}:alarm:${a}`, severity: 'alarm', system: 'energy', title: `${d.name}: ${a}` });
+      }
+      if ((r.type === 'solar' || r.type === 'dcdc' || r.type === 'ac-charger') && (r.state === 2 || (r.error !== null && r.error !== 0))) {
+        add({ id: `${id}:fault`, severity: 'warn', system: 'energy', title: `${d.name}: Störung`, detail: r.error ? `Fehler ${r.error}` : VICTRON_STATE_LABELS[2] });
+      }
+      const voltage = r.type === 'lithium' || r.type === 'battery-monitor' || r.type === 'solar' ? r.voltageV : null;
+      if (d.warnBelowV !== null && voltage !== null && voltage < d.warnBelowV) {
+        add({ id: `${id}:low`, severity: 'warn', system: 'energy', title: `${d.name}: Spannung niedrig`, detail: `${volts(voltage)} (Grenze ${volts(d.warnBelowV)})` });
       }
     }
   }

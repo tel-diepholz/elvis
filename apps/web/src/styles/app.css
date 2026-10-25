@@ -3401,6 +3401,14 @@ select.unit-status.has-children {
   min-width: 0;
 }
 
+/* ---------- Energie (Bluetooth) ---------- */
+.energy-readout.stale {
+  opacity: 0.6;
+}
+.energy-readout .meter {
+  margin-bottom: 0.75rem;
+}
+
 /* ---------- ELW-Router ---------- */
 .router-grid.stale {
   opacity: 0.6;

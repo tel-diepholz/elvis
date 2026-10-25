@@ -42,7 +42,9 @@ import { TileService } from './services/tiles.js';
 import type { UbusHttp } from './services/openwrt.js';
 import { WifiService } from './services/wifi.js';
 import { wifiRoutes } from './routes/wifi.js';
+import { bluetoothRoutes } from './routes/bluetooth.js';
 import { monitoringRoutes } from './routes/monitoring.js';
+import { BluetoothService } from './services/bluetooth.js';
 import { MonitoringService } from './services/monitoring.js';
 import type { ProbeDeps } from './services/monitoring-probes.js';
 import { documentRoutes } from './routes/documents.js';
@@ -90,7 +92,8 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     http: opts.wifiHttp,
   });
   const monitoring = new MonitoringService(db, () => hub.invalidate(['monitoring']), opts.monitoringProbes);
-  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices), { cameras, wifi, monitoring });
+  const bluetooth = new BluetoothService(db, () => hub.invalidate(['bluetooth']));
+  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices), { cameras, wifi, monitoring, bluetooth });
   const settings = new SettingsService(db, { vehicle: config.vehicle });
   const hub = new LiveHub(devices, () => settings.get().vehicle);
   settings.onChange(() => hub.invalidate(['settings']));
@@ -219,6 +222,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     cameraRoutes(api, { cameras, presets: cameraPresets, devices, incidents, store, notify: (t) => hub.invalidate(t) });
     wifiRoutes(api, { wifi, store, notify: (t) => hub.invalidate(t) });
     monitoringRoutes(api, { monitoring, store, notify: (t) => hub.invalidate(t) });
+    bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
     mapRoutes(api, tiles, store, settings, () => hub.invalidate(['audit']), geocoder);
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {

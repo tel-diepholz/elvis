@@ -14,6 +14,7 @@ export * from './geocode';
 export * from './mapobjects';
 export * from './wifi';
 export * from './monitoring';
+export * from './bluetooth';
 export * from './documents';
 export * from './template';
 export * from './tasks';

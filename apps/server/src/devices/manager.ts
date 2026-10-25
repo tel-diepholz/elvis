@@ -46,6 +46,7 @@ export class DeviceManager {
       cameras: { list: () => [], onChange: () => () => {} },
       wifi: { list: () => [], onChange: () => () => {}, storeClients: () => {}, clearClients: () => {} },
       monitoring: { list: () => [], onChange: () => () => {} },
+      bluetooth: { list: () => [], onChange: () => () => {} },
     },
   ) {
     this.ctx = {

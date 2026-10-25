@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { fmtDateTime, fmtTime } from '../lib/format';
 import { useSettings } from '../lib/hooks';
 import { useLive } from '../lib/live';
+import { BluetoothCard } from './system/BluetoothCard';
 import { CamerasCard } from './system/CamerasCard';
 import { DisplaysCard } from './system/DisplaysCard';
 import { DocumentFoldersCard } from './system/DocumentFoldersCard';
@@ -43,6 +44,7 @@ export function SystemPage() {
             <WifiCard />
             <WifiApsCard />
             <MonitoringCard />
+            <BluetoothCard />
             <DocumentFoldersCard />
             <PrintSettingsCard />
             <ScanSettingsCard />

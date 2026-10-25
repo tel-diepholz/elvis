@@ -23,6 +23,10 @@ services:
     #   - /dev/serial/by-id/usb-Actisense_NGX-1_XXXXXXXX-if00-port0:/dev/ttyUSB0
     # group_add:
     #   - dialout
+    # Bluetooth (Modul „Bluetooth“, Treiber BlueZ): ELVIS nutzt bluetoothd des Hosts über den D-Bus-System-Bus.
+    # Socket durchreichen und die Freigabe aus deploy/bluetooth/elvis-bluetooth.conf auf dem Host einspielen.
+    # Zusätzlich zu den Volumes oben eintragen:
+    #   - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
 
 volumes:
   elvis-data:
