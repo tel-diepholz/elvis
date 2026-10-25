@@ -72,7 +72,7 @@ class RelayError extends Error {
 }
 
 /**
- * App-Anbindung: Apps von Einsatzkräften werden über das Cloud-Relay (apps/relay) mit einer Einheit im
+ * App-Anbindung: Apps von Einsatzkräften werden über das Cloud-Relay (tel-diepholz/elvis-relay) mit einer Einheit im
  * Einsatz gekoppelt; ELVIS holt ihre Positionen ausgehend ab und setzt die Einheit auf der Karte. Die
  * Kopplung endet beim Entkoppeln, beim Entlassen der Einheit und mit dem Einsatz – die App hört dann auf
  * zu orten. Kann das Relay beim Entkoppeln nicht erreicht werden, holt der nächste Lauf das nach.

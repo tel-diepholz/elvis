@@ -8,7 +8,6 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
-COPY apps/relay/package.json apps/relay/
 RUN npm ci
 COPY packages packages
 COPY apps apps

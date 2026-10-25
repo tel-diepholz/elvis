@@ -1,10 +1,11 @@
 /**
  * App-Anbindung: Einsatzkräfte senden ihre Position mit der ELVIS-App über ein kleines Cloud-Relay
- * (apps/relay) an den ELW. Die App registriert sich beim Relay und zeigt ID und Code; in der
+ * (tel-diepholz/elvis-relay) an den ELW. Die App registriert sich beim Relay und zeigt ID und Code; in der
  * Kräfteübersicht wird sie damit einer Einheit im Einsatz zugeordnet. ELVIS holt die Positionen
  * ausgehend beim Relay ab – der ELW braucht keinen öffentlichen Zugang.
  *
- * Diese Datei ist das gemeinsame Protokoll von App, Relay und ELVIS-Server.
+ * Diese Datei beschreibt das Protokoll von App (tel-diepholz/elvis-app), Relay (tel-diepholz/elvis-relay,
+ * dort src/protocol.ts) und ELVIS-Server – Änderungen an allen Stellen gleich halten.
  */
 import { z } from 'zod';
 
@@ -74,11 +75,6 @@ export interface ElwRegistration {
   elwId: string;
   token: string;
 }
-
-export const relayPairSchema = z.object({ deviceId, code: pairCode, label: z.string().trim().max(200).default('') });
-export type RelayPair = z.input<typeof relayPairSchema>;
-
-export const relayLabelSchema = z.object({ label: z.string().trim().max(200) });
 
 export interface RelayPositionItem extends RelayPosition {
   seq: number;

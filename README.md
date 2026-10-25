@@ -63,7 +63,6 @@ apps/server       Fastify-Backend
   services/       Einsatzführung inkl. automatischer Tagebucheinträge
   db/             SQLite (better-sqlite3), Migrationen, revisionssicheres Tagebuch
 apps/web          React + Vite, React Query, Leaflet
-apps/relay        Cloud-Relay der ELVIS-App (Cloudflare Worker + D1)
 ```
 
 - **Live-Daten:** Der Server schickt Gerätezustände und Meldungen per WebSocket (`/api/live`). REST-Daten
@@ -110,7 +109,8 @@ Warnungen und Prognose in den Kacheln „Wetter“ und „Wettervorhersage“.
 ## App-Anbindung (Positionen von Einsatzkräften)
 
 Einsatzkräfte können ihre Position mit der Android-App [ELVIS Ortung](https://github.com/tel-diepholz/elvis-app)
-an den ELW senden. Die Positionen laufen über ein kleines **Cloud-Relay** (`apps/relay`, Cloudflare Worker mit D1).
+an den ELW senden. Die Positionen laufen über ein kleines **Cloud-Relay** ([ELVIS Relay](https://github.com/tel-diepholz/elvis-relay),
+Cloudflare Worker mit D1).
 ELVIS holt sie dort ausgehend ab, der ELW braucht also keine öffentliche Adresse.
 
 ```
@@ -132,17 +132,8 @@ App ──HTTPS──▶ Relay (Cloudflare) ◀──Abruf alle 15 s── ELVIS
   spätestens nach 24 Stunden; unbenutzte App-IDs nach 90 Tagen. Hinweise für Nutzer: `<relay>/datenschutz`.
 - **Zustand:** *Einstellungen → Dienste → App-Anbindung* zeigt Relay, Anmeldung, gekoppelte Apps und den letzten Abruf.
 
-**Relay einrichten** (einmalig, Cloudflare-Konto, Free-Tier genügt):
-
-```sh
-cd apps/relay
-npx wrangler@4 login
-npx wrangler@4 d1 create elvis-relay        # ausgegebene database_id in wrangler.toml eintragen
-npm run deploy                               # Schema anlegen und Worker veröffentlichen
-```
-
-Das Relay läuft unter **`https://elvis-app.h2com.eu`** (eigene Domain des Workers, `routes` in `wrangler.toml`; die
-Zone `h2com.eu` muss im selben Cloudflare-Konto liegen). ELVIS und die App nutzen diese Adresse als Vorgabe. Der ELW
+Das Relay läuft unter **`https://elvis-app.h2com.eu`**. Einrichtung und Betrieb beschreibt das Repo
+[elvis-relay](https://github.com/tel-diepholz/elvis-relay). ELVIS und die App nutzen diese Adresse als Vorgabe; der ELW
 meldet sich beim ersten Koppeln selbst beim Relay an. Ein anderes Relay oder `null` (aus) lässt sich in ELVIS
 eintragen:
 
@@ -151,10 +142,8 @@ eintragen:
 ```
 
 oder per Umgebungsvariable `ELVIS_APP_RELAY_URL` (`off` = aus). In der App ist die Adresse unter „Relay-Adresse“
-änderbar. Lokal ausprobieren:
-`npm run dev -w @elvis/relay` (Port 8787, lokale D1 nach `npx wrangler@4 d1 migrations apply elvis-relay --local`),
-dann ELVIS mit `ELVIS_APP_RELAY_URL=http://localhost:8787` starten; im Android-Emulator ist das Relay unter
-`http://10.0.2.2:8787` erreichbar.
+änderbar. Zum Ausprobieren das Relay lokal starten (siehe elvis-relay, Port 8787) und ELVIS mit
+`ELVIS_APP_RELAY_URL=http://localhost:8787` starten.
 
 ## Ausbreitungsberechnung (Karte)
 
