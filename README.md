@@ -132,13 +132,13 @@ App ──HTTPS──▶ Relay (Cloudflare) ◀──Abruf alle 15 s── ELVIS
   spätestens nach 24 Stunden; unbenutzte App-IDs nach 90 Tagen. Hinweise für Nutzer: `<relay>/datenschutz`.
 - **Zustand:** *Einstellungen → Dienste → App-Anbindung* zeigt Relay, Anmeldung, gekoppelte Apps und den letzten Abruf.
 
-Das Relay läuft unter **`https://elvis-app.h2com.eu`**. Einrichtung und Betrieb beschreibt das Repo
+Das Relay läuft unter **`https://elvis-relay.hhansen06.workers.dev`** (Cloudflare Worker). Einrichtung und Betrieb beschreibt das Repo
 [elvis-relay](https://github.com/tel-diepholz/elvis-relay). ELVIS und die App nutzen diese Adresse als Vorgabe; der ELW
 meldet sich beim ersten Koppeln selbst beim Relay an. Ein anderes Relay oder `null` (aus) lässt sich in ELVIS
 eintragen:
 
 ```json
-"app": { "relayUrl": "https://elvis-app.h2com.eu" }
+"app": { "relayUrl": "https://elvis-relay.hhansen06.workers.dev" }
 ```
 
 oder per Umgebungsvariable `ELVIS_APP_RELAY_URL` (`off` = aus). In der App ist die Adresse unter „Relay-Adresse“
