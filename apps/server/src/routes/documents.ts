@@ -166,7 +166,7 @@ export function documentRoutes(
     return reply.code(204).send();
   });
 
-  // --- Vorgabe der Ordnerstruktur (Systemeinstellungen, nur Admins über /api/system/) ---
+  // --- Vorgabe der Ordnerstruktur (Einstellungen, nur Admins über /api/system/) ---
 
   app.get('/api/system/document-folders', async () => documents.folderSpec());
 

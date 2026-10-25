@@ -4,7 +4,7 @@ import type { VehicleInfo } from './protocol';
 import type { PlaceholderBags } from './template';
 
 /**
- * Dokumente: Je Einsatz eine virtuelle Ordnerstruktur (Vorgabe aus den Systemeinstellungen, beim Eröffnen
+ * Dokumente: Je Einsatz eine virtuelle Ordnerstruktur (Vorgabe aus den Einstellungen, beim Eröffnen
  * übernommen), Vorlagen in einem eigenen Baum (Admins) und Bearbeitung im Browser über Collabora Online.
  */
 
@@ -20,7 +20,7 @@ export interface DocumentFolder {
   createdAt: string;
 }
 
-/** Vorgabe der Ordnerstruktur für neue Einsätze (Systemeinstellungen) */
+/** Vorgabe der Ordnerstruktur für neue Einsätze (Einstellungen) */
 export interface FolderSpec {
   name: string;
   children: FolderSpec[];

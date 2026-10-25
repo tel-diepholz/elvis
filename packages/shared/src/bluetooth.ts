@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * Bluetooth-Geräte im Fahrzeug: ELVIS hört über den Bluetooth-Adapter des Servers die Werbepakete (Advertisements)
  * der eingetragenen Geräte mit. Verbunden wird nicht – die Geräte senden ihre Messwerte von selbst. Die Geräte legen
- * Admins in den Systemeinstellungen an; empfangen wird vom Fahrzeugmodul „Bluetooth“.
+ * Admins in den Einstellungen an; empfangen wird vom Fahrzeugmodul „Bluetooth“.
  */
 
 /** Geräteart; bestimmt, wie die Werbepakete gelesen werden. Weitere Arten hier ergänzen. */

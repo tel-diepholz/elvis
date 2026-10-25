@@ -6,6 +6,7 @@ import {
   CloudSun,
   FileStack,
   FileText,
+  History,
   Gauge,
   LayoutDashboard,
   ListChecks,
@@ -82,7 +83,8 @@ export const NAV: NavGroup[] = [
       { to: '/addons', label: 'Addons', icon: Package, requiresDocker: true, requiresAdmin: true },
       { to: '/docker-hosts', label: 'Docker-Hosts', icon: Server, requiresDocker: true, requiresAdmin: true },
       { to: '/zeichen', label: 'Taktische Zeichen', icon: Shapes },
-      { to: '/system', label: 'System', icon: Settings, requiresLogin: true },
+      { to: '/protokoll', label: 'Bedienprotokoll', icon: History, requiresLogin: true, requiresAdmin: true },
+      { to: '/einstellungen', label: 'Einstellungen', icon: Settings, requiresLogin: true, requiresAdmin: true },
     ],
   },
 ];

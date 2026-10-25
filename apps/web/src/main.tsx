@@ -27,11 +27,12 @@ import { TemplatesPage } from './pages/TemplatesPage';
 import { SignGeneratorPage } from './pages/SignGeneratorPage';
 import { PrintPage } from './pages/PrintPage';
 import { ScanPage } from './pages/ScanPage';
-import { SystemPage } from './pages/SystemPage';
 import { UsersPage } from './pages/UsersPage';
 import { VehiclePage } from './pages/VehiclePage';
 import { WeatherPage } from './pages/WeatherPage';
+import { AuditPage } from './pages/AuditPage';
 import { EnergyPage } from './pages/EnergyPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { MonitoringPage } from './pages/MonitoringPage';
 import './styles/app.css';
 
@@ -85,7 +86,10 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="zeichen" element={<SignGeneratorPage />} />
                 <Route path="drucken" element={<PrintPage />} />
                 <Route path="scans" element={<RequireLogin><ScanPage /></RequireLogin>} />
-                <Route path="system" element={<RequireLogin><SystemPage /></RequireLogin>} />
+                <Route path="protokoll" element={<RequireLogin admin><AuditPage /></RequireLogin>} />
+                <Route path="einstellungen" element={<RequireLogin admin><SettingsPage /></RequireLogin>} />
+                {/* alte Adresse (Lesezeichen) */}
+                <Route path="system" element={<Navigate to="/einstellungen" replace />} />
                 <Route path="*" element={<EmptyState title="Seite nicht gefunden" />} />
               </Route>
             </Routes>

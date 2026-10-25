@@ -29,7 +29,7 @@ const input = {
   mapSign: { ...DEFAULT_VEHICLE_SIGN, text: 'ELW 2', orgLabel: 'FW' },
 };
 
-describe('Systemeinstellungen', () => {
+describe('Einstellungen', () => {
   it('liefert ohne Anmeldung die Vorgaben aus der Konfiguration und das Standard-Kartenzeichen', async () => {
     const res = await call<Settings>('GET', '/api/settings');
     expect(res.status).toBe(200);

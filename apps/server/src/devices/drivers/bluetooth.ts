@@ -4,7 +4,7 @@ import { BaseAdapter, command, noParams, type AdapterContext } from '../adapter.
 import type { BleAdvertisement, BleScanner } from '../bluetooth/bluez.js';
 import { VICTRON_COMPANY_ID, VictronKeyError, victronDecrypt, victronEncode, victronPacket, victronParse, victronReadoutType } from '../bluetooth/victron.js';
 
-/** Geräte aus den Systemeinstellungen (Tabelle bluetooth_devices) */
+/** Geräte aus den Einstellungen (Tabelle bluetooth_devices) */
 export interface BluetoothSource {
   list(): BluetoothDeviceConfig[];
   onChange(listener: () => void): () => void;

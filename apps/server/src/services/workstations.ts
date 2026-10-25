@@ -58,7 +58,7 @@ export class WorkstationService {
   constructor(
     private readonly db: Db,
     private readonly store: Store,
-    /** Zugangsdaten des Betriebs-WLANs (System → WLAN), wenn eingeschaltet */
+    /** Zugangsdaten des Betriebs-WLANs (Einstellungen → WLAN), wenn eingeschaltet */
     private readonly opsWifi: () => WorkstationWifi | null = () => null,
     private readonly now: () => number = Date.now,
   ) {}

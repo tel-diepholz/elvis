@@ -14,7 +14,7 @@ export function MonitoringPage() {
   const monitoring = useDevice('monitoring');
   const user = useAuth().user;
   const { send, pending } = useCommand('monitoring');
-  if (!monitoring) return <ModuleDisabled name="Monitoring" />;
+  if (!monitoring) return <ModuleDisabled name="Monitoring" module="monitoring" />;
   const targets = monitoring.state.targets;
 
   return (
@@ -34,10 +34,10 @@ export function MonitoringPage() {
         <EmptyState icon={<Activity size={32} />} title="Keine Geräte überwacht">
           {user?.isAdmin ? (
             <>
-              Ziele unter <Link to="/system">System → Monitoring</Link> anlegen.
+              Ziele unter <Link to="/einstellungen#modul-monitoring">Einstellungen → Monitoring</Link> anlegen.
             </>
           ) : (
-            'Ein Admin kann die Geräte in den Systemeinstellungen eintragen.'
+            'Ein Admin kann die Geräte in den Einstellungen eintragen.'
           )}
         </EmptyState>
       ) : (

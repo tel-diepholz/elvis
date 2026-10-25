@@ -75,7 +75,7 @@ export function DisplayScreenPage() {
         <h1>Bildschirm koppeln</h1>
         {self.state === 'pending' ? (
           <>
-            <p>In ELVIS unter System → Bildschirme „Bildschirm koppeln“ wählen und diesen Code eingeben:</p>
+            <p>In ELVIS unter Einstellungen → Bildschirme „Bildschirm koppeln“ wählen und diesen Code eingeben:</p>
             <div className="display-code">{self.code.replace(/(\d{3})(\d{3})/, '$1 $2')}</div>
             <p className="muted">Der Code gilt 10 Minuten und wird danach automatisch erneuert.</p>
           </>

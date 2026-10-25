@@ -41,7 +41,7 @@ function scaleBarLength(maxM: number): number {
 
 export interface PrintContext {
   vehicle: VehicleInfo;
-  /** Taktisches Zeichen für den Fahrzeugstandort (Systemeinstellungen). */
+  /** Taktisches Zeichen für den Fahrzeugstandort (Einstellungen). */
   vehicleSign: TacticalSign;
   operator: string;
   now?: Date;

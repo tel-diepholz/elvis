@@ -118,7 +118,7 @@ function DeviceBadge({ d }: { d: BluetoothDeviceLive }) {
 export function EnergyPage() {
   const bt = useDevice('bluetooth');
   const user = useAuth().user;
-  if (!bt) return <ModuleDisabled name="Bluetooth" />;
+  if (!bt) return <ModuleDisabled name="Bluetooth" module="bluetooth" />;
   const { devices, adapter } = bt.state;
 
   return (
@@ -128,10 +128,10 @@ export function EnergyPage() {
         <EmptyState icon={<Bluetooth size={32} />} title="Keine Geräte eingetragen">
           {user?.isAdmin ? (
             <>
-              Akkus und andere Bluetooth-Geräte unter <Link to="/system">System → Bluetooth-Geräte</Link> hinzufügen.
+              Akkus und andere Bluetooth-Geräte unter <Link to="/einstellungen#modul-bluetooth">Einstellungen → Bluetooth</Link> hinzufügen.
             </>
           ) : (
-            'Ein Admin kann die Geräte in den Systemeinstellungen eintragen.'
+            'Ein Admin kann die Geräte in den Einstellungen eintragen.'
           )}
         </EmptyState>
       ) : (

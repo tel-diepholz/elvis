@@ -139,7 +139,7 @@ export function DisplaysPage() {
       <>
         {header}
         <EmptyState icon={<MonitorSmartphone size={32} />} title="Noch keine Bildschirme gekoppelt">
-          Auf dem Bildschirm (Kiosk-Browser) <code>{`${location.origin}/bildschirm`}</code> öffnen – er zeigt einen Code. {user?.isAdmin ? <Link to="/system">Unter System → Bildschirme koppeln.</Link> : 'Ein Admin koppelt ihn unter System → Bildschirme.'}
+          Auf dem Bildschirm (Kiosk-Browser) <code>{`${location.origin}/bildschirm`}</code> öffnen – er zeigt einen Code. {user?.isAdmin ? <Link to="/einstellungen#bildschirme">Unter Einstellungen → Bildschirme koppeln.</Link> : 'Ein Admin koppelt ihn unter Einstellungen → Bildschirme.'}
         </EmptyState>
       </>
     );

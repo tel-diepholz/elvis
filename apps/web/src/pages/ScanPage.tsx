@@ -49,7 +49,7 @@ export function ScanPage() {
             : `Der Scan-Empfänger läuft nicht${status.error ? ` (${status.error})` : ''}.`}{' '}
           {admin ? (
             <>
-              Einstellungen unter <Link to="/system">System → Scannen</Link>.
+              Einstellungen unter <Link to="/einstellungen#scannen">Einstellungen → Scannen</Link>.
             </>
           ) : (
             'Bitte einen Admin informieren.'

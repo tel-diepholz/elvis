@@ -253,7 +253,7 @@ export function MonitoringCard() {
         </button>
       }
     >
-      {!live && <p className="muted">Das Modul „Monitoring“ ist deaktiviert – die Ziele werden erst abgefragt, wenn es unter Fahrzeugmodule aktiviert ist.</p>}
+      {!live && <p className="muted">Das Modul „Monitoring“ ist deaktiviert – die Ziele werden erst abgefragt, wenn es oben unter „Modul aktiv“ eingeschaltet ist.</p>}
       {!targets ? (
         <Loading />
       ) : targets.length === 0 ? (

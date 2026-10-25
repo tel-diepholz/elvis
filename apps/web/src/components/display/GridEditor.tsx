@@ -238,7 +238,7 @@ export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; 
           <Field label="Überschrift" hint="optional, z. B. „Gäste-WLAN“">
             <input value={String(tile.config.title ?? '')} onChange={(e) => set('title', e.target.value.slice(0, 60))} maxLength={60} />
           </Field>
-          <p className="field-hint">Zeigt Netzname, Passwort und QR-Code des Gastnetzes, solange ein Einsatz läuft. Einrichten unter System → WLAN.</p>
+          <p className="field-hint">Zeigt Netzname, Passwort und QR-Code des Gastnetzes, solange ein Einsatz läuft. Einrichten unter Einstellungen → WLAN-Accesspoints.</p>
         </>
       )}
       {tile.type === 'tasks' && (

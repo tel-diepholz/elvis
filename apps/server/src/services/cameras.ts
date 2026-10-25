@@ -51,7 +51,7 @@ const fromRow = (r: Row): CameraSecretConfig => ({
 
 export const publicCamera = ({ password, ...c }: CameraSecretConfig): CameraConfig => ({ ...c, passwordSet: password !== '' });
 
-/** Kameras aus den Systemeinstellungen (Tabelle cameras). */
+/** Kameras aus den Einstellungen (Tabelle cameras). */
 export class CameraConfigStore {
   private readonly listeners = new Set<() => void>();
 

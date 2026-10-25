@@ -44,7 +44,7 @@ export type StoredDocument = IncidentDocument & { path: string };
 
 /**
  * Dokumente eines Einsatzes in einer virtuellen Ordnerstruktur. Die Dateien liegen flach unter UUIDs; Ordner gibt es
- * nur in der Datenbank. Beim Eröffnen eines Einsatzes wird die Vorgabe aus den Systemeinstellungen übernommen;
+ * nur in der Datenbank. Beim Eröffnen eines Einsatzes wird die Vorgabe aus den Einstellungen übernommen;
  * danach lassen sich Ordner ergänzen, aber nicht löschen (Admins: leere, selbst angelegte Ordner).
  */
 export class DocumentService {

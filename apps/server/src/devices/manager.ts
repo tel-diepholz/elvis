@@ -21,7 +21,7 @@ interface Running {
 }
 
 /**
- * Hält je aktiviertem Fahrzeugmodul einen Treiber. Änderungen aus den Systemeinstellungen werden
+ * Hält je aktiviertem Fahrzeugmodul einen Treiber. Änderungen aus den Einstellungen werden
  * zur Laufzeit übernommen: alter Treiber stoppen, neuer starten – ohne ELVIS neu zu starten.
  */
 export class DeviceManager {
@@ -93,7 +93,7 @@ export class DeviceManager {
     return job.then(() => this.module(id, config));
   }
 
-  /** Alle Module mit Konfiguration und verfügbaren Treibern (für die Systemeinstellungen). */
+  /** Alle Module mit Konfiguration und verfügbaren Treibern (für die Einstellungen). */
   modules(): DeviceModule[] {
     return DEVICE_IDS.map((id) => this.module(id));
   }

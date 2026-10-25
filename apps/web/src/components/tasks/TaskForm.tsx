@@ -229,7 +229,7 @@ export function TaskForm({ initial, pending, onSubmit }: { initial?: Task; pendi
   );
 }
 
-/** Aufgabenvorlage (Systemeinstellungen): Zeiten relativ zum Einsatzbeginn */
+/** Aufgabenvorlage (Einstellungen): Zeiten relativ zum Einsatzbeginn */
 export function TaskTemplateForm({ initial, pending, onSubmit }: { initial?: TaskTemplate; pending: boolean; onSubmit: (t: TaskTemplateInput) => void }) {
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.roles });
   const s = initial?.schedule;

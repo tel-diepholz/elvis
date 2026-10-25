@@ -86,7 +86,7 @@ export interface WorkstationLoginResult {
   incident: WorkstationIncident | null;
 }
 
-/** Installer-ISO eines laufenden Addons (System → Arbeitsplätze) */
+/** Installer-ISO eines laufenden Addons (Einstellungen → Arbeitsplätze) */
 export interface WorkstationInstaller {
   id: string;
   name: string;

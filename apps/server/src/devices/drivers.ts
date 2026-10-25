@@ -16,19 +16,19 @@ import { WeatherSim } from './sim/weather.js';
 export interface DriverDefinition<K extends DeviceId> {
   label: string;
   description: string;
-  /** Einstellungen des Treibers; daraus entsteht das Formular in den Systemeinstellungen. */
+  /** Einstellungen des Treibers; daraus entsteht das Formular in den Einstellungen. */
   options: Record<string, AddonOption>;
   create(options: OptionValues, deps: DriverDeps): DeviceAdapter<K>;
 }
 
-/** Dienste, die Treiber brauchen können (z. B. die Kameraliste aus den Systemeinstellungen) */
+/** Dienste, die Treiber brauchen können (z. B. die Kameraliste aus den Einstellungen) */
 export interface DriverDeps {
   cameras: CameraSource;
-  /** Accesspoints aus den Systemeinstellungen (WLAN) */
+  /** Accesspoints aus den Einstellungen (WLAN) */
   wifi: WifiSource;
-  /** Ziele des Monitorings aus den Systemeinstellungen */
+  /** Ziele des Monitorings aus den Einstellungen */
   monitoring: MonitoringSource;
-  /** Bluetooth-Geräte aus den Systemeinstellungen */
+  /** Bluetooth-Geräte aus den Einstellungen */
   bluetooth: BluetoothSource;
 }
 
@@ -56,7 +56,7 @@ const sim = <K extends DeviceId>(create: (options: OptionValues) => DeviceAdapte
 
 /**
  * Treiber je Fahrzeugmodul. Weitere Treiber (z. B. andere Wetterstationen) hier eintragen –
- * sie erscheinen automatisch in der Treiberauswahl der Systemeinstellungen.
+ * sie erscheinen automatisch in der Treiberauswahl der Einstellungen.
  */
 export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
   router: {
@@ -106,7 +106,7 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
     system: 'media',
     drivers: {
       standard: {
-        label: 'Kameras aus den Systemeinstellungen',
+        label: 'Kameras aus den Einstellungen',
         description: 'Zeigt und bedient die unter „Kameras“ eingetragenen Kameras (z. B. Axis über VAPIX). Kameratyp und Zugangsdaten werden je Kamera eingestellt.',
         options: {},
         create: (_o, deps) => new CamerasAdapter(deps.cameras),
@@ -118,7 +118,7 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
     system: 'comms',
     drivers: {
       openwrt: {
-        label: 'OpenWrt-Accesspoints aus den Systemeinstellungen',
+        label: 'OpenWrt-Accesspoints aus den Einstellungen',
         description:
           'Fragt die unter „WLAN-Accesspoints“ eingetragenen OpenWrt-Geräte ab: angemeldete Geräte in Betriebs-WLAN und Gastnetz (Netzwerk-Seite) und Erreichbarkeit – ein nicht erreichbarer Accesspoint löst einen Alarm aus.',
         options: {
@@ -133,7 +133,7 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
     system: 'comms',
     drivers: {
       standard: {
-        label: 'Ziele aus den Systemeinstellungen',
+        label: 'Ziele aus den Einstellungen',
         description:
           'Fragt die unter „Monitoring“ eingetragenen Geräte ab: Drucker und andere Geräte per SNMP, Rechner per Prometheus Node Exporter. Auffällige Messwerte erscheinen als Meldung; nicht erreichbar löst nur bei dauerhaft eingeschalteten Geräten einen Alarm aus.',
         options: {

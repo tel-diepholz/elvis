@@ -6,7 +6,7 @@ import { HttpError } from '../../errors.js';
 import { BaseAdapter, CommandError, command, type AdapterContext } from '../adapter.js';
 import { AxisCamera, DemoCamera, NO_CAPS, type CameraClient } from './axis/camera.js';
 
-/** Quelle der Kameraliste (Systemeinstellungen) */
+/** Quelle der Kameraliste (Einstellungen) */
 export interface CameraSource {
   list(): CameraSecretConfig[];
   onChange(listener: () => void): () => void;
@@ -41,7 +41,7 @@ const positionSchema = z.object({ pan: z.number().nullable(), tilt: z.number().n
 const connectionKey = (c: CameraSecretConfig) => JSON.stringify([c.type, c.host, c.protocol, c.username, c.password, c.verifyTls]);
 
 /**
- * Alle Kameras aus den Systemeinstellungen: Status, Fähigkeiten und Bedienung. Der Typ (Axis, Demo) ist je Kamera
+ * Alle Kameras aus den Einstellungen: Status, Fähigkeiten und Bedienung. Der Typ (Axis, Demo) ist je Kamera
  * eingestellt; weitere Hersteller kommen als weiterer CameraClient dazu.
  */
 export class CamerasAdapter extends BaseAdapter<'cameras'> {

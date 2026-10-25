@@ -1,7 +1,13 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 export type Tone = 'ok' | 'warn' | 'alarm' | 'info' | 'muted';
+
+/**
+ * Innerhalb eines aufklappbaren Abschnitts (Einstellungen) erscheinen Karten ohne eigenen Rahmen. Ihr Titel entfällt,
+ * wenn er dem Abschnitt entspricht; sonst wird er zur Zwischenüberschrift.
+ */
+export const CardFrame = createContext<{ sectionTitle: string } | null>(null);
 
 export function Card({
   title,
@@ -16,6 +22,28 @@ export function Card({
   children: ReactNode;
   className?: string;
 }) {
+  const frame = useContext(CardFrame);
+  if (frame) {
+    const showTitle = !!title && title !== frame.sectionTitle;
+    return (
+      <div className={`card-embedded ${className}`}>
+        {(showTitle || actions) && (
+          <header className="card-embedded-head">
+            {showTitle ? (
+              <h3 className="section-title">
+                {icon}
+                {title}
+              </h3>
+            ) : (
+              <span />
+            )}
+            {actions && <div className="card-actions">{actions}</div>}
+          </header>
+        )}
+        {children}
+      </div>
+    );
+  }
   return (
     <section className={`card ${className}`}>
       {(title || actions) && (

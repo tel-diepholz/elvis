@@ -1,34 +1,38 @@
-import { useEffect, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { Cpu } from 'lucide-react';
-import { SYSTEM_LABELS, defaultOptionValues, type DeviceModule, type DeviceModuleConfig } from '@elvis/shared';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { defaultOptionValues, type DeviceModule, type DeviceModuleConfig } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { useLive } from '../../lib/live';
 import { useToast } from '../../lib/toast';
 import { OptionsForm, validateOptions } from '../../components/OptionsForm';
-import { Badge, Card, Dot, Field, Loading, Toggle } from '../../components/ui';
+import { SettingsSection } from '../../components/SettingsSection';
+import { Badge, Field, Toggle } from '../../components/ui';
 
-/** Fahrzeugmodule aktivieren, Treiber wählen und einstellen – nur für Admins. */
-export function ModulesCard() {
-  const { data: modules } = useQuery({ queryKey: ['devices'], queryFn: api.deviceModules });
+/**
+ * Ein Fahrzeugmodul als aufklappbarer Abschnitt: Kopfzeile mit Zustand und Treiber (nur wenn es eine Auswahl gibt), darin Aktivierung, Treiber und
+ * dessen Einstellungen, darunter die Geräte des Moduls (`children`, z. B. die Bluetooth-Geräte). Nur für Admins.
+ */
+export function ModuleSection({ module: m, icon, children }: { module: DeviceModule; icon?: ReactNode; children?: ReactNode }) {
+  const live = useLive().devices[m.id];
+  const driver = m.drivers.find((d) => d.id === m.config.driver);
+  const summary = !m.config.enabled ? (
+    <Badge>deaktiviert</Badge>
+  ) : (
+    <>
+      {m.config.driver === 'sim' ? <Badge tone="warn">Simulation</Badge> : m.drivers.length > 1 && <span>{driver?.label}</span>}
+      {live ? <Badge tone={live.online ? 'ok' : 'alarm'}>{live.online ? 'verbunden' : 'keine Daten'}</Badge> : <Badge tone="alarm">{m.error ?? 'nicht gestartet'}</Badge>}
+    </>
+  );
   return (
-    <Card title="Fahrzeugmodule" icon={<Cpu size={18} />} className="span-3">
-      {!modules ? (
-        <Loading />
-      ) : (
-        <div className="modules">
-          {modules.map((m) => (
-            <ModuleEditor key={m.id} module={m} />
-          ))}
-        </div>
-      )}
-    </Card>
+    <SettingsSection id={`modul-${m.id}`} title={m.name} icon={icon} summary={summary}>
+      <ModuleEditor module={m} />
+      {children}
+    </SettingsSection>
   );
 }
 
 function ModuleEditor({ module: m }: { module: DeviceModule }) {
   const toast = useToast();
-  const live = useLive().devices[m.id];
   const [draft, setDraft] = useState<DeviceModuleConfig>(m.config);
   const [dirty, setDirty] = useState(false);
   useEffect(() => {
@@ -50,28 +54,8 @@ function ModuleEditor({ module: m }: { module: DeviceModule }) {
     onError: (e) => toast('error', e.message),
   });
 
-  const status = !m.config.enabled ? (
-    <Badge>deaktiviert</Badge>
-  ) : live ? (
-    <Badge tone={live.online ? 'ok' : 'alarm'}>{live.online ? 'verbunden' : 'keine Daten'}</Badge>
-  ) : (
-    <Badge tone="alarm">{m.error ?? 'nicht gestartet'}</Badge>
-  );
-
   return (
-    <section className={`module ${draft.enabled ? '' : 'module-off'}`}>
-      <header className="module-head">
-        <div className="cell-title">
-          <Dot tone={!m.config.enabled ? 'muted' : live?.online ? 'ok' : 'alarm'} />
-          <strong>{m.name}</strong>
-          <span className="muted">{SYSTEM_LABELS[m.system]}</span>
-        </div>
-        <div className="module-status">
-          {status}
-          {m.config.enabled && m.config.driver === 'sim' && <Badge tone="warn">Simulation</Badge>}
-        </div>
-      </header>
-
+    <div className="module-editor">
       <Toggle label="Modul aktiv" checked={draft.enabled} onChange={(enabled) => change({ ...draft, enabled })} disabled={save.isPending} />
 
       {draft.enabled && (
@@ -106,7 +90,7 @@ function ModuleEditor({ module: m }: { module: DeviceModule }) {
       )}
 
       <div className="form-actions spread">
-        <span className="muted">{m.source === 'config' ? 'Vorgabe aus config/elvis.json' : 'In den Systemeinstellungen gespeichert'}</span>
+        <span className="muted">{m.source === 'config' ? 'Vorgabe aus config/elvis.json' : 'In den Einstellungen gespeichert'}</span>
         <span className="btn-row">
           <button className="btn" disabled={!dirty || save.isPending} onClick={() => (setDirty(false), setDraft(m.config))}>
             Verwerfen
@@ -116,6 +100,6 @@ function ModuleEditor({ module: m }: { module: DeviceModule }) {
           </button>
         </span>
       </div>
-    </section>
+    </div>
   );
 }

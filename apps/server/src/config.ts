@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { z } from 'zod';
 import { DEVICE_IDS, type DeviceId } from '@elvis/shared';
 
-/** Vorgabe je Fahrzeugmodul; in den Systemeinstellungen gespeicherte Werte haben Vorrang. */
+/** Vorgabe je Fahrzeugmodul; in den Einstellungen gespeicherte Werte haben Vorrang. */
 const driverSchema = z.object({
   enabled: z.boolean().default(true),
   driver: z.string().default('sim'),

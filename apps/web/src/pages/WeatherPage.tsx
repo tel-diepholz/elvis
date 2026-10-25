@@ -68,7 +68,7 @@ export function WeatherPage() {
     return (
       <>
         <PageHeader title="Wetterstation" />
-        <ModuleDisabled name="Wetterstation" />
+        <ModuleDisabled name="Wetterstation" module="weather" />
       </>
     );
   const s = dev.state;

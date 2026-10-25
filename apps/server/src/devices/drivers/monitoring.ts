@@ -2,7 +2,7 @@ import type { MonitoringState, MonitoringTargetConfig, MonitoringTargetLive } fr
 import { probe, type ProbeDeps } from '../../services/monitoring-probes.js';
 import { BaseAdapter, command, noParams, type AdapterContext } from '../adapter.js';
 
-/** Ziele aus den Systemeinstellungen (Tabelle monitoring_targets) */
+/** Ziele aus den Einstellungen (Tabelle monitoring_targets) */
 export interface MonitoringSource {
   list(): MonitoringTargetConfig[];
   onChange(listener: () => void): () => void;

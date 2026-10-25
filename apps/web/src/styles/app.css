@@ -3354,38 +3354,119 @@ select.unit-status.has-children {
   }
 }
 
-/* ---------- Fahrzeugmodule ---------- */
-.modules {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
-  gap: 14px;
+/* ---------- Einstellungen ---------- */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 1200px;
 }
-.module {
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0 0 2px 4px;
+}
+.settings-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+  scroll-margin-top: 80px;
+}
+.settings-section.open {
+  border-color: var(--border-strong);
+}
+.settings-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 18px;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-section-head:hover {
+  background: var(--bg-hover);
+}
+.settings-section-chevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+.settings-section.open .settings-section-chevron {
+  transform: rotate(90deg);
+}
+.settings-section-title {
+  font-size: 15px;
+  font-weight: 650;
+}
+.settings-section-summary {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  min-width: 0;
+}
+.settings-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 4px 18px 18px 46px;
+}
+.card-embedded {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.card-embedded + .card-embedded {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.card-embedded-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+@media (max-width: 700px) {
+  .settings-section-head {
+    flex-wrap: wrap;
+    padding: 12px 14px;
+  }
+  .settings-section-summary {
+    margin-left: 28px;
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .settings-section-body {
+    padding: 4px 14px 14px;
+  }
+}
+
+/* ---------- Fahrzeugmodule ---------- */
+.module-editor {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-}
-.module-off {
-  opacity: 0.85;
-}
-.module-head {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-.module-status {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.module .form-actions {
-  margin-top: auto;
 }
 .serialport {
   display: flex;

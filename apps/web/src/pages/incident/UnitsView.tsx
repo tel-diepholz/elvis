@@ -244,7 +244,7 @@ function DeployForm({
     );
   };
 
-  if (catalog.length === 0) return <EmptyState title="Keine Systemeinheiten">Admins legen sie unter System → Kräfteverwaltung an.</EmptyState>;
+  if (catalog.length === 0) return <EmptyState title="Keine Systemeinheiten">Admins legen sie unter Einstellungen → Kräfteverwaltung an.</EmptyState>;
 
   if (!tree)
     return (

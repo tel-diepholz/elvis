@@ -60,7 +60,7 @@ export function useMediaQuery(query: string): boolean {
   return match;
 }
 
-/** Fahrzeugname, Funkrufname, Einheit und Kartenzeichen aus den Systemeinstellungen. */
+/** Fahrzeugname, Funkrufname, Einheit und Kartenzeichen aus den Einstellungen. */
 export function useSettings() {
   return useQuery({ queryKey: ['settings'], queryFn: api.settings, staleTime: Infinity });
 }

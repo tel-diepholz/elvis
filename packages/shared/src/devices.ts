@@ -207,7 +207,7 @@ export interface CamerasState {
   cameras: CameraStatus[];
 }
 
-/** Kamera in den Systemeinstellungen (Passwort wird nie ausgeliefert). */
+/** Kamera in den Einstellungen (Passwort wird nie ausgeliefert). */
 export interface CameraConfig {
   id: string;
   name: string;
@@ -389,7 +389,7 @@ export interface CommandResponse {
   message?: string;
 }
 
-// --- Konfiguration der Fahrzeugmodule (Systemeinstellungen, nur Admins) ---
+// --- Konfiguration der Fahrzeugmodule (Einstellungen, nur Admins) ---
 
 /** Treiber eines Moduls; `options` beschreibt das Formular (gleiches Schema wie bei Addons). */
 export interface DeviceDriverInfo {

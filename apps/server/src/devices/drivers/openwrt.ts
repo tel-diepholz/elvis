@@ -9,7 +9,7 @@ export interface ApPollResult {
   stations: ApStation[] | null;
 }
 
-/** Accesspoints aus den Systemeinstellungen und Ablage der angemeldeten Geräte (Tabelle wifi_clients) */
+/** Accesspoints aus den Einstellungen und Ablage der angemeldeten Geräte (Tabelle wifi_clients) */
 export interface WifiSource {
   list(): WifiApSecretConfig[];
   onChange(listener: () => void): () => void;
@@ -22,7 +22,7 @@ export interface WifiSource {
 /**
  * WLAN-Accesspoints mit OpenWrt: fragt reihum die angemeldeten Geräte ab (iwinfo über ubus) und schreibt sie in die
  * Datenbank. Im Zustand steht je AP, ob er erreichbar ist – daraus entsteht die Meldung „Accesspoint nicht erreichbar“.
- * Das Einrichten der WLANs übernimmt der WifiService (Systemeinstellungen), unabhängig von diesem Modul.
+ * Das Einrichten der WLANs übernimmt der WifiService (Einstellungen), unabhängig von diesem Modul.
  */
 export class OpenWrtWifiAdapter extends BaseAdapter<'wifi'> {
   private timer: NodeJS.Timeout | null = null;

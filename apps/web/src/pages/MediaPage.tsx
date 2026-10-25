@@ -11,7 +11,7 @@ export function MediaPage() {
     return (
       <>
         <PageHeader title="Medien" subtitle="Videomatrix, Monitore und Kameras" />
-        <ModuleDisabled name="Videomatrix & Kameras" />
+        <ModuleDisabled name="Videomatrix & Kameras" module="media" />
       </>
     );
   const s = dev.state;

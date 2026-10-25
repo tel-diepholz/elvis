@@ -10,7 +10,7 @@ Einsatzführung (Einsatztagebuch, Kräfte, Dokumente) in einer Anwendung zusamme
 | --- | --- | --- |
 | **Fahrzeug** | immer | Übersicht, Fahrzeugzustand, Karte, Wetterstation, Netzwerk, Medien |
 | **Einsatz** | Unterseiten erst mit aufgelegtem Einsatz | Einsatztagebuch, Kräfteübersicht, Dokumente |
-| **Verwaltung** | immer | Einsatzarchiv (schreibgeschützt), System/Bedienprotokoll |
+| **Verwaltung** | immer | Einsatzarchiv (schreibgeschützt); nur Admins: Bedienprotokoll, Einstellungen |
 
 Die Sperre der Einsatzbereiche wird im Backend durchgesetzt: Schreibzugriffe sind nur auf den offenen
 Einsatz möglich, abgeschlossene Einsätze sind nur lesbar.
@@ -160,7 +160,9 @@ Schwarz-Weiß-Stil ist Stamen Toner (Refills Vorgänger), z. B. über einen Kach
 ## Fahrzeugmodule
 
 Fahrzeugsysteme sind Treiber im Kern (`apps/server/src/devices/`). Admins konfigurieren sie unter
-**System → Fahrzeugmodule**:
+**Einstellungen → Fahrzeugmodule**. Jedes Modul ist dort ein aufklappbarer Abschnitt. Die Kopfzeile zeigt Zustand und
+Treiber, aufgeklappt folgen die Einstellungen und darunter die Geräte des Moduls (z. B. Kameras, Accesspoints,
+Monitoring-Ziele, Bluetooth-Geräte):
 
 - Modul aktivieren oder deaktivieren. Ein deaktiviertes Modul erzeugt keine Meldungen, und seine Seite zeigt einen Hinweis.
 - Treiber wählen, z. B. „Simulation“ oder „Airmar über Actisense“. Das Formular mit den Treiber-Einstellungen
@@ -249,7 +251,7 @@ Bildschirme im Fahrzeug (z. B. Lagetisch, Monitor im Führungsraum) zeigen die S
 oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS unter **Bildschirme**.
 
 - **Koppeln (Admin):** `/bildschirm` öffnen, der Bildschirm zeigt einen 6-stelligen Code (10 Minuten gültig). Unter
-  System → Bildschirme → „Bildschirm koppeln“ den Code und einen Namen eintragen. Der Bildschirm erhält ein dauerhaftes
+  Einstellungen → Bildschirme → „Bildschirm koppeln“ den Code und einen Namen eintragen. Der Bildschirm erhält ein dauerhaftes
   Gerätecookie, in der Datenbank steht nur dessen Hash. Entkoppeln widerruft es sofort, der Bildschirm zeigt dann
   wieder einen Code.
 - **Inhalte (angemeldete Benutzer):** zwischen Bildschirmen umschalten, Vorschau in Originalauflösung des Bildschirms,
@@ -275,12 +277,12 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
   Neustart verloren. Beispiel: `chromium --kiosk --noerrdialogs --disable-session-crashed-bubble http://<elvis>:8080/bildschirm`.
 - **Smart-TV / Android:** Die App [ELVIS Bildschirm](https://github.com/tel-diepholz/elvis-tv) zeigt `/bildschirm` im
   Vollbild, startet auf Wunsch nach dem Einschalten und fragt beim ersten Start nach der Adresse des Servers. Den
-  Download-Link der neuesten APK zeigt ELVIS unter *System → Bildschirme* beim Koppeln
+  Download-Link der neuesten APK zeigt ELVIS unter *Einstellungen → Bildschirme* beim Koppeln
   (`https://github.com/tel-diepholz/elvis-tv/releases/latest/download/elvis-tv.apk`).
 
 ### Kameras (Axis über VAPIX)
 
-Modul „Kameras“: beliebig viele Kameras, angelegt unter **System → Kameras** (nur Admins). Je Kamera gibt es Name,
+Modul „Kameras“: beliebig viele Kameras, angelegt unter **Einstellungen → Kameras** (nur Admins). Je Kamera gibt es Name,
 Typ (Axis oder Demo ohne Hardware), Adresse, Benutzer, Passwort und die Auflösung des Livebilds. „Verbindung testen“
 zeigt Modell und Funktionen der Kamera.
 
@@ -308,7 +310,7 @@ zeigt Modell und Funktionen der Kamera.
 
 ### WLAN (OpenWrt-Accesspoints)
 
-Unter **System → WLAN-Accesspoints** (nur Admins) beliebig viele OpenWrt-Geräte anlegen: Adresse, Konto (meist
+Unter **Einstellungen → WLAN-Accesspoints** (nur Admins) beliebig viele OpenWrt-Geräte anlegen: Adresse, Konto (meist
 `root`), das Netz für das Betriebs-WLAN (meist `lan`) und die **Gastnetz-Bridge** (z. B. `br-guests`). Angegeben
 werden kann jeweils eine OpenWrt-Schnittstelle (`lan`), eine Bridge (`br-lan`) oder ein Bridge-Port (`eth0`). Die Bridge
 muss auf dem AP bereits eingerichtet sein; hat sie noch keine Schnittstelle (nur unter *Netzwerk → Geräte* angelegt),
@@ -320,11 +322,11 @@ diesem AP kein Gastnetz.
   eigene WLANs an (`elvis_ops_<radio>`, `elvis_guest_<radio>`, WPA2), schaltet ausgeschaltete Funkmodule ein und lässt
   alle anderen WLANs unverändert. Geschrieben und neu geladen wird nur bei Abweichungen; der Abgleich läuft bei jeder
   Änderung und jede Minute (holt zurückgesetzte APs wieder auf den Sollstand). „Jetzt übertragen“ stößt ihn sofort an.
-- **Betriebs-WLAN** (System → WLAN): Netzname und Passwort, dauerhaft auf allen aktiven APs.
+- **Betriebs-WLAN** (Einstellungen → WLAN-Accesspoints): Netzname und Passwort, dauerhaft auf allen aktiven APs.
 - **Gastnetz:** einschaltbar mit eigenem Netznamen. Sobald ein Einsatz eröffnet ist, richtet ELVIS es auf allen APs
   mit Gastnetz-Bridge ein – Netzname mit angehängter Einsatznummer (`Gast-12`), Passwort je Einsatz neu erzeugt, Clients
   untereinander abgeschottet. Mit Ende des Einsatzes verschwindet es wieder.
-- **Fahrzeugmodul „WLAN-Accesspoints“** (Treiber *OpenWrt*, unter *System → Fahrzeugmodule*): fragt alle aktiven APs
+- **Fahrzeugmodul „WLAN-Accesspoints“** (Treiber *OpenWrt*, unter *Einstellungen → Fahrzeugmodule*): fragt alle aktiven APs
   im Hintergrund ab (Vorgabe alle 10 s, `iwinfo assoclist`, Zuordnung der WLANs über `luci-rpc`) und schreibt die
   angemeldeten Geräte in die Tabelle `wifi_clients` – nur der aktuelle Stand, abgemeldete Geräte verschwinden. Unter
   *Netzwerk* zeigen zwei Tabellen (nur angemeldet) daraus die Geräte im Betriebs-WLAN und im Gastnetz mit AP, Band,
@@ -339,7 +341,7 @@ diesem AP kein Gastnetz.
 ### Monitoring (SNMP, Node Exporter)
 
 Das Modul „Monitoring“ fragt Geräte im Fahrzeugnetz regelmäßig ab (Vorgabe alle 30 s, einstellbar unter
-Fahrzeugmodule). Die Ziele legen Admins unter **System → Monitoring** an, „Verbindung testen“ zeigt die Messwerte
+Fahrzeugmodule). Die Ziele legen Admins unter **Einstellungen → Monitoring** an, „Verbindung testen“ zeigt die Messwerte
 vor dem Speichern. Den aktuellen Stand sehen alle auf der Seite **Monitoring**, Auffälligkeiten stehen in der Meldungsleiste.
 
 | Art | Abfrage | Fest eingebaute Prüfungen |
@@ -397,7 +399,7 @@ Modul **Bluetooth** (System Energie, Seite **Energie**): ELVIS liest über den B
 Werbepakete der eingetragenen Geräte mit. Gekoppelt wird nicht, die Geräte senden ihre Werte von selbst, und
 VictronConnect lässt sich weiter parallel nutzen.
 
-- **Geräte** unter *System → Bluetooth-Geräte*: Name, Geräteart, Bluetooth-Adresse, Schlüssel und optional eine
+- **Geräte** unter *Einstellungen → Bluetooth*: Name, Geräteart, Bluetooth-Adresse, Schlüssel und optional eine
   Spannungsgrenze für eine Warnung. Victron-Geräte, die in Reichweite senden, aber noch nicht eingetragen sind,
   erscheinen unter „In der Nähe gefunden“ und lassen sich mit Adresse und Namen übernehmen.
 - **Victron Instant Readout:** Im Gerät muss „Instant Readout über Bluetooth“ eingeschaltet sein. Den Schlüssel zeigt
@@ -427,7 +429,7 @@ VictronConnect lässt sich weiter parallel nutzen.
      `sudo cp deploy/bluetooth/elvis-bluetooth.conf /etc/dbus-1/system.d/ && sudo systemctl reload dbus`
   3. In `deploy/compose.yaml` den Socket durchreichen (`/run/dbus/system_bus_socket`, siehe Kommentar dort) und
      `docker compose up -d` ausführen.
-  4. Unter *System → Fahrzeugmodule* beim Modul Bluetooth den Treiber BlueZ wählen.
+  4. Unter *Einstellungen → Fahrzeugmodule* beim Modul Bluetooth den Treiber BlueZ wählen.
 - **Weitere Geräte:** Neue Gerätearten kommen in `packages/shared/src/bluetooth.ts` (`BluetoothKind`) und als
   Auswertung der Herstellerdaten in `apps/server/src/devices/drivers/bluetooth.ts` hinzu.
 
@@ -456,7 +458,7 @@ VictronConnect lässt sich weiter parallel nutzen.
     Fahrzeug, nicht vor einem gezielten Angriff aus einem offenen Netz.
 - Einträge im Einsatztagebuch und im Bedienprotokoll tragen den Namen des angemeldeten Benutzers.
 
-## Taktische Zeichen und Systemeinstellungen
+## Taktische Zeichen und Einstellungen
 
 - **Generator** (*Verwaltung → Taktische Zeichen*, auch ohne Anmeldung): Zeichen nach der Empfehlung „Taktische
   Zeichen im Bevölkerungsschutz“ (DV 102) zusammenstellen und als SVG herunterladen. Häufige Zeichen gibt es als
@@ -470,9 +472,14 @@ VictronConnect lässt sich weiter parallel nutzen.
 - **Umsetzung:** Das Zeichen wird einmal als Geometrie beschrieben (`packages/shared/src/tactical.ts`). Daraus
   entstehen das SVG im Browser und auf der Karte sowie die Vektorgrafik im Druck-PDF. Weitere Fachaufgaben werden in
   `functionSymbol()` ergänzt.
-- **Systemeinstellungen** (*Verwaltung → System*): Fahrzeugname, Funkrufname, Einheit und das taktische Zeichen für
-  den Fahrzeugstandort auf Karte und Druck. Ändern dürfen nur Admins, lesen dürfen alle. Ohne gespeicherte Werte
-  gelten `vehicle` aus `config/elvis.json` und das Zeichen „ELW 2“ der Feuerwehr.
+- **Einstellungen** (*Verwaltung → Einstellungen*, nur Admins): aufklappbare Abschnitte in den Gruppen Fahrzeug,
+  Fahrzeugmodule, Dienste und Einsatz. Links aus anderen Seiten öffnen den passenden Abschnitt direkt, z. B.
+  `/einstellungen#modul-bluetooth` oder `/einstellungen#scannen`. Die alte Adresse `/system` leitet dorthin um.
+  - *Fahrzeug & Einheit:* Fahrzeugname, Funkrufname, Einheit und das taktische Zeichen für den Fahrzeugstandort auf
+    Karte und Druck. Ohne gespeicherte Werte gelten `vehicle` aus `config/elvis.json` und das Zeichen „ELW 2“ der
+    Feuerwehr.
+  - Das Farbschema stellt jeder über das Symbol oben rechts um.
+- **Bedienprotokoll** (*Verwaltung → Bedienprotokoll*, nur Admins): die letzten 100 Bedienvorgänge.
 
 ## Addons und Docker-Hosts
 
@@ -574,7 +581,7 @@ Voraussetzung: Docker und Node auf dem Entwicklungsrechner.
 
 ## Dokumente, Vorlagen und Collabora
 
-- **Ordner je Einsatz:** Beim Eröffnen erhält jeder Einsatz eine Ordnerstruktur, die Admins unter *System →
+- **Ordner je Einsatz:** Beim Eröffnen erhält jeder Einsatz eine Ordnerstruktur, die Admins unter *Einstellungen →
   Ordnervorgabe für Dokumente* festlegen. Die Struktur ist virtuell: Ordner gibt es nur in der Datenbank, die Dateien
   liegen flach unter `data/documents/<uuid>`. Benutzer können Ordner ergänzen, aber keine löschen. Admins dürfen nur
   leere, selbst angelegte Ordner entfernen, etwa zur Korrektur eines Tippfehlers. Spätere Änderungen an der Vorgabe
@@ -631,7 +638,7 @@ Voraussetzung: Docker und Node auf dem Entwicklungsrechner.
   `GET /api/printing`, `POST /api/printing/jobs` (Multipart: `options` als JSON, dann `file`) und
   `GET /api/printing/jobs/:ref`; Gastdrucker: `GET /api/printing/guest`, `GET …/:id/file`, `POST …/:id/release`,
   `DELETE …/:id`.
-- **Ablage** (*System → Druckserver*, nur Admins): Ist ein Einsatz eröffnet, landet jeder Druck als PDF in dessen
+- **Ablage** (*Einstellungen → Druckserver*, nur Admins): Ist ein Einsatz eröffnet, landet jeder Druck als PDF in dessen
   Dokumentverwaltung. Der Ablageort lässt sich mit Platzhaltern wie bei Vorlagen festlegen (Vorgabe `Drucke`), fehlende
   Ordner werden angelegt. Jeder Druck steht im Bedienprotokoll, die Ablage zusätzlich im Einsatztagebuch. Ohne offenen
   Einsatz wird gedruckt, aber nichts abgelegt. Die Karte zeigt außerdem die letzten Aufträge und den vorausgewählten Drucker.
@@ -643,7 +650,7 @@ Voraussetzung: Docker und Node auf dem Entwicklungsrechner.
   - Ein eigener, abgespeckter CUPS (Vorgabe Port 8631, keine Verwaltung, nur drucken) wandelt PDF, JPEG, Apple- und
     PWG-Raster in PDF. Das Backend `elvis` schickt jeden Auftrag an `POST /api/printing/guest/submit`, angemeldet mit
     einem je Addon festen Geheimnis (`{{addon.secret}}`, Manifest: `provides.guestPrinters`).
-  - *System → Druckserver → Gastdrucker:* **Aus** (Aufträge ablehnen), **Direkt drucken** (fester Drucker, Farbe und
+  - *Einstellungen → Druckserver → Gastdrucker:* **Aus** (Aufträge ablehnen), **Direkt drucken** (fester Drucker, Farbe und
     Seiten einstellbar, nur was der Drucker kann) oder **Freigabe durch Personal**: Die Aufträge erscheinen
     angemeldet unter *Drucken* mit Vorschau, werden dort mit den üblichen Einstellungen freigegeben oder verworfen und
     nach 24 Stunden gelöscht. Höchstzahl Kopien je Auftrag einstellbar; Vorgabe: nur annehmen, solange das Gast-WLAN
@@ -665,7 +672,7 @@ ELVIS betreibt dafür einen eigenen SMTP-Empfänger (Port 2525, `scan.smtpPort` 
   werden nach der eingestellten Frist (Vorgabe 14 Tage) gelöscht; abgelegte Dokumente bleiben im Einsatz.
 - **Ablage:** Ist ein Einsatz eröffnet, legt ELVIS jeden Scan zusätzlich in dessen Dokumentverwaltung ab (Vorgabe
   `Scans/{{datum.iso}}`, Platzhalter wie bei Vorlagen) und vermerkt das im Einsatztagebuch.
-- **Einstellungen** (*System → Scannen*, nur Admins): Annahme an/aus, Ablage, erlaubte Geräte (IP-Adressen) und
+- **Einstellungen** (*Einstellungen → Scannen*, nur Admins): Annahme an/aus, Ablage, erlaubte Geräte (IP-Adressen) und
   optional SMTP-Anmeldung (PLAIN/LOGIN). Mails ohne PDF-Anhang lehnt ELVIS ab, das Gerät zeigt dann einen Fehler.
 - **HP-Drucker einrichten:** Embedded Web Server des Druckers öffnen → *Scannen* → *Scan an E-Mail* → *Ausgehende
   E-Mail-Profile*: SMTP-Server = Adresse des ELVIS-Servers, Port 2525, SSL/TLS aus, ggf. Authentifizierung mit den
@@ -703,7 +710,7 @@ KDE Plasma). Man meldet sich dort mit den Benutzern und PINs aus ELVIS an.
 
   Danach folgt eine Zusammenfassung, und man muss **JA** eintippen. Bis dahin wird nichts verändert. Vor dem Löschen
   registriert sich das Notebook bei ELVIS. Ist ELVIS nicht erreichbar, bleibt die Platte unberührt.
-- **Installer-ISO** (ohne PXE): *System → Arbeitsplätze → Installer-ISO* lädt eine hybride ISO (ca. 150 MB) herunter.
+- **Installer-ISO** (ohne PXE): *Einstellungen → Arbeitsplätze → Installer-ISO* lädt eine hybride ISO (ca. 150 MB) herunter.
   Sie startet per BIOS und UEFI (auch mit Secure Boot) und funktioniert als CD oder auf einem USB-Stick
   (balenaEtcher, Rufus im DD-Modus oder `dd`). Die ISO enthält nur Kernel und initrd. Installer-System und
   Abbild lädt das Notebook per Netzwerkkabel vom Addon. Der Container `pxe` erzeugt sie bei jedem Start mit seiner
@@ -735,7 +742,7 @@ KDE Plasma). Man meldet sich dort mit den Benutzern und PINs aus ELVIS an.
 - **Aussehen:** Fluent-Theme (vinceliuice, GPL-3.0) für Plasma, Kvantum, GTK und Symbole. Eine Taskleiste unten mit
   Start und Programmen in der Mitte, Fensterknöpfe rechts, ELVIS-Hintergrund. Das Look-and-Feel-Paket
   `de.elvis.desktop` gilt für jedes neue Profil.
-- **Updates** (*System → Arbeitsplätze*, je Gerät oder „Alle aktualisieren“): Pakete (`apt dist-upgrade`) und/oder
+- **Updates** (*Einstellungen → Arbeitsplätze*, je Gerät oder „Alle aktualisieren“): Pakete (`apt dist-upgrade`) und/oder
   Firmware (fwupd/LVFS) auf Auftrag aus ELVIS.
   - **Quelle:** Die Pakete kommen über den apt-Cache des Addons (Container `aptcache`, apt-cacher-ng, Option
     „Port des apt-Caches“, Vorgabe 3142). Nur der Docker-Host braucht Internet, jedes Paket wird einmal geladen.
@@ -748,7 +755,7 @@ KDE Plasma). Man meldet sich dort mit den Benutzern und PINs aus ELVIS an.
   - **Automatisch** sucht das System weiterhin nichts.
   - **Technik:** `POST|DELETE /api/system/workstations/:id/update` (`:id` = `all` für alle),
     Rückmeldung `POST /api/clients/update`, Auftrag in `GET /api/clients/state`.
-- **Betriebs-WLAN:** Ist unter *System → WLAN* das Betriebs-WLAN eingeschaltet, hinterlegt jeder Arbeitsplatz es
+- **Betriebs-WLAN:** Ist unter *Einstellungen → WLAN-Accesspoints* das Betriebs-WLAN eingeschaltet, hinterlegt jeder Arbeitsplatz es
   automatisch als systemweite Verbindung „ELVIS Betrieb“ (NetworkManager, WPA2, verbindet sich selbst).
   - Änderungen an Netzname oder Passwort übernimmt das Notebook beim nächsten Abgleich (30 s). Schaltet man das
     Betriebs-WLAN in ELVIS ab, wird die Verbindung entfernt.
@@ -758,7 +765,7 @@ KDE Plasma). Man meldet sich dort mit den Benutzern und PINs aus ELVIS an.
   - Das Gast-WLAN wird nicht hinterlegt.
 - **Notfall-Admin:** Das Konto `elvisadmin` (Passwort aus den Addon-Optionen, `sudo`) meldet sich nur an der
   Textkonsole an (Strg+Alt+F3), nicht an der Anmeldemaske.
-- **Verwaltung** (*System → Arbeitsplätze*, nur Admins): Übersicht mit Rechnername, MAC-Adresse, zuletzt gesehen,
+- **Verwaltung** (*Einstellungen → Arbeitsplätze*, nur Admins): Übersicht mit Rechnername, MAC-Adresse, zuletzt gesehen,
   angemeldetem Benutzer und Version.
   - Umbenennen ist möglich.
   - **Entfernen** sperrt das Gerätetoken. Beim nächsten Kontakt verwirft das Notebook auch seine Offline-Anmeldedaten.

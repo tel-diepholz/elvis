@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * Einfaches Monitoring: ELVIS fragt Geräte im Fahrzeugnetz regelmäßig ab (Drucker und andere Geräte per SNMP,
  * Rechner per Prometheus Node Exporter) und meldet Probleme in der Meldungsleiste. Die Ziele legen Admins in den
- * Systemeinstellungen an; abgefragt wird vom Fahrzeugmodul „Monitoring“.
+ * Einstellungen an; abgefragt wird vom Fahrzeugmodul „Monitoring“.
  */
 
 export type MonitoringKind = 'snmp-printer' | 'snmp' | 'node-exporter';

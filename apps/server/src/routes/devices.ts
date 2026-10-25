@@ -46,7 +46,7 @@ export function deviceRoutes(app: FastifyInstance, devices: DeviceManager, store
 
   app.get('/api/alerts', async () => devices.getAlerts());
 
-  // Modulkonfiguration in den Systemeinstellungen (nur Admins, siehe auth/access.ts)
+  // Modulkonfiguration in den Einstellungen (nur Admins, siehe auth/access.ts)
   app.get('/api/system/devices', async () => devices.modules());
 
   app.put<{ Params: { id: string } }>('/api/system/devices/:id', async (req) => {

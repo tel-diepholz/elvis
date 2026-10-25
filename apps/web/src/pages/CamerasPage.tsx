@@ -336,7 +336,7 @@ export function CamerasPage() {
     return (
       <>
         {header}
-        <ModuleDisabled name="Kameras" />
+        <ModuleDisabled name="Kameras" module="cameras" />
       </>
     );
   const cams = dev.state.cameras;
@@ -347,10 +347,10 @@ export function CamerasPage() {
         <EmptyState icon={<Cctv size={32} />} title="Noch keine Kameras eingerichtet">
           {admin ? (
             <>
-              Kameras unter <Link to="/system">System → Kameras</Link> anlegen.
+              Kameras unter <Link to="/einstellungen#modul-cameras">Einstellungen → Kameras</Link> anlegen.
             </>
           ) : (
-            'Ein Admin kann Kameras in den Systemeinstellungen anlegen.'
+            'Ein Admin kann Kameras in den Einstellungen anlegen.'
           )}
         </EmptyState>
       </>

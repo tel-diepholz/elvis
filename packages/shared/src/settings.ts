@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { tacticalSignSchema, type TacticalSign } from './tactical';
 import type { VehicleInfo } from './protocol';
 
-/** Von Admins in den Systemeinstellungen pflegbar. */
+/** Von Admins in den Einstellungen pflegbar. */
 export interface Settings {
   vehicle: VehicleInfo;
   /** Taktisches Zeichen für den Fahrzeugstandort auf Karte und Druck. */

@@ -135,7 +135,7 @@ describe('Modul Bluetooth', () => {
   });
 });
 
-describe('Bluetooth-Geräte in den Systemeinstellungen', () => {
+describe('Bluetooth-Geräte in den Einstellungen', () => {
   let app: App;
   let dataDir: string;
   let admin: string;

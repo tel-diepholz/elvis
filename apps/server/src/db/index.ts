@@ -162,7 +162,7 @@ const MIGRATIONS: Migration[] = [
   `,
   // Ergebnis je Schritt, damit nach einem Fehler sichtbar bleibt, wo der Lauf abgebrochen ist
   `ALTER TABLE addon_job_runs ADD COLUMN steps TEXT NOT NULL DEFAULT '[]';`,
-  // Kameras (Systemeinstellungen) und im Einsatz gespeicherte Kamerapositionen
+  // Kameras (Einstellungen) und im Einsatz gespeicherte Kamerapositionen
   `
   CREATE TABLE cameras (
     id TEXT PRIMARY KEY,
@@ -239,7 +239,7 @@ const MIGRATIONS: Migration[] = [
   `ALTER TABLE incidents ADD COLUMN vehicle_visible INTEGER NOT NULL DEFAULT 1;`,
   // Szenen schützen (nur Admins): geschützte lassen sich weder überschreiben noch löschen
   `ALTER TABLE display_scenes ADD COLUMN locked INTEGER NOT NULL DEFAULT 0;`,
-  // OpenWrt-Accesspoints für Betriebs-WLAN und Gastnetz (Systemeinstellungen)
+  // OpenWrt-Accesspoints für Betriebs-WLAN und Gastnetz (Einstellungen)
   `
   CREATE TABLE wifi_aps (
     id TEXT PRIMARY KEY,

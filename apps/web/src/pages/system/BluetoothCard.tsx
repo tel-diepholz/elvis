@@ -99,7 +99,7 @@ export function BluetoothCard() {
       }
     >
       {!live ? (
-        <p className="muted">Das Fahrzeugmodul „Bluetooth“ ist deaktiviert – unter Fahrzeugmodule einschalten.</p>
+        <p className="muted">Das Modul ist deaktiviert – oben unter „Modul aktiv“ einschalten.</p>
       ) : live.state.adapter.error ? (
         <p className="tone-alarm">{live.state.adapter.error}</p>
       ) : null}
