@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MonitorSmartphone } from 'lucide-react';
-import type { DisplayCommand } from '@elvis/shared';
+import type { DisplayCommand, DisplayDevice, DisplaySelf } from '@elvis/shared';
 import { api } from '../lib/api';
 import { DISPLAY_COMMAND_EVENT, useLive } from '../lib/live';
 import { applyTheme } from '../lib/theme';
 import { DisplayCanvas } from '../components/display/DisplayCanvas';
-import { MapSyncContext, type MapSync } from '../components/display/tiles';
+import { DisplayControlContext, MapSyncContext, type DisplayControl, type MapSync } from '../components/display/tiles';
 
 /**
- * Seite für gekoppelte Bildschirme (Kiosk-Browser oder App, /bildschirm): ohne Menü, dunkel, Vollbild.
+ * Seite für gekoppelte Bildschirme (Kiosk-Browser oder App, /bildschirm): ohne Menü, Vollbild, im Design des Bildschirms.
  * Ungekoppelt zeigt sie einen Kopplungscode; danach das Kachel-Layout, das in ELVIS eingestellt wird.
  */
 /** Kartenausschnitte an ELVIS melden (Vorschau unter „Bildschirme“); Fehler sind unkritisch */
@@ -24,10 +24,23 @@ export function DisplayScreenPage() {
   const display = self?.state === 'paired' ? self.display : null;
 
   useEffect(() => {
-    applyTheme('dark');
     document.documentElement.classList.add('display-mode');
     return () => document.documentElement.classList.remove('display-mode');
   }, []);
+
+  // Design des Bildschirms (Kachel „Szenenwahl“ oder ELVIS); ungekoppelt dunkel
+  useEffect(() => applyTheme(display?.theme ?? 'dark'), [display?.theme]);
+
+  // Bedienung über die Kachel „Szenenwahl“; Antwort sofort übernehmen, die Live-Meldung folgt
+  const paired = (d: DisplayDevice) => {
+    const next: DisplaySelf = { state: 'paired', display: d };
+    queryClient.setQueryData(['displays', 'self'], next);
+  };
+  const control: DisplayControl | null = display && {
+    display,
+    applyScene: (id) => api.displaySelfApplyScene(id).then(paired),
+    setTheme: (t) => api.displaySelfTheme(t).then(paired),
+  };
 
   // Ungekoppelt: Kopplung beginnen (Code anzeigen)
   useEffect(() => {
@@ -89,7 +102,9 @@ export function DisplayScreenPage() {
     <div className="display-screen">
       {display!.layout.tiles.length ? (
         <MapSyncContext.Provider value={mapSync}>
-          <DisplayCanvas layout={display!.layout} />
+          <DisplayControlContext.Provider value={control}>
+            <DisplayCanvas layout={display!.layout} />
+          </DisplayControlContext.Provider>
         </MapSyncContext.Provider>
       ) : (
         <div className="display-center display-pairing">

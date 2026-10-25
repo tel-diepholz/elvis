@@ -5,7 +5,7 @@ import { z } from 'zod';
  * Den Inhalt bestimmt ein Raster mit Kacheln, das aus ELVIS ferngesteuert wird.
  */
 
-export type DisplayTileType = 'map' | 'camera' | 'video' | 'weather' | 'forecast' | 'clock' | 'alerts' | 'network' | 'text' | 'guestWifi' | 'tasks' | 'forces';
+export type DisplayTileType = 'map' | 'camera' | 'video' | 'weather' | 'forecast' | 'clock' | 'alerts' | 'network' | 'text' | 'guestWifi' | 'tasks' | 'forces' | 'scenes' | 'image';
 
 export interface DisplayTileTypeInfo {
   label: string;
@@ -27,6 +27,8 @@ export const DISPLAY_TILE_TYPES: Record<DisplayTileType, DisplayTileTypeInfo> = 
   guestWifi: { label: 'Gast-WLAN', description: 'QR-Code, Netzname und Passwort des Gastnetzes im laufenden Einsatz', size: { w: 4, h: 3 } },
   tasks: { label: 'Aufgaben', description: 'Offene Aufgaben des laufenden Einsatzes mit Fälligkeit, fällige hervorgehoben', size: { w: 4, h: 4 } },
   forces: { label: 'Kräfteübersicht', description: 'Kräfte des laufenden Einsatzes nach Abschnitten mit taktischem Zeichen, Status und Stärke', size: { w: 5, h: 5 } },
+  image: { label: 'Bild', description: 'Hochgeladenes Bild, z. B. Lageplan, Logo oder Hinweistafel', size: { w: 4, h: 3 } },
+  scenes: { label: 'Szenenwahl', description: 'Szenen des Bildschirms per Touch aufrufen, dazu Umschalter für helles und dunkles Design', size: { w: 3, h: 3 } },
 };
 
 /** Höchstlänge des Freitexts */
@@ -94,6 +96,26 @@ export const displayMapViewSchema = z.object({
   zoom: z.number().min(0).max(22),
 });
 
+/** Hochgeladenes Bild für die Kachel „Bild“ */
+export interface DisplayImage {
+  id: number;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+  createdBy: string;
+  /** Kacheln in Layouts oder Szenen, die das Bild zeigen – benutzte Bilder lassen sich nicht löschen */
+  uses: number;
+}
+
+/** Höchstgröße eines Bildes */
+export const DISPLAY_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Farbschema eines Bildschirms */
+export type DisplayTheme = 'dark' | 'light';
+
+export const displayThemeSchema = z.enum(['dark', 'light']);
+
 export interface DisplayScreen {
   width: number;
   height: number;
@@ -118,6 +140,8 @@ export interface DisplayDevice {
   online: boolean;
   /** Fenstergröße, die der Bildschirm zuletzt gemeldet hat (für die Vorschau im richtigen Seitenverhältnis) */
   screen: DisplayScreen | null;
+  /** Hell oder dunkel – am Bildschirm (Kachel „Szenenwahl“) oder in ELVIS umschaltbar */
+  theme: DisplayTheme;
   userAgent: string;
   pairedAt: string;
   lastSeenAt: string | null;

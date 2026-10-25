@@ -18,6 +18,7 @@ import { Store } from './db/store.js';
 import { DeviceConfigStore } from './devices/config-store.js';
 import { cameraRoutes } from './routes/cameras.js';
 import { displayRoutes } from './routes/displays.js';
+import { DisplayImageService } from './services/displayImages.js';
 import { DISPLAY_COOKIE, DisplayService } from './services/displays.js';
 import { WorkstationService } from './services/workstations.js';
 import { workstationRoutes } from './routes/workstations.js';
@@ -103,6 +104,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   videos.onChange(() => hub.invalidate(['videoSources']));
   const displays = new DisplayService(db);
   displays.onChange(() => hub.invalidate(['displays']));
+  const displayImages = new DisplayImageService(db, config.dataDir, () => hub.invalidate(['displays']));
   hub.attachDisplays({ identify: (req) => displays.resolve(req.cookies[DISPLAY_COOKIE])?.id ?? null, setOnline: (id, on) => displays.setOnline(id, on) });
   const templates = new TemplateService(db, config.dataDir, (t) => hub.invalidate(t));
   const documents = new DocumentService(store, config.dataDir, { templates, vehicle: () => settings.get().vehicle, notify: (t) => hub.invalidate(t) });
@@ -230,7 +232,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     wopiRoutes(api, { office, documents, templates });
     printingRoutes(api, { printing, office, store, notify: (t) => hub.invalidate(t), download: opts.officeDownload });
     scanningRoutes(api, { scanning, store, notify: (t) => hub.invalidate(t) });
-    displayRoutes(api, { displays, hub, store, notify: (t) => hub.invalidate(t) });
+    displayRoutes(api, { displays, images: displayImages, hub, store, notify: (t) => hub.invalidate(t) });
     workstationRoutes(api, { workstations, users, limiter, store, notify: (t) => hub.invalidate(t) });
     api.get('/api/video/sources', async () => videos.list());
     cameraRoutes(api, { cameras, presets: cameraPresets, devices, incidents, store, notify: (t) => hub.invalidate(t) });

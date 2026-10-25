@@ -549,6 +549,22 @@ const MIGRATIONS: Migration[] = [
     created_at TEXT NOT NULL
   );
   `,
+  // Farbschema je Bildschirm (Kachel „Szenenwahl“)
+  (db) => {
+    const columns = db.prepare('PRAGMA table_info(displays)').all() as { name: string }[];
+    if (!columns.some((c) => c.name === 'theme')) db.exec("ALTER TABLE displays ADD COLUMN theme TEXT NOT NULL DEFAULT 'dark'");
+  },
+  // Bilder für die Kachel „Bild“ (Datei unter display-images/<id>)
+  `
+  CREATE TABLE display_images (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL
+  );
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

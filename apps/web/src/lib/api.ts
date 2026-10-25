@@ -19,9 +19,11 @@ import {
   type DisplayCommand,
   type DisplayMapView,
   type DisplayDevice,
+  type DisplayImage,
   type DisplayScene,
   type DisplayLayout,
   type DisplaySelf,
+  type DisplayTheme,
   type Workstation,
   type WorkstationInstaller,
   type WorkstationUpdateRequest,
@@ -259,6 +261,15 @@ export const api = {
   lockDisplayScene: (id: string, sceneId: number, locked: boolean) => request<DisplayDevice>('PUT', `/api/displays/${id}/scenes/${sceneId}/lock`, { locked }),
   applyDisplayScene: (id: string, sceneId: number) => request<DisplayDevice>('POST', `/api/displays/${id}/scenes/${sceneId}/apply`),
   reorderDisplayScenes: (id: string, ids: number[]) => request<DisplayDevice>('PUT', `/api/displays/${id}/scenes/order`, { ids }),
+  displayImages: () => request<DisplayImage[]>('GET', '/api/displays/images'),
+  uploadDisplayImage: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<DisplayImage>('POST', '/api/displays/images', form);
+  },
+  removeDisplayImage: (imageId: number) => request<void>('DELETE', `/api/displays/images/${imageId}`),
+  displayImageUrl: (imageId: number) => `/api/displays/images/${imageId}`,
+  setDisplayTheme: (id: string, theme: DisplayTheme) => request<DisplayDevice>('PUT', `/api/displays/${id}/theme`, { theme }),
   displayCommand: (id: string, action: DisplayCommand) => request<{ ok: boolean }>('POST', `/api/displays/${id}/command`, { action }),
   displayMapView: (id: string, tileId: string, view: DisplayMapView) => request<{ ok: boolean }>('POST', `/api/displays/${id}/map-view`, { tileId, ...view }),
   reportDisplayMapView: (tileId: string, view: DisplayMapView) => request<void>('POST', '/api/display/map-view', { tileId, ...view }),
@@ -275,6 +286,8 @@ export const api = {
   reorderDisplays: (ids: string[]) => request<DisplayDevice[]>('PUT', '/api/system/displays/order', { ids }),
   displaySelf: () => request<DisplaySelf>('GET', '/api/display/self'),
   displayStartPairing: () => request<DisplaySelf>('POST', '/api/display/pair'),
+  displaySelfApplyScene: (sceneId: number) => request<DisplayDevice>('POST', `/api/display/scenes/${sceneId}/apply`),
+  displaySelfTheme: (theme: DisplayTheme) => request<DisplayDevice>('PUT', '/api/display/theme', { theme }),
   displayHeartbeat: (width: number, height: number) => request<void>('POST', '/api/display/heartbeat', { width, height }),
 
   cameraConfigs: () => request<CameraConfig[]>('GET', '/api/system/cameras'),

@@ -299,11 +299,16 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
   und jede Aktion landet im Bedienprotokoll. Beim Entkoppeln eines Bildschirms werden seine Szenen gelöscht.
 - **Kacheln:** Lagekarte (Fahrzeug und Einsatzort, Kartenstil, Mittelpunkt, Mitführen, Zoom), Kamera (Livebild),
   Wetter (mit amtlichen Warnungen), Wettervorhersage (24 Stunden und/oder 7 Tage), Uhr (DTG), Meldungen, Netzwerk (Router/Failover), Gast-WLAN (QR-Code, Netzname und Passwort des Gastnetzes
-  im laufenden Einsatz, siehe „WLAN“). Eine mitgeführte Karte folgt Fahrzeug bzw. Einsatzort und
+  im laufenden Einsatz, siehe „WLAN“), Bild (hochgeladenes PNG, JPEG, GIF oder WebP bis 20 MB, ohne Kachelrahmen) und
+  Szenenwahl (Szenen und Hell/Dunkel per Touch am Bildschirm). Eine mitgeführte Karte folgt Fahrzeug bzw. Einsatzort und
   lässt sich nicht verschieben. Ohne Mitführen lässt sie sich am Bildschirm per Touch und unter „Bildschirme“ direkt in
   der Vorschau verschieben und zoomen – der Bildschirm folgt und behält den Ausschnitt, auch nach „Neu laden“.
+- **Design:** Jeder Bildschirm ist hell oder dunkel (Standard), umschaltbar unter „Bildschirme“ oder am Bildschirm über
+  die Kachel „Szenenwahl“. Im dunklen Design ist der Hintergrund hinter den Kacheln schwarz.
 - **Rechte:** Gekoppelte Bildschirme dürfen ohne Benutzeranmeldung zusätzlich den laufenden Einsatz lesen (für den
-  Einsatzort auf der Karte) und das Gastnetz (Kachel „Gast-WLAN“), sonst nur, was auch anonyme Arbeitsplätze sehen.
+  Einsatzort auf der Karte), das Gastnetz (Kachel „Gast-WLAN“) und die Bilder der Kachel „Bild“, sonst nur, was auch
+  anonyme Arbeitsplätze sehen. Szenen aufrufen und das Design wechseln darf ein Bildschirm selbst nur, solange er eine
+  Kachel „Szenenwahl“ zeigt.
 - **Kiosk-Browser:** mit dauerhaftem Profil starten, nicht im Inkognito-Modus, sonst geht die Kopplung bei jedem
   Neustart verloren. Beispiel: `chromium --kiosk --noerrdialogs --disable-session-crashed-bubble http://<elvis>:8080/bildschirm`.
 - **Smart-TV / Android:** Die App [ELVIS Bildschirm](https://github.com/tel-diepholz/elvis-tv) zeigt `/bildschirm` im

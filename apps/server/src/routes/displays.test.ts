@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import type { DisplayDevice, DisplaySelf, ServerMessage } from '@elvis/shared';
+import type { DisplayDevice, DisplayImage, DisplaySelf, ServerMessage } from '@elvis/shared';
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
 import { adminCookie, sessionCookie } from '../test-helpers.js';
@@ -237,5 +237,93 @@ describe('Bildschirme: Szenen', () => {
     await req('DELETE', `/api/system/displays/${display.id}`);
     const again = await pairDisplay('Neu');
     expect(again.display.scenes).toEqual([]);
+  });
+
+  it('lässt den Bildschirm über die Kachel „Szenenwahl“ Szenen aufrufen und das Design wechseln', async () => {
+    const { cookie, display } = await pairDisplay('Lagetisch');
+    const tile = (id: string, type: string, x: number, y: number, w: number, h: number) => ({ id, type, x, y, w, h, config: {} });
+    const mitWahl = { cols: 12, rows: 8, tiles: [tile('m', 'map', 0, 0, 9, 8), tile('s', 'scenes', 9, 0, 3, 3)] };
+    const ohneWahl = { cols: 12, rows: 8, tiles: [tile('c', 'clock', 0, 0, 4, 2)] };
+    const layout = (l: unknown) => req<DisplayDevice>('PUT', `/api/displays/${display.id}/layout`, { layout: l });
+    expect(display.theme).toBe('dark');
+
+    await layout(ohneWahl);
+    const uhr = (await req<{ id: number }>('POST', `/api/displays/${display.id}/scenes`, { name: 'Uhr' })).body;
+    await layout(mitWahl);
+    const lage = (await req<{ id: number }>('POST', `/api/displays/${display.id}/scenes`, { name: 'Lage' })).body;
+
+    // Design: am Bildschirm und in ELVIS
+    const hell = await req<DisplayDevice>('PUT', '/api/display/theme', { theme: 'light' }, cookie);
+    expect(hell.status).toBe(200);
+    expect(hell.body.theme).toBe('light');
+    expect((await req('PUT', '/api/display/theme', { theme: 'blau' }, cookie)).status).toBe(400);
+    expect((await req('PUT', '/api/display/theme', { theme: 'dark' }, '')).status).toBe(401);
+    expect((await req<DisplayDevice>('PUT', `/api/displays/${display.id}/theme`, { theme: 'dark' })).body.theme).toBe('dark');
+    expect((await req('PUT', `/api/displays/${display.id}/theme`, { theme: 'light' }, '')).status).toBe(401);
+
+    // Szene am Bildschirm aufrufen; ohne Szenenwahl-Kachel geht es nicht mehr
+    const applied = await req<DisplayDevice>('POST', `/api/display/scenes/${uhr.id}/apply`, undefined, cookie);
+    expect(applied.status).toBe(200);
+    expect(applied.body.activeSceneId).toBe(uhr.id);
+    expect((await req('POST', `/api/display/scenes/${lage.id}/apply`, undefined, cookie)).status).toBe(403);
+    expect((await req('PUT', '/api/display/theme', { theme: 'light' }, cookie)).status).toBe(403);
+    expect((await req('POST', `/api/display/scenes/${lage.id}/apply`, undefined, '')).status).toBe(401);
+
+    // fremde Szenen sind nicht erreichbar
+    await layout(mitWahl);
+    const other = await pairDisplay('Andere');
+    await req('PUT', `/api/displays/${other.display.id}/layout`, { layout: ohneWahl });
+    const fremd = (await req<{ id: number }>('POST', `/api/displays/${other.display.id}/scenes`, { name: 'Fremd' })).body;
+    expect((await req('POST', `/api/display/scenes/${fremd.id}/apply`, undefined, cookie)).status).toBe(404);
+
+    const audit = (await req<{ operator: string; message: string }[]>('GET', '/api/audit')).body;
+    expect(audit).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ operator: 'Bildschirm Lagetisch', message: 'Lagetisch: Szene „Uhr“ am Bildschirm aufgerufen' }),
+        expect.objectContaining({ operator: 'Bildschirm Lagetisch', message: 'Lagetisch: Design hell am Bildschirm gewählt' }),
+      ]),
+    );
+  });
+
+  it('nimmt Bilder für die Kachel „Bild“ an, liefert sie an Bildschirme aus und schützt benutzte vor dem Löschen', async () => {
+    const { cookie, display } = await pairDisplay('Lagetisch');
+    const upload = async (name: string, data: Buffer, as = admin) => {
+      const boundary = '----elvis' + Math.random().toString(16).slice(2);
+      const payload = Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: image/png\r\n\r\n`),
+        data,
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+      const res = await app.server.inject({ method: 'POST', url: '/api/displays/images', payload, headers: { 'content-type': `multipart/form-data; boundary=${boundary}`, ...(as ? { cookie: as } : {}) } });
+      return { status: res.statusCode, body: res.json() as DisplayImage & { error?: string } };
+    };
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 1)]);
+
+    expect((await upload('plan.png', png, '')).status).toBe(401);
+    const bad = await upload('kein-bild.png', Buffer.from('<svg onload="alert(1)"/>'));
+    expect(bad.status).toBe(415);
+    const img = await upload('Lageplan.png', png);
+    expect(img.status).toBe(201);
+    expect(img.body).toMatchObject({ name: 'Lageplan.png', mimeType: 'image/png', sizeBytes: png.length, uses: 0 });
+
+    // Inhalt: angemeldete Benutzer und gekoppelte Bildschirme, sonst niemand
+    const content = await app.server.inject({ method: 'GET', url: `/api/displays/images/${img.body.id}`, headers: { cookie } });
+    expect(content.statusCode).toBe(200);
+    expect(content.headers['content-type']).toBe('image/png');
+    expect(content.rawPayload.equals(png)).toBe(true);
+    expect((await req('GET', `/api/displays/images/${img.body.id}`, undefined, '')).status).toBe(401);
+    expect((await req('GET', '/api/displays/images', undefined, cookie)).status).toBe(401);
+
+    // in Layout und Szene benutzt → nicht löschbar
+    const layout = { cols: 12, rows: 8, tiles: [{ id: 'b', type: 'image', x: 0, y: 0, w: 4, h: 3, config: { imageId: img.body.id } }] };
+    await req('PUT', `/api/displays/${display.id}/layout`, { layout });
+    await req('POST', `/api/displays/${display.id}/scenes`, { name: 'Plan' });
+    expect((await req<DisplayImage[]>('GET', '/api/displays/images')).body[0]?.uses).toBe(2);
+    expect((await req<{ error: string }>('DELETE', `/api/displays/images/${img.body.id}`)).body.error).toMatch(/2 Kachel/);
+    await req('PUT', `/api/displays/${display.id}/layout`, { layout: { ...layout, tiles: [] } });
+    const scene = (await req<DisplayDevice[]>('GET', '/api/displays')).body[0]!.scenes[0]!;
+    await req('DELETE', `/api/displays/${display.id}/scenes/${scene.id}`);
+    expect((await req('DELETE', `/api/displays/images/${img.body.id}`)).status).toBe(204);
+    expect((await req('GET', `/api/displays/images/${img.body.id}`)).status).toBe(404);
   });
 });

@@ -1,9 +1,9 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useQuery } from '@tanstack/react-query';
-import { Bell, Cctv, CalendarDays, Clock, CloudSun, ListChecks, Map as MapIcon, Network, Repeat, Type, Users, Video, Wifi } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Bell, Cctv, CalendarDays, Clock, CloudSun, Image as ImageIcon, Layers, ListChecks, Map as MapIcon, Moon, Network, Repeat, Sun, Type, Users, Video, Wifi } from 'lucide-react';
 import {
   DEFAULT_VEHICLE_SIGN,
   DISPLAY_TILE_TYPES,
@@ -18,8 +18,10 @@ import {
   taskIsDue,
   unitChildren,
   unitDescendants,
+  type DisplayDevice,
   type DisplayMapView,
   type DisplayTile,
+  type DisplayTheme,
   type DisplayTileType,
   type Unit,
 } from '@elvis/shared';
@@ -40,7 +42,7 @@ import { UnitsLayer, useMapUnits } from '../map/units';
 import { WifiQr } from '../WifiQr';
 import { fmtRelative } from '../tasks/taskActions';
 
-export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, forecast: CalendarDays, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users };
+export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, forecast: CalendarDays, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users, scenes: Layers, image: ImageIcon };
 
 const date = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 const time = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -576,6 +578,72 @@ function ForcesTile({ tile }: { tile: DisplayTile }) {
   );
 }
 
+/** Hochgeladenes Bild, eingepasst oder kachelfüllend */
+function ImageTile({ tile }: { tile: DisplayTile }) {
+  const id = typeof tile.config.imageId === 'number' ? tile.config.imageId : null;
+  const [failed, setFailed] = useState<number | null>(null);
+  if (id === null) return <TileEmpty text="Kein Bild gewählt" />;
+  if (failed === id) return <TileEmpty text="Bild nicht gefunden" />;
+  return <img className={`tile-image fit-${tile.config.fit === 'cover' ? 'cover' : 'contain'}`} src={api.displayImageUrl(id)} alt="" draggable={false} onError={() => setFailed(id)} />;
+}
+
+/**
+ * Bedienung des Bildschirms für die Kachel „Szenenwahl“: auf dem Bildschirm über dessen Gerätecookie, in der Vorschau
+ * unter „Bildschirme“ mit der Anmeldung des Benutzers. Ohne Kontext (Editor) bleibt die Kachel unbedienbar.
+ */
+export interface DisplayControl {
+  display: DisplayDevice;
+  applyScene: (sceneId: number) => Promise<unknown>;
+  setTheme: (theme: DisplayTheme) => Promise<unknown>;
+}
+
+export const DisplayControlContext = createContext<DisplayControl | null>(null);
+
+/** Szenen des Bildschirms als große Schaltflächen, darunter hell/dunkel */
+function ScenesTile({ tile }: { tile: DisplayTile }) {
+  const ctl = useContext(DisplayControlContext);
+  const apply = useMutation({ mutationFn: (id: number) => ctl!.applyScene(id) });
+  const theme = useMutation({ mutationFn: (t: DisplayTheme) => ctl!.setTheme(t) });
+  if (!ctl) return <TileEmpty text="Szenenwahl" />;
+  const { display } = ctl;
+  const busy = apply.isPending || theme.isPending;
+  const error = apply.error ?? theme.error;
+  const showTheme = tile.config.theme !== false;
+  return (
+    <div className="tile-scenes">
+      {display.scenes.length ? (
+        <div className="tile-scenes-list" role="group" aria-label="Szenen">
+          {display.scenes.map((s) => {
+            const active = s.id === display.activeSceneId;
+            return (
+              <button key={s.id} type="button" className={active ? 'active' : undefined} aria-pressed={active} disabled={busy} onClick={() => !active && apply.mutate(s.id)}>
+                {s.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <TileEmpty text="Keine Szenen gespeichert" />
+      )}
+      {error && <div className="tile-scenes-error">{error.message}</div>}
+      {showTheme && (
+        <div className="tile-scenes-theme" role="radiogroup" aria-label="Design">
+          {(
+            [
+              ['light', Sun, 'Hell'],
+              ['dark', Moon, 'Dunkel'],
+            ] as const
+          ).map(([value, Icon, label]) => (
+            <button key={value} type="button" role="radio" aria-checked={display.theme === value} className={display.theme === value ? 'active' : undefined} disabled={busy} onClick={() => display.theme !== value && theme.mutate(value)}>
+              <Icon size="1.1em" /> {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TileEmpty({ text }: { text: string }) {
   return <div className="tile-empty">{text}</div>;
 }
@@ -607,6 +675,10 @@ export function TileView({ tile }: { tile: DisplayTile }) {
       return <TasksTile tile={tile} />;
     case 'forces':
       return <ForcesTile tile={tile} />;
+    case 'scenes':
+      return <ScenesTile tile={tile} />;
+    case 'image':
+      return <ImageTile tile={tile} />;
     default:
       return <TileEmpty text={`Unbekannte Kachel ${DISPLAY_TILE_TYPES[tile.type as DisplayTileType]?.label ?? tile.type}`} />;
   }

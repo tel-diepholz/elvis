@@ -45,8 +45,8 @@ export function accessLevel(method: string, rawUrl: string): AccessLevel {
   return 'user';
 }
 
-/** Endpunkte, die gekoppelte Bildschirme ohne Benutzeranmeldung lesen dürfen (Einsatzort, Kartenobjekte, Kräfte, Aufgaben, Gastnetz) */
+/** Endpunkte, die gekoppelte Bildschirme ohne Benutzeranmeldung lesen dürfen (Einsatzort, Kartenobjekte, Kräfte, Aufgaben, Gastnetz, Bilder) */
 export function displayReadable(method: string, rawUrl: string): boolean {
   const url = rawUrl.split('?')[0]!;
-  return (method === 'GET' || method === 'HEAD') && (url === '/api/incidents/active' || url === '/api/wifi/guest' || /^\/api\/incidents\/\d+\/(objects|units|tasks)$/.test(url));
+  return (method === 'GET' || method === 'HEAD') && (url === '/api/incidents/active' || url === '/api/wifi/guest' || /^\/api\/incidents\/\d+\/(objects|units|tasks)$/.test(url) || /^\/api\/displays\/images\/\d+$/.test(url));
 }
