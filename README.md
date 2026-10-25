@@ -141,15 +141,17 @@ npx wrangler@4 d1 create elvis-relay        # ausgegebene database_id in wrangle
 npm run deploy                               # Schema anlegen und Worker veröffentlichen
 ```
 
-Die ausgegebene Adresse (`https://elvis-relay.<konto>.workers.dev`) in ELVIS eintragen – ohne Eintrag ist die
-Funktion aus. Der ELW meldet sich beim ersten Koppeln selbst beim Relay an:
+Das Relay läuft unter **`https://elvis-app.h2com.eu`** (eigene Domain des Workers, `routes` in `wrangler.toml`; die
+Zone `h2com.eu` muss im selben Cloudflare-Konto liegen). ELVIS und die App nutzen diese Adresse als Vorgabe. Der ELW
+meldet sich beim ersten Koppeln selbst beim Relay an. Ein anderes Relay oder `null` (aus) lässt sich in ELVIS
+eintragen:
 
 ```json
-"app": { "relayUrl": "https://elvis-relay.<konto>.workers.dev" }
+"app": { "relayUrl": "https://elvis-app.h2com.eu" }
 ```
 
-oder per Umgebungsvariable `ELVIS_APP_RELAY_URL`. In der App ist dieselbe Adresse als Vorgabe eingebaut
-(Repository-Variable `ELVIS_APP_RELAY_URL` im App-Repo) und unter „Relay-Adresse“ änderbar. Lokal ausprobieren:
+oder per Umgebungsvariable `ELVIS_APP_RELAY_URL` (`off` = aus). In der App ist die Adresse unter „Relay-Adresse“
+änderbar. Lokal ausprobieren:
 `npm run dev -w @elvis/relay` (Port 8787, lokale D1 nach `npx wrangler@4 d1 migrations apply elvis-relay --local`),
 dann ELVIS mit `ELVIS_APP_RELAY_URL=http://localhost:8787` starten; im Android-Emulator ist das Relay unter
 `http://10.0.2.2:8787` erreichbar.

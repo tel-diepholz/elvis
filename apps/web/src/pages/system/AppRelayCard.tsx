@@ -3,7 +3,7 @@ import { api } from '../../lib/api';
 import { fmtDateTime } from '../../lib/format';
 import { Badge, Card, Loading } from '../../components/ui';
 
-/** App-Anbindung: Zustand des Cloud-Relays. Die Adresse steht in config/elvis.json (app.relayUrl). */
+/** App-Anbindung: Zustand des Cloud-Relays. Vorgabe https://elvis-app.h2com.eu, abweichend in config/elvis.json (app.relayUrl). */
 export function AppRelayCard() {
   // Schlüssel unter „appLinks“, damit Kopplungen und Abrufe die Anzeige auffrischen
   const { data: s } = useQuery({ queryKey: ['appLinks', 'relay'], queryFn: api.appRelayStatus, refetchInterval: 15_000 });
@@ -21,8 +21,8 @@ export function AppRelayCard() {
     <Card title="App-Anbindung" actions={badge}>
       {!s.enabled ? (
         <p className="muted">
-          Einsatzkräfte können ihre Position mit der ELVIS-App senden. Dazu das Relay in <code>config/elvis.json</code> unter <code>app.relayUrl</code> (oder per{' '}
-          <code>ELVIS_APP_RELAY_URL</code>) eintragen.
+          Abgeschaltet (<code>app.relayUrl</code> ist <code>null</code>). Damit Einsatzkräfte ihre Position mit der ELVIS-App senden können, in{' '}
+          <code>config/elvis.json</code> die Relay-Adresse eintragen (Vorgabe <code>https://elvis-app.h2com.eu</code>) oder per <code>ELVIS_APP_RELAY_URL</code>.
         </p>
       ) : (
         <>

@@ -104,7 +104,7 @@ const configSchema = z.object({
   app: z
     .object({
       /** Cloud-Relay der ELVIS-App (apps/relay), über das Einsatzkräfte ihre Position senden; null = aus. */
-      relayUrl: z.string().url().nullable().default(null),
+      relayUrl: z.string().url().nullable().default('https://elvis-app.h2com.eu'),
     })
     .default({}),
   alerts: z
