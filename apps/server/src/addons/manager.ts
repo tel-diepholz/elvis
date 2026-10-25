@@ -43,6 +43,7 @@ import {
   addonImages,
   addonVolumes,
   builtImageTag,
+  containerName,
   containerSpec,
   demuxLogs,
   jobStepName,
@@ -628,6 +629,8 @@ export class AddonManager {
     let exitCode: number | null = null;
     let error: string | null = null;
     let recorded = false;
+    /** Für einzelne Schritte angehaltene Container – laufen danach wieder */
+    const stopped = new Set<string>();
     const record = () => {
       this.runs.finish(live.runId, error ? 'failed' : 'succeeded', exitCode, error ?? '', live.steps.map(({ weight: _, ...st }) => st));
       recorded = true;
@@ -645,6 +648,16 @@ export class AddonManager {
         const built = /^build:(.+)$/.exec(step.image);
         if (built) await this.buildImage(docker, manifest, built[1]!);
         else await this.ensureImage(docker, r.host_id, step.image);
+        st.message = null;
+        for (const name of step.stopContainers) {
+          const c = docker.getContainer(containerName(r.id, name));
+          const info = await c.inspect().catch(() => null);
+          if (!info?.State.Running) continue;
+          st.message = `Container ${name} anhalten`;
+          this.notifySoon(r.id);
+          await c.stop();
+          stopped.add(name);
+        }
         st.message = null;
         // Voriger Lauf: Container entfernen – sein Protokoll war bis hierhin abrufbar.
         await docker.getContainer(jobStepName(r.id, jobId, i)).remove({ force: true }).catch(() => undefined);
@@ -671,7 +684,10 @@ export class AddonManager {
       exitCode = 0;
       // Erfolg zuerst speichern: Container, die auf diesen Job warten, dürfen danach starten.
       record();
-      if (job.restartAfter) await this.startContainers(r.id, manifest, docker);
+      if (job.restartAfter) {
+        stopped.clear();
+        await this.startContainers(r.id, manifest, docker);
+      }
     } catch (err) {
       if (recorded) {
         // Job war erfolgreich, nur der (Neu-)Start der Container scheiterte
@@ -686,6 +702,9 @@ export class AddonManager {
       }
     } finally {
       if (!recorded) record();
+      for (const name of stopped) {
+        await this.hosts.readyClient(r.host_id).docker.getContainer(containerName(r.id, name)).start().catch(() => undefined);
+      }
       this.live.delete(this.liveKey(r.id, jobId));
       this.audit({ operator: triggeredBy, target: `addon:${r.id}`, action: `job:${jobId}`, params: '{}', success: !error, message: error ?? '' });
       this.notify(['addons']);

@@ -23,6 +23,8 @@ export class FakeDocker {
   arch = 'x86_64';
   /** Exit-Code für Job-Container. */
   jobExitCode = 0;
+  /** Nur dieser Job-Container (Name) endet mit Code 1. */
+  failingJob: string | null = null;
   /** Laufzeit von Job-Containern (für Vorführungen); Protokollzeilen erscheinen verteilt über die Laufzeit. */
   jobDurationMs = 5;
   /** Job-Container geben zusätzlich ELVIS_PROGRESS-Zeilen von 0 bis 100 aus. */
@@ -33,6 +35,8 @@ export class FakeDocker {
   buildError: string | null = null;
   /** Per putArchive hochgeladene Dateien: Volume → Archiv-Einträge. */
   archives: { volume: string; entries: string[] }[] = [];
+  /** Namen angehaltener Container in Reihenfolge */
+  stops: string[] = [];
   private seq = 0;
 
   constructor(images: string[] = []) {
@@ -64,9 +68,15 @@ export class FakeDocker {
           setTimeout(() => (c.state = 'exited'), self.jobDurationMs);
         }
       },
+      async inspect() {
+        const c = self.find(idOrName);
+        if (!c) throw self.notFound();
+        return { Id: c.id, Name: `/${c.name}`, State: { Status: c.state, Running: c.state === 'running' } };
+      },
       async stop() {
         const c = self.find(idOrName);
         if (!c) throw self.notFound();
+        self.stops.push(c.name);
         c.state = 'exited';
       },
       async restart() {
@@ -83,7 +93,8 @@ export class FakeDocker {
         const c0 = self.find(idOrName);
         await new Promise((r) => setTimeout(r, c0?.spec.Labels?.['elvis.addon.job'] ? self.jobDurationMs + 5 : 10));
         const c = self.find(idOrName);
-        return { StatusCode: c?.spec.Labels?.['elvis.addon.job'] ? self.jobExitCode : 0 };
+        if (!c?.spec.Labels?.['elvis.addon.job']) return { StatusCode: 0 };
+        return { StatusCode: c.name === self.failingJob ? 1 : self.jobExitCode };
       },
       async logs(opts: { follow?: boolean } = {}) {
         const c = self.find(idOrName);

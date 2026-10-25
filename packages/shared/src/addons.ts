@@ -128,6 +128,8 @@ const stepSchema = z.object({
   /** Anteil am Gesamtfortschritt des Jobs. */
   weight: z.number().positive().default(1),
   progress: progressSchema.optional(),
+  /** Container des Addons, die für diesen Schritt angehalten werden (z. B. gemeinsame Datenbank); danach starten sie wieder. */
+  stopContainers: z.array(slug).default([]),
 });
 
 const jobSchema = z
@@ -188,6 +190,23 @@ const geocoderProvision = z.object({
   name: z.string().min(1),
   type: z.enum(['photon', 'nominatim']).default('photon'),
   /** Basisadresse, z. B. http://{{host.address}}:8088 */
+  url: templated,
+});
+
+/** Routing: Valhalla (POST <url>/route, /isochrone …) */
+const routerProvision = z.object({
+  id: slug,
+  name: z.string().min(1),
+  type: z.enum(['valhalla']).default('valhalla'),
+  /** Basisadresse, z. B. http://{{host.address}}:8002 */
+  url: templated,
+});
+
+/** Overpass-API (GET/POST <url>/api/interpreter) */
+const overpassProvision = z.object({
+  id: slug,
+  name: z.string().min(1),
+  /** Basisadresse, z. B. http://{{host.address}}:8089 */
   url: templated,
 });
 
@@ -252,6 +271,8 @@ export const addonManifestSchema = z
         mapSources: z.array(mapSourceProvision).default([]),
         videoSources: z.array(videoSourceProvision).default([]),
         geocoders: z.array(geocoderProvision).default([]),
+        routers: z.array(routerProvision).default([]),
+        overpass: z.array(overpassProvision).default([]),
         office: z.array(officeProvision).default([]),
         printServers: z.array(printServerProvision).default([]),
         guestPrinters: z.array(guestPrinterProvision).default([]),
@@ -288,6 +309,11 @@ export const addonManifestSchema = z
     for (const c of m.containers) {
       if (c.waitForJob && !m.jobs[c.waitForJob]) ctx.addIssue({ code: 'custom', message: `Unbekannter Job „${c.waitForJob}“`, path: ['containers'] });
     }
+    for (const [id, j] of Object.entries(m.jobs)) {
+      for (const n of (j.steps ?? []).flatMap((s) => s.stopContainers)) {
+        if (!names.includes(n)) ctx.addIssue({ code: 'custom', message: `Unbekannter Container „${n}“ in stopContainers`, path: ['jobs', id] });
+      }
+    }
     const runs = [...m.containers, ...Object.values(m.jobs).flatMap((j) => (j.steps ?? []) as { image: string }[]), ...Object.values(m.jobs).filter((j) => j.image).map((j) => ({ image: j.image! }))];
     for (const r of runs) {
       const ref = /^build:(.+)$/.exec(r.image);
@@ -305,7 +331,7 @@ export type AddonProgressSpec = z.infer<typeof progressSchema>;
 /** Schritte eines Jobs – ein einfacher Job ist ein einzelner Schritt. */
 export function jobSteps(j: AddonJob): AddonJobStep[] {
   if (j.steps) return j.steps;
-  return [{ label: j.label, image: j.image!, command: j.command, env: j.env, volumes: j.volumes, network: j.network, capabilities: j.capabilities, devices: j.devices, gpus: j.gpus, shmSize: j.shmSize, apparmor: j.apparmor, weight: 1, progress: j.progress }];
+  return [{ label: j.label, image: j.image!, command: j.command, env: j.env, volumes: j.volumes, network: j.network, capabilities: j.capabilities, devices: j.devices, gpus: j.gpus, shmSize: j.shmSize, apparmor: j.apparmor, weight: 1, progress: j.progress, stopContainers: [] }];
 }
 
 /** Versionsvergleich „1.2.3“ (Zusätze wie „-beta“ zählen niedriger als die reine Version): <0, 0, >0 */

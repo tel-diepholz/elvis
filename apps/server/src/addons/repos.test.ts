@@ -38,7 +38,7 @@ describe('Addon-Repositories', () => {
     expect(hello).toHaveLength(1);
     expect(hello[0]).toMatchObject({ manifest: { version: '1.5.0' }, location: { kind: 'remote' } });
     // die übrigen eingebauten Addons bleiben erhalten
-    expect(newer.list().map((e) => e.manifest?.id)).toEqual(expect.arrayContaining(['kartenserver', 'ndi-gateway']));
+    expect(newer.list().map((e) => e.manifest?.id)).toEqual(expect.arrayContaining(['osm-daten', 'ndi-gateway']));
     server!.close();
 
     const same = new RepoService({ builtinDir: BUILTIN, repositories: [await onlineRepo('1.0.0')] }, ':memory:');

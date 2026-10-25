@@ -6,8 +6,8 @@ import { addonManifestSchema, defaultOptionValues, jobSteps, optionsSchema, rend
 
 const helloPath = fileURLToPath(new URL('../../../addons/hello/addon.yaml', import.meta.url));
 const hello = addonManifestSchema.parse(parseYaml(readFileSync(helloPath, 'utf8')));
-const kartenPath = fileURLToPath(new URL('../../../addons/kartenserver/addon.yaml', import.meta.url));
-const karten = addonManifestSchema.parse(parseYaml(readFileSync(kartenPath, 'utf8')));
+const osmPath = fileURLToPath(new URL('../../../addons/osm-daten/addon.yaml', import.meta.url));
+const osm = addonManifestSchema.parse(parseYaml(readFileSync(osmPath, 'utf8')));
 
 const minimal = { id: 'demo', name: 'Demo', version: '1.0.0', containers: [{ name: 'app', image: 'nginx:1.27' }] };
 
@@ -88,23 +88,56 @@ describe('Platzhalter und Rechte', () => {
 
 describe('Mehrfachauswahl, Job-Schritte und Zeitplan', () => {
   it('prüft Mehrfachauswahl und setzt sie in Platzhaltern als Liste ein', () => {
-    const s = optionsSchema(karten.options);
-    const ok = { ...defaultOptionValues(karten.options), regions: ['germany/thueringen', 'germany/hessen'] };
+    const s = optionsSchema(osm.options);
+    const ok = { ...defaultOptionValues(osm.options), regions: ['europe/germany/thueringen', 'europe/luxembourg'] };
     expect(s.safeParse(ok).success).toBe(true);
-    expect(s.safeParse({ ...ok, regions: [] }).success).toBe(false);
     expect(s.safeParse({ ...ok, regions: ['atlantis'] }).success).toBe(false);
     const ctx = { options: ok, addon: { id: 'k', version: '1' }, host: { address: 'h', name: 'h' } };
-    expect(renderTemplate('{{options.regions}}', ctx)).toBe('germany/thueringen,germany/hessen');
+    expect(renderTemplate('{{options.regions}}', ctx)).toBe('europe/germany/thueringen,europe/luxembourg');
   });
 
-  it('akzeptiert das Kartenserver-Addon mit fünf Schritten, Zeitplan und Kartenvarianten', () => {
-    const job = karten.jobs.update!;
-    expect(jobSteps(job).map((s) => s.label)).toEqual(['Stile und Schriften', 'Zusatzdaten laden', 'OSM-Daten laden', 'Kacheln erzeugen', 'Neue Daten aktivieren']);
-    expect(job).toMatchObject({ runOnInstall: true, restartAfter: true, schedule: { interval: '{{options.updateInterval}}' } });
-    expect(karten.containers[0]!.waitForJob).toBe('update');
-    expect(karten.provides.mapSources.map((m) => m.variant)).toEqual(['light', 'dark', 'print']);
-    expect(karten.files?.paths).toContain('styles/druck.json');
-    expect(requestedPermissions(karten).map((p) => p.kind)).toEqual(['port']);
+  it('akzeptiert freie Geofabrik-Pfade als weitere Regionen', () => {
+    const s = optionsSchema(osm.options);
+    const base = defaultOptionValues(osm.options);
+    for (const v of ['', 'africa/mali', 'europe/spain, africa/morocco', 'asia/japan/kanto']) expect(s.safeParse({ ...base, extraRegions: v }).success, v).toBe(true);
+    for (const v of ['../etc', 'europe/spain;rm', 'Europe/Spain', 'europe//spain']) expect(s.safeParse({ ...base, extraRegions: v }).success, v).toBe(false);
+  });
+
+  it('akzeptiert das OSM-Daten-Addon: ein Bau-Job ohne Zeitplan für alle vier Dienste', () => {
+    const job = osm.jobs.build!;
+    expect(jobSteps(job).map((s) => s.label)).toEqual([
+      'OSM-Daten laden',
+      'Stile und Schriften',
+      'Zusatzdaten laden',
+      'Kacheln erzeugen',
+      'Routing bauen',
+      'Ortssuche importieren',
+      'Overpass bauen',
+      'Neue Daten aktivieren',
+    ]);
+    expect(job).toMatchObject({ runOnInstall: true, restartAfter: true });
+    expect(job.schedule).toBeUndefined();
+    expect(osm.containers.map((c) => [c.name, c.waitForJob])).toEqual([
+      ['tiles', 'build'],
+      ['nominatim', 'build'],
+      ['valhalla', 'build'],
+      ['overpass', 'build'],
+    ]);
+    expect(jobSteps(job).find((s) => s.label === 'Ortssuche importieren')!.stopContainers).toEqual(['nominatim']);
+    expect(osm.provides.mapSources.map((m) => m.variant)).toEqual(['light', 'dark', 'print']);
+    expect(osm.provides.geocoders.map((g) => g.type)).toEqual(['nominatim']);
+    expect(osm.provides.routers.map((r) => r.type)).toEqual(['valhalla']);
+    expect(osm.provides.overpass).toHaveLength(1);
+    expect(osm.files?.paths).toContain('styles/druck.json');
+    expect(requestedPermissions(osm).map((p) => p.kind)).toEqual(['port', 'port', 'port', 'port']);
+  });
+
+  it('prüft die Container in stopContainers', () => {
+    const base = { id: 'x', name: 'X', version: '1.0.0', containers: [{ name: 'db', image: 'i' }] };
+    const job = (stop: string[]) => ({ ...base, jobs: { j: { label: 'J', steps: [{ label: 'S', image: 'i', stopContainers: stop }] } } });
+    expect(addonManifestSchema.safeParse(job(['db'])).success).toBe(true);
+    expect(addonManifestSchema.safeParse(job(['fehlt'])).success).toBe(false);
+    expect(jobSteps(addonManifestSchema.parse({ ...base, jobs: { j: { label: 'J', image: 'i' } } }).jobs.j!)[0]!.stopContainers).toEqual([]);
   });
 
   it('macht aus einem einfachen Job einen einzelnen Schritt und verlangt image oder steps', () => {

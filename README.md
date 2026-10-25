@@ -130,8 +130,10 @@ sofern er in OpenStreetMap als Grenze erfasst ist (manche Ortsteile sind dort nu
 (`52.70986, 8.50425`), Grad/Minuten/Sekunden (`N 52° 42.591' E 8° 30.255'`), UTM (`32U 466507 5840110`) und
 UTMREF/MGRS (`32U MD 66507 40110`). Gesucht wird über den Server (`GET /api/map/search`):
 
-1. Läuft das Addon **Ortssuche** (eigenes Nominatim mit den OSM-Daten der gewählten Region), fragt ELVIS zuerst dort –
-   Suche und Umrisse funktionieren dann komplett offline.
+1. Läuft das Addon **OSM-Daten** (eigenes Nominatim mit den OSM-Daten der gewählten Regionen), fragt ELVIS zuerst dort –
+   Suche und Umrisse funktionieren dann komplett offline. Dasselbe Addon liefert aus denselben Daten auch die lokale
+   Karte, Routing (Valhalla) und eine Overpass-API. Es aktualisiert sich nicht selbst: Regionen in der Konfiguration
+   ergänzen und den Job „Kartendaten bauen“ starten – geladen und in die Suche nachimportiert wird nur, was neu ist.
 2. Findet es nichts (Nominatim erkennt halb getippte Wörter oft nicht) oder läuft kein Addon, fragt ELVIS den
    öffentlichen Dienst [photon.komoot.io](https://photon.komoot.io), einstellbar über `"map": { "geocoderUrl": "…" }`
    (`null` = nur lokal). Treffer bleiben einen Tag im Speicher und helfen auch bei kurzen Ausfällen.
@@ -519,8 +521,12 @@ provides:                                 # Integration in ELVIS
   Eine Registry ist nicht nötig.
 - Laufende Addons mit `provides.mapSources` erscheinen automatisch als Kartenstil auf der Karte und im Druck.
   `provides.geocoders` (`{ id, name, type: photon|nominatim, url }`) ersetzt den öffentlichen Suchdienst der
-  Ortssuche; bei Nominatim auch für Umrisse. `provides.office` (`{ id, name, url, wopiBase }`) meldet einen
+  Ortssuche; bei Nominatim auch für Umrisse. `provides.routers` (`{ id, name, type: valhalla, url }`) und
+  `provides.overpass` (`{ id, name, url }`) melden Routing und Overpass (noch ohne Nutzung in der Oberfläche).
+  `provides.office` (`{ id, name, url, wopiBase }`) meldet einen
   Office-Server mit WOPI (Collabora) für die Dokumentbearbeitung. `shmSize` (z. B. `"1g"`) vergrößert `/dev/shm`, etwa für PostgreSQL.
+- Ein Job-Schritt mit `stopContainers: [<name>]` hält diese Container des Addons für die Dauer des Schritts an, etwa
+  wenn Job und Dienst dieselbe Datenbank nutzen. Danach (auch nach einem Fehler) laufen sie wieder.
 
 **Labor:** `npm run test:lab` startet ELVIS und zwei Docker-Daemons (dind) und prüft den kompletten Ablauf gegen
 echte Docker-APIs: TLS, Installation, Neukonfiguration, Job, Protokolle, Image-Übertragung, Deinstallation.
