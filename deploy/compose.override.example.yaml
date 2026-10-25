@@ -1,0 +1,21 @@
+# Anpassungen für dieses Fahrzeug (Hardware am Server). Kopieren nach deploy/compose.override.yaml – die Datei ist
+# nicht im Git, `git pull` läuft also weiter ohne Konflikte. Compose führt sie mit compose.yaml zusammen:
+#   sudo sh deploy/install.sh                 (berücksichtigt sie automatisch)
+#   cd deploy && docker compose up -d --build (ebenso, Standard-Dateinamen)
+# Nicht Benötigtes löschen bzw. auskommentiert lassen. Prüfen: cd deploy && docker compose config
+services:
+  elvis:
+    # Bluetooth (Modul „Bluetooth“, Treiber BlueZ): ELVIS nutzt bluetoothd des Hosts über den D-Bus-System-Bus.
+    # Dazu die Freigabe auf dem Host einspielen:
+    #   sudo cp deploy/bluetooth/elvis-bluetooth.conf /etc/dbus-1/system.d/ && sudo systemctl reload dbus
+    volumes:
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+
+    # Airmar-Wetterstation über Actisense NGX-1 (USB): Gerät durchreichen und Zugriff erlauben.
+    # Pfad mit `ls -l /dev/serial/by-id/` ermitteln; fehlt das Gerät, startet der Container nicht.
+    # In ELVIS unter Einstellungen → Wetterstation dann /dev/ttyUSB0 wählen (oder als eigenen Pfad eintragen,
+    # falls die Erkennung im Container ohne udev nichts findet).
+    # devices:
+    #   - /dev/serial/by-id/usb-Actisense_NGX-1_XXXXXXXX-if00-port0:/dev/ttyUSB0
+    # group_add:
+    #   - dialout

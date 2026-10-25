@@ -30,6 +30,17 @@ Installation auf einem Fahrzeug-Server als Docker-Container (richtet den Server 
 sudo sh deploy/install.sh            # oder --no-docker-host
 ```
 
+Hardware des Fahrzeugs (Airmar am USB, Bluetooth …) kommt nicht in `deploy/compose.yaml`, sondern in
+`deploy/compose.override.yaml`. Die Datei ist nicht im Git, `git pull` bleibt also konfliktfrei:
+
+```bash
+cp deploy/compose.override.example.yaml deploy/compose.override.yaml   # anpassen
+sudo sh deploy/install.sh            # berücksichtigt die Datei; alternativ: cd deploy && docker compose up -d --build
+```
+
+Wer `deploy/compose.yaml` schon angepasst hat: Änderungen in die Override-Datei übernehmen, dann
+`git checkout deploy/compose.yaml` und `git pull`.
+
 Dann <http://localhost:5173> öffnen; im Fahrzeug-WLAN auch von Tablets/Smartphones über die IP des Rechners.
 
 Produktion (ein Prozess, ein Port):
@@ -175,7 +186,8 @@ Monitoring-Ziele, Bluetooth-Geräte):
 Ohne Angabe läuft der Simulator (`sim`). Neue Treiber, z. B. weitere Wetterstationen, werden in
 `apps/server/src/devices/drivers.ts` eingetragen und erscheinen dann automatisch in der Auswahl.
 
-Läuft ELVIS im Container, muss das USB-Gerät durchgereicht werden (siehe `deploy/compose.yaml`, `devices:`).
+Läuft ELVIS im Container, muss das USB-Gerät durchgereicht werden (`devices:` in `deploy/compose.override.yaml`, Vorlage
+`deploy/compose.override.example.yaml`).
 
 ### ELW-Router Teltonika RUTM59 (RutOS-Web-API)
 
@@ -388,7 +400,8 @@ Treiber `actisense-airmar`: liest die Station über ein Actisense-Gateway (NGX-1
 - **Fahrzeugstandort:** Das GPS der Station liefert die Fahrzeugposition für Karte und Druck.
 - **Verbindung:** Bei Abbruch verbindet sich der Treiber alle 5 s neu. Ohne Daten seit 15 s gilt die Station als nicht
   erreichbar (Meldung in ELVIS).
-- **Docker:** Gerät in `deploy/compose.yaml` durchreichen (`devices`, `group_add: dialout`, siehe Kommentar dort).
+- **Docker:** Gerät in `deploy/compose.override.yaml` durchreichen (`devices`, `group_add: dialout`, siehe Vorlage
+  `deploy/compose.override.example.yaml`).
 - **Diagnose:** Zeigt live, welche PGNs von welcher Adresse ankommen und was ELVIS daraus liest:
   - Entwicklung: `npm run n2k:monitor -w @elvis/server -- /dev/ttyUSB0`
   - Container: `docker exec -it elvis node apps/server/dist/tools/n2k-monitor.js /dev/ttyUSB0`
@@ -427,8 +440,8 @@ VictronConnect lässt sich weiter parallel nutzen.
      prüfen mit `bluetoothctl list` (bzw. `rfkill unblock bluetooth`, falls blockiert).
   2. Freigabe für den ELVIS-Benutzer (UID 1000 im Container):
      `sudo cp deploy/bluetooth/elvis-bluetooth.conf /etc/dbus-1/system.d/ && sudo systemctl reload dbus`
-  3. In `deploy/compose.yaml` den Socket durchreichen (`/run/dbus/system_bus_socket`, siehe Kommentar dort) und
-     `docker compose up -d` ausführen.
+  3. In `deploy/compose.override.yaml` den Socket durchreichen (`/run/dbus/system_bus_socket`, ist in der Vorlage
+     schon eingetragen) und `sudo sh deploy/install.sh` bzw. `cd deploy && docker compose up -d` ausführen.
   4. Unter *Einstellungen → Fahrzeugmodule* beim Modul Bluetooth den Treiber BlueZ wählen.
 - **Weitere Geräte:** Neue Gerätearten kommen in `packages/shared/src/bluetooth.ts` (`BluetoothKind`) und als
   Auswertung der Herstellerdaten in `apps/server/src/devices/drivers/bluetooth.ts` hinzu.

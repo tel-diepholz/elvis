@@ -13,8 +13,16 @@ command -v docker >/dev/null 2>&1 || fail "Docker ist nicht installiert."
 docker compose version >/dev/null 2>&1 || fail "Docker Compose (Plugin) fehlt."
 cd "$(dirname "$0")/.."
 
+# Anpassungen dieses Fahrzeugs (nicht im Git), siehe deploy/compose.override.example.yaml
+COMPOSE="-f deploy/compose.yaml"
+if [ -f deploy/compose.override.yaml ]; then
+  COMPOSE="$COMPOSE -f deploy/compose.override.yaml"
+  echo "==> Mit Anpassungen aus deploy/compose.override.yaml"
+fi
+
 echo "==> ELVIS bauen und starten"
-docker compose -f deploy/compose.yaml up -d --build
+# shellcheck disable=SC2086
+docker compose $COMPOSE up -d --build
 
 echo "==> Warten, bis ELVIS bereit ist"
 i=0

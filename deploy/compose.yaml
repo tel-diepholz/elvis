@@ -1,5 +1,7 @@
 # ELVIS auf einem Server. Kein Docker-Socket: Docker-Hosts (auch dieser Server) werden über die
 # Docker-API per TLS angebunden – siehe deploy/install.sh.
+# Nicht für eigene Anpassungen ändern – die gehören in compose.override.yaml (Vorlage:
+# compose.override.example.yaml), sonst blockieren sie `git pull`.
 services:
   elvis:
     image: elvis:latest
@@ -15,18 +17,8 @@ services:
     volumes:
       - elvis-data:/data
       - elvis-config:/config
-    # Airmar-Wetterstation über Actisense NGX-1 (USB): Gerät durchreichen und Zugriff erlauben.
-    # Pfad mit `ls -l /dev/serial/by-id/` ermitteln; fehlt das Gerät, startet der Container nicht.
-    # In ELVIS unter System → Fahrzeugmodule dann /dev/ttyUSB0 wählen (oder als eigenen Pfad eintragen,
-    # falls die Erkennung im Container ohne udev nichts findet).
-    # devices:
-    #   - /dev/serial/by-id/usb-Actisense_NGX-1_XXXXXXXX-if00-port0:/dev/ttyUSB0
-    # group_add:
-    #   - dialout
-    # Bluetooth (Modul „Bluetooth“, Treiber BlueZ): ELVIS nutzt bluetoothd des Hosts über den D-Bus-System-Bus.
-    # Socket durchreichen und die Freigabe aus deploy/bluetooth/elvis-bluetooth.conf auf dem Host einspielen.
-    # Zusätzlich zu den Volumes oben eintragen:
-    #   - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+    # Hardware dieses Fahrzeugs (Airmar, Bluetooth …) gehört in deploy/compose.override.yaml,
+    # Vorlage: deploy/compose.override.example.yaml
 
 volumes:
   elvis-data:
