@@ -101,6 +101,12 @@ const configSchema = z.object({
       smtpPort: z.coerce.number().int().min(0).max(65535).nullable().default(2525),
     })
     .default({}),
+  app: z
+    .object({
+      /** Cloud-Relay der ELVIS-App (apps/relay), über das Einsatzkräfte ihre Position senden; null = aus. */
+      relayUrl: z.string().url().nullable().default(null),
+    })
+    .default({}),
   alerts: z
     .object({
       stormWarnMs: z.number().default(17),
@@ -123,6 +129,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ElvisConfig {
     ...(env.PORT && { port: env.PORT }),
     ...(env.ELVIS_DATA_DIR && { dataDir: env.ELVIS_DATA_DIR }),
     ...(env.ELVIS_WEB_DIST && { webDist: env.ELVIS_WEB_DIST }),
+    ...(env.ELVIS_APP_RELAY_URL && { app: { ...fromFile.app, relayUrl: env.ELVIS_APP_RELAY_URL === 'off' ? null : env.ELVIS_APP_RELAY_URL } }),
     ...(env.ELVIS_SCAN_PORT && { scan: { ...fromFile.scan, smtpPort: env.ELVIS_SCAN_PORT === 'off' ? null : env.ELVIS_SCAN_PORT } }),
     ...((env.ELVIS_ADDONS_DIR || env.ELVIS_ADDON_REPOSITORIES) && {
       addons: {

@@ -41,6 +41,8 @@ import { SettingsService } from './services/settings.js';
 import { GeocoderService, type GeocodeFetch } from './services/geocoder.js';
 import { WeatherAlertWatch, WeatherService, type WeatherFetch } from './services/weather.js';
 import { weatherRoutes } from './routes/weather.js';
+import { AppLinkService, type RelayFetch } from './services/applinks.js';
+import { appLinkRoutes } from './routes/applinks.js';
 import { TileService } from './services/tiles.js';
 import type { UbusHttp } from './services/openwrt.js';
 import { WifiService } from './services/wifi.js';
@@ -72,11 +74,12 @@ export interface App {
   printing: PrintService;
   scanning: ScanService;
   workstations: WorkstationService;
+  appLinks: AppLinkService;
   start(): Promise<void>;
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; weatherFetch?: WeatherFetch; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; weatherFetch?: WeatherFetch; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -157,6 +160,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     },
     (alerts) => devices.setExtraAlerts('weather', alerts),
   );
+  const appLinks = new AppLinkService(db, store, incidents, (t) => hub.invalidate(t), config.app.relayUrl, opts.relayFetch);
   const users = new UserService(db);
   const limiter = new LoginLimiter();
   const workstations = new WorkstationService(db, store, () => wifi.opsCredentials());
@@ -241,6 +245,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
     mapRoutes(api, tiles, store, settings, () => hub.invalidate(['audit']), geocoder);
     weatherRoutes(api, weather, weatherWatch);
+    appLinkRoutes(api, appLinks);
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
       const parsed = settingsInputSchema.safeParse(req.body);
@@ -277,11 +282,13 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     printing,
     scanning,
     workstations,
+    appLinks,
     async start() {
       await devices.start();
       videos.start();
       wifi.start();
       weatherWatch.start();
+      appLinks.start();
       cleanup();
       cleanupTimer = setInterval(cleanup, 3600_000);
       if (docker) {
@@ -300,6 +307,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       videos.stop();
       wifi.stop();
       weatherWatch.stop();
+      appLinks.stop();
       if (cleanupTimer) clearInterval(cleanupTimer);
       docker?.hosts.stop();
       docker?.addons.stop();

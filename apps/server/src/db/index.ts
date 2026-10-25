@@ -565,6 +565,27 @@ const MIGRATIONS: Migration[] = [
     created_by TEXT NOT NULL
   );
   `,
+  // App-Anbindung: Herkunft der Einheitenposition und gekoppelte Apps (über das Cloud-Relay)
+  `
+  ALTER TABLE units ADD COLUMN position_source TEXT;
+  ALTER TABLE units ADD COLUMN position_at TEXT;
+  ALTER TABLE units ADD COLUMN position_accuracy_m REAL;
+  UPDATE units SET position_source = 'manual', position_at = updated_at WHERE lat IS NOT NULL;
+  CREATE TABLE app_links (
+    id INTEGER PRIMARY KEY,
+    unit_id INTEGER NOT NULL REFERENCES units(id),
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    device_id TEXT NOT NULL,
+    paired_at TEXT NOT NULL,
+    paired_by TEXT NOT NULL,
+    ended_at TEXT,
+    relay_pending INTEGER NOT NULL DEFAULT 0,
+    last_position_at TEXT,
+    accuracy_m REAL,
+    battery REAL
+  );
+  CREATE INDEX app_links_active ON app_links (device_id) WHERE ended_at IS NULL;
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

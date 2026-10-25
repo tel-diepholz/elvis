@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { BookmarkPlus, LogOut, MapPin, Pencil, Plus } from 'lucide-react';
+import { BookmarkPlus, LogOut, MapPin, Pencil, Plus, Smartphone } from 'lucide-react';
 import {
   DEFAULT_UNIT_SIGN,
   UNIT_STATUS,
@@ -12,6 +12,7 @@ import {
   sumStrength,
   unitChildren,
   unitDescendants,
+  formatDeviceId,
   type DeployNode,
   type ForceUnit,
   type Incident,
@@ -29,6 +30,7 @@ import { Badge, Card, EmptyState, Field, Loading, Modal, Segmented, Stat } from 
 import { TacticalSignEditor } from '../../components/tactical/TacticalSignEditor';
 import { TacticalSignImage } from '../../components/tactical/TacticalSign';
 import { RoleInput, StatusBadge, StatusSelect, StrengthFields } from '../../components/forces/fields';
+import { AppLinkInfo, PairAppForm } from './AppLinkParts';
 
 const NO_SECTION = 'Ohne Abschnitt';
 
@@ -322,7 +324,12 @@ export function UnitsView({ incident, readOnly }: { incident: Incident; readOnly
   const [mode, setMode] = useState<'catalog' | 'new'>('catalog');
   const [editing, setEditing] = useState<Unit | null>(null);
   const [showReleased, setShowReleased] = useState(false);
+  const [pairing, setPairing] = useState<Unit | null>(null);
   const onError = (e: Error) => toast('error', e.message);
+  const { data: relay } = useQuery({ queryKey: ['appRelay'], queryFn: api.appRelayEnabled, staleTime: Infinity });
+  const appEnabled = !!relay?.enabled;
+  const { data: appLinks = [] } = useQuery({ queryKey: ['appLinks', incident.id], queryFn: () => api.appLinks(incident.id), enabled: appEnabled });
+  const linkOf = (u: Unit) => appLinks.find((l) => l.unitId === u.id);
 
   const add = useMutation({
     mutationFn: (u: NewUnit) => api.addUnit(incident.id, u),
@@ -337,6 +344,16 @@ export function UnitsView({ incident, readOnly }: { incident: Incident; readOnly
   const patch = useMutation({
     mutationFn: ({ id, p }: { id: number; p: UnitPatch }) => api.patchUnit(id, p),
     onSuccess: () => setEditing(null),
+    onError,
+  });
+  const pairApp = useMutation({
+    mutationFn: ({ unit, input }: { unit: Unit; input: Parameters<typeof api.pairApp>[1] }) => api.pairApp(unit.id, input),
+    onSuccess: (_, { unit }) => (setPairing(null), toast('success', `App mit ${unit.name} gekoppelt`)),
+    onError,
+  });
+  const unpairApp = useMutation({
+    mutationFn: (u: Unit) => api.unpairApp(u.id),
+    onSuccess: (_, u) => toast('success', `App von ${u.name} entkoppelt`),
     onError,
   });
   const adopt = useMutation({
@@ -377,6 +394,7 @@ export function UnitsView({ incident, readOnly }: { incident: Incident; readOnly
                 </div>
                 <div className="cell-sub">{[u.callsign, u.organization].filter(Boolean).join(' · ') || '–'}</div>
                 {u.notes && <div className="cell-sub">{u.notes}</div>}
+                {linkOf(u) && <AppLinkInfo link={linkOf(u)!} />}
               </div>
             </div>
           </td>
@@ -408,9 +426,28 @@ export function UnitsView({ incident, readOnly }: { incident: Incident; readOnly
           </td>
           {!readOnly && (
             <td className="cell-actions">
-              <span className={`unit-map ${u.lat !== null ? 'placed' : ''}`} title={u.lat !== null ? 'Auf der Karte gesetzt' : 'Noch ohne Position – in der Karte unter „Objekte“ setzen'}>
+              <span
+                className={`unit-map ${u.lat !== null ? 'placed' : ''}`}
+                title={u.lat === null ? 'Noch ohne Position – in der Karte unter „Objekte“ setzen' : u.positionSource === 'app' ? 'Position per App' : 'Auf der Karte gesetzt'}
+              >
                 <MapPin size={16} />
               </span>
+              {appEnabled && u.status !== 'entlassen' && (
+                linkOf(u) ? (
+                  <button
+                    className="btn btn-ghost btn-icon app-linked"
+                    onClick={() => window.confirm(`App ${formatDeviceId(linkOf(u)!.deviceId)} von ${u.name} entkoppeln? Die App hört dann auf zu orten.`) && unpairApp.mutate(u)}
+                    aria-label={`App von ${u.name} entkoppeln`}
+                    title="App gekoppelt – entkoppeln"
+                  >
+                    <Smartphone size={16} />
+                  </button>
+                ) : (
+                  <button className="btn btn-ghost btn-icon" onClick={() => setPairing(u)} aria-label={`App mit ${u.name} koppeln`} title="App koppeln">
+                    <Smartphone size={16} />
+                  </button>
+                )
+              )}
               {u.status !== 'entlassen' && (
                 <button className="btn btn-ghost btn-icon" onClick={() => openAdd(u.id)} aria-label={`Untereinheit zu ${u.name} hinzufügen`} title="Untereinheit hinzufügen">
                   <Plus size={16} />
@@ -549,6 +586,9 @@ export function UnitsView({ incident, readOnly }: { incident: Incident; readOnly
             <UnitForm units={all} sections={sections} roles={roles} defaultParentId={adding ?? null} pending={add.isPending} onSubmit={(u) => add.mutate(u)} />
           )}
         </div>
+      </Modal>
+      <Modal open={!!pairing} title={`App mit ${pairing?.name ?? ''} koppeln`} onClose={() => setPairing(null)}>
+        {pairing && <PairAppForm unitName={pairing.name} pending={pairApp.isPending} onSubmit={(input) => pairApp.mutate({ unit: pairing, input })} />}
       </Modal>
       <Modal open={!!editing} title={`${editing?.name ?? ''} bearbeiten`} onClose={() => setEditing(null)} wide>
         {editing && (

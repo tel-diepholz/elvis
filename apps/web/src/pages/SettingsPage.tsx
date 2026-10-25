@@ -15,6 +15,7 @@ import {
   Radio,
   Router,
   ScanLine,
+  Smartphone,
   Truck,
   UserRoundCog,
   Users,
@@ -25,6 +26,7 @@ import { api } from '../lib/api';
 import { useSettings } from '../lib/hooks';
 import { SettingsGroup, SettingsSection } from '../components/SettingsSection';
 import { Loading, PageHeader } from '../components/ui';
+import { AppRelayCard } from './system/AppRelayCard';
 import { BluetoothCard } from './system/BluetoothCard';
 import { CamerasCard } from './system/CamerasCard';
 import { DisplaysCard } from './system/DisplaysCard';
@@ -108,6 +110,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="dokumente" title="Ordnervorgabe für Dokumente" icon={<FolderTree {...ICON} />} summary="Ordner je Einsatz">
             <DocumentFoldersCard />
+          </SettingsSection>
+          <SettingsSection id="app" title="App-Anbindung" icon={<Smartphone {...ICON} />} summary="Positionen von Einsatzkräften per App">
+            <AppRelayCard />
           </SettingsSection>
         </SettingsGroup>
 

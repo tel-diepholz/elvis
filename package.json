@@ -5,7 +5,9 @@
   "description": "ELVIS – Einsatzleitwagen-Verwaltungs- und Informationssystem",
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/server",
+    "apps/web",
+    "apps/relay"
   ],
   "scripts": {
     "dev": "concurrently -n server,web -c red,blue \"npm run dev -w @elvis/server\" \"npm run dev -w @elvis/web\"",

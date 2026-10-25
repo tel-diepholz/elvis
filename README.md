@@ -63,6 +63,7 @@ apps/server       Fastify-Backend
   services/       Einsatzführung inkl. automatischer Tagebucheinträge
   db/             SQLite (better-sqlite3), Migrationen, revisionssicheres Tagebuch
 apps/web          React + Vite, React Query, Leaflet
+apps/relay        Cloud-Relay der ELVIS-App (Cloudflare Worker + D1)
 ```
 
 - **Live-Daten:** Der Server schickt Gerätezustände und Meldungen per WebSocket (`/api/live`). REST-Daten
@@ -105,6 +106,53 @@ Warnungen und Prognose in den Kacheln „Wetter“ und „Wettervorhersage“.
 ```
 
 `null` schaltet den jeweiligen Dienst ab.
+
+## App-Anbindung (Positionen von Einsatzkräften)
+
+Einsatzkräfte können ihre Position mit der Android-App [ELVIS Ortung](https://github.com/tel-diepholz/elvis-app)
+an den ELW senden. Die Positionen laufen über ein kleines **Cloud-Relay** (`apps/relay`, Cloudflare Worker mit D1).
+ELVIS holt sie dort ausgehend ab, der ELW braucht also keine öffentliche Adresse.
+
+```
+App ──HTTPS──▶ Relay (Cloudflare) ◀──Abruf alle 15 s── ELVIS ──▶ Kräfteübersicht / Karte
+```
+
+- **Koppeln:** Die App zeigt nach dem Start eine App-ID (z. B. `K7M2-QX9P`) und einen 6-stelligen Code. In der
+  Kräfteübersicht bei der Einheit auf das Smartphone-Symbol tippen und beides eintragen. Der Code gilt einmal;
+  nach 5 Fehlversuchen zeigt die App einen neuen. Eine Einheit hat höchstens eine App, eine App gehört zu einem ELW.
+- **Ortung:** Die App meldet die erste Position sofort, danach ab 10 m Bewegung, spätestens alle 10 Minuten (Regel
+  `shouldSendPosition` in `packages/shared/src/applink.ts`). ELVIS setzt die Einheit auf der Karte. Ins Tagebuch
+  kommen nur „App gekoppelt/entkoppelt“ und der Wechsel auf „Position per App“, nicht jede Meldung. Die Karte zeigt
+  Alter und Genauigkeit im Tooltip und blasst Einheiten ohne Meldung seit 20 Minuten ab. Verschiebt man eine
+  Einheit von Hand, gilt das bis zur nächsten App-Meldung.
+- **Ende:** Die Kopplung endet beim Entkoppeln (Smartphone-Symbol), beim Entlassen der Einheit und mit dem Einsatz.
+  Die App erfährt es mit ihrer nächsten Meldung und hört auf zu orten. Ist das Relay gerade nicht erreichbar,
+  holt ELVIS das Entkoppeln nach. Die Einsatzkraft kann die Ortung in der App jederzeit stoppen.
+- **Datenschutz:** Das Relay kennt nur zufällige IDs, keine Namen. Positionen löscht es mit der Abholung,
+  spätestens nach 24 Stunden; unbenutzte App-IDs nach 90 Tagen. Hinweise für Nutzer: `<relay>/datenschutz`.
+- **Zustand:** *Einstellungen → Dienste → App-Anbindung* zeigt Relay, Anmeldung, gekoppelte Apps und den letzten Abruf.
+
+**Relay einrichten** (einmalig, Cloudflare-Konto, Free-Tier genügt):
+
+```sh
+cd apps/relay
+npx wrangler@4 login
+npx wrangler@4 d1 create elvis-relay        # ausgegebene database_id in wrangler.toml eintragen
+npm run deploy                               # Schema anlegen und Worker veröffentlichen
+```
+
+Die ausgegebene Adresse (`https://elvis-relay.<konto>.workers.dev`) in ELVIS eintragen – ohne Eintrag ist die
+Funktion aus. Der ELW meldet sich beim ersten Koppeln selbst beim Relay an:
+
+```json
+"app": { "relayUrl": "https://elvis-relay.<konto>.workers.dev" }
+```
+
+oder per Umgebungsvariable `ELVIS_APP_RELAY_URL`. In der App ist dieselbe Adresse als Vorgabe eingebaut
+(Repository-Variable `ELVIS_APP_RELAY_URL` im App-Repo) und unter „Relay-Adresse“ änderbar. Lokal ausprobieren:
+`npm run dev -w @elvis/relay` (Port 8787, lokale D1 nach `npx wrangler@4 d1 migrations apply elvis-relay --local`),
+dann ELVIS mit `ELVIS_APP_RELAY_URL=http://localhost:8787` starten; im Android-Emulator ist das Relay unter
+`http://10.0.2.2:8787` erreichbar.
 
 ## Ausbreitungsberechnung (Karte)
 

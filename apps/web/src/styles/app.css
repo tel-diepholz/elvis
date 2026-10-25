@@ -2341,6 +2341,18 @@ select.unit-status.has-children {
   color: var(--ok);
   opacity: 1;
 }
+.app-linked {
+  color: var(--ok);
+}
+.app-link-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ok);
+}
+.app-link-info.stale {
+  color: var(--warn);
+}
 .force-members,
 .force-sign {
   border: 1px solid var(--border);

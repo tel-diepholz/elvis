@@ -1,4 +1,7 @@
 import {
+  type AppLink,
+  type AppRelayStatus,
+  type PairInput,
   type AddonStoreEntry,
   type AuditEntry,
   type AuthStatus,
@@ -151,6 +154,11 @@ export const api = {
   addUnit: (id: number, unit: NewUnit) => request<Unit>('POST', `/api/incidents/${id}/units`, unit),
   patchUnit: (unitId: number, patch: UnitPatch) => request<Unit>('PATCH', `/api/units/${unitId}`, patch),
   deployUnit: (id: number, input: DeployUnitInput) => request<Unit>('POST', `/api/incidents/${id}/units/deploy`, input),
+  appRelayEnabled: () => request<{ enabled: boolean }>('GET', '/api/app-relay'),
+  appRelayStatus: () => request<AppRelayStatus>('GET', '/api/system/app-relay'),
+  appLinks: (id: number) => request<AppLink[]>('GET', `/api/incidents/${id}/app-links`),
+  pairApp: (unitId: number, input: PairInput) => request<AppLink>('POST', `/api/units/${unitId}/app-link`, input),
+  unpairApp: (unitId: number) => request<void>('DELETE', `/api/units/${unitId}/app-link`),
 
   forces: () => request<ForceUnit[]>('GET', '/api/forces'),
   createForce: (input: ForceUnitInput) => request<ForceUnit>('POST', '/api/system/forces', input),

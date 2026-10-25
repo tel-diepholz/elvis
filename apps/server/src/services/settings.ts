@@ -21,9 +21,9 @@ export class SettingsService {
   ) {}
 
   get(): Settings {
-    // device:<id> gehört zur Modulkonfiguration (DeviceConfigStore), wifi:* zum WLAN (WifiService), documents:* zu den Dokumenten, print:* zum Druckserver
+    // device:<id> gehört zur Modulkonfiguration (DeviceConfigStore), wifi:* zum WLAN (WifiService), documents:* zu den Dokumenten, print:* zum Druckserver, app:* zur App-Anbindung
     const rows = this.db
-      .prepare("SELECT * FROM settings WHERE key NOT LIKE 'device:%' AND key NOT LIKE 'wifi:%' AND key NOT LIKE 'documents:%' AND key NOT LIKE 'print:%'")
+      .prepare("SELECT * FROM settings WHERE key NOT LIKE 'device:%' AND key NOT LIKE 'wifi:%' AND key NOT LIKE 'documents:%' AND key NOT LIKE 'print:%' AND key NOT LIKE 'app:%'")
       .all() as Row[];
     const value = <T>(key: string): T | undefined => {
       const r = rows.find((x) => x.key === key);
