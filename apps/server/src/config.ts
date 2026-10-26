@@ -74,6 +74,14 @@ const configSchema = z.object({
        * nicht bereit ist (oder ausfällt); null = nur lokal.
        */
       overpassUrl: z.string().url().nullable().default('https://overpass-api.de'),
+      /** Regenradar des DWD (GeoServer-WMS mit Zeitachse, Messung und Vorhersage); wmsUrl null = aus. */
+      radar: z
+        .object({
+          wmsUrl: z.string().url().nullable().default('https://maps.dwd.de/geoserver/dwd/wms'),
+          layer: z.string().default('Niederschlagsradar'),
+          attribution: z.string().default('Radar © Deutscher Wetterdienst'),
+        })
+        .default({}),
     })
     .default({}),
   weather: z

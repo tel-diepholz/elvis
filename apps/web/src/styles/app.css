@@ -6048,3 +6048,77 @@ fieldset.field {
 .force-import-error td {
   background: var(--alarm-bg);
 }
+
+/* Regenradar: Bedienleiste unten mittig, Verkehrsstatus rückt darüber */
+.map-radar {
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(560px, calc(100% - 24px));
+  padding: 6px 8px;
+  font-size: 13px;
+}
+.map-radar-slider {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--accent);
+}
+.map-radar-time {
+  display: flex;
+  flex-direction: column;
+  min-width: 104px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.map-radar-time span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.map-radar-time.forecast span {
+  color: var(--info);
+  font-weight: 600;
+}
+.map-radar-legend {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  padding: 8px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.map-radar-legend img {
+  display: block;
+  max-height: 50vh;
+}
+.map-traffic-status.above-radar {
+  bottom: 80px;
+}
+@media (max-width: 900px) {
+  /* unten liegen Objektliste und Wind – das Radar sitzt unter der Suche */
+  .map-radar {
+    top: 68px;
+    bottom: auto;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    transform: none;
+  }
+  .map-radar-legend {
+    top: calc(100% + 8px);
+    bottom: auto;
+  }
+  .map-traffic-status.above-radar {
+    bottom: 24px;
+  }
+}
+@media (max-width: 720px) {
+  /* Suche und Knöpfe brechen hier auf zwei Zeilen um */
+  .map-radar {
+    top: 186px;
+  }
+}

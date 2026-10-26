@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, ChevronDown, Crosshair, Database, Loader2, Search, X, Layers, MapPin, Plane, Shapes, Ship, Wind as WindIcon } from 'lucide-react';
+import { Check, ChevronDown, CloudRain, Crosshair, Database, Loader2, Search, X, Layers, MapPin, Plane, Shapes, Ship, Wind as WindIcon } from 'lucide-react';
 import type { MapSource, OverpassQuery } from '@elvis/shared';
 import { MapIcon } from '../../components/map/mapIcons';
 import { compass, fmtOpt } from '../../lib/format';
@@ -186,6 +186,7 @@ export function MapStylePicker({
             <div className="map-dropdown-heading">Ebenen</div>
             {layer('aircraft', <Plane size={16} />, 'Flugzeuge')}
             {layer('ships', <Ship size={16} />, 'Schiffe')}
+            {layer('radar', <CloudRain size={16} />, 'Regenradar')}
           </>
         )}
       </Dropdown>

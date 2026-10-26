@@ -268,6 +268,14 @@ etwa weil der Job „Kartendaten bauen“ noch läuft, oder wenn sie ausfällt, 
 `overpass-api.de` (einstellbar über `"map": { "overpassUrl": "…" }`, `null` = nur lokal). Der ist oft ausgelastet:
 Er braucht dann 30–60 s oder lehnt mit HTTP 502 ab. ELVIS versucht es dann nach 2 und 5 s erneut.
 
+**Regenradar:** Unter *Ebenen → Regenradar* liegt das Niederschlagsradar des Deutschen Wetterdienstes über der Karte
+(Open Data, 1-km-Raster, alle 5 Minuten neu). Die Leiste unten zeigt die letzten 2 Stunden und die Vorhersage für bis
+zu 2 Stunden. Man kann sie abspielen oder mit dem Regler einen Zeitpunkt wählen. „Jetzt“ springt zur letzten Messung
+zurück, ⓘ zeigt die Legende in mm/h. Die Bilder holt der Server (`/api/map/radar`) und hält sie im Speicher: Messungen
+einen Tag, Vorhersagen bis zum nächsten Lauf. Ohne Internet bleibt der letzte Stand sichtbar. Quelle ist der
+GeoServer-WMS `https://maps.dwd.de/geoserver/dwd/wms`, Ebene `Niederschlagsradar`. Abschalten lässt sich das Radar mit
+`"map": { "radar": { "wmsUrl": null } }`.
+
 **Lagekarte drucken:** Auf der Karte öffnet „Drucken“ einen Dialog mit Format (A4/A3/A2/A1), Ausrichtung,
 Zoomstufe (mit Maßstabsangabe) und Kartenstil. In der Vorschau wird der Ausschnitt gewählt, indem man die Karte
 unter dem Druckrahmen verschiebt. Fahrzeugstandort, Einsatzort und die sichtbaren Kartenobjekte lassen sich

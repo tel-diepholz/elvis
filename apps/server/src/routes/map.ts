@@ -7,6 +7,7 @@ import { renderMapPdf } from '../services/print.js';
 import type { SettingsService } from '../services/settings.js';
 import type { GeocoderService } from '../services/geocoder.js';
 import type { OverpassService } from '../services/overpass.js';
+import type { RadarService } from '../services/radar.js';
 import type { TileService } from '../services/tiles.js';
 import { operatorOf, parse } from './util.js';
 
@@ -47,6 +48,8 @@ const tileParams = z.object({
   y: z.coerce.number().int(),
 });
 
+const radarTileParams = tileParams.omit({ source: true }).extend({ time: z.string().max(40) });
+
 /** Ohne Einsatzort prüft „Testen“ eine Kachel in der Mitte Niedersachsens. */
 const TEST_FALLBACK = { lat: 52.64, lon: 9.35 };
 
@@ -56,7 +59,7 @@ const searchQuery = z.object({
   lon: z.coerce.number().min(-180).max(180).optional(),
 });
 
-export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notify: (topics: Topic[]) => void, geocoder: GeocoderService, overpass: OverpassService): void {
+export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notify: (topics: Topic[]) => void, geocoder: GeocoderService, overpass: OverpassService, radar: RadarService): void {
   app.get('/api/map/sources', async () => tiles.list());
 
   /** Ortssuche: Straßen, Orte, Adressen sowie Koordinaten und UTMREF; lat/lon bevorzugen Treffer in der Nähe */
@@ -82,6 +85,24 @@ export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store
 
   /** Vorlagen aus den Einstellungen (Menü „Objekte“) */
   app.get('/api/map/overpass/queries', async () => overpass.settings().queries);
+
+  /** Regenradar (DWD): Zeitschritte mit letzter Messung, Kacheln je Zeitschritt und Legende */
+  app.get('/api/map/radar', async () => radar.frames());
+
+  app.get('/api/map/radar/legend', async (_req, reply) => {
+    const legend = await radar.legend();
+    if (!legend) return reply.code(404).send({ error: 'Legende nicht verfügbar' });
+    return reply.header('content-type', legend.contentType).header('cache-control', 'public, max-age=86400').send(legend.data);
+  });
+
+  app.get('/api/map/radar/:time/:z/:x/:y', async (req, reply) => {
+    const { time, z: zoom, x, y } = parse(radarTileParams, req.params);
+    const tile = await radar.tile(time, zoom, x, y);
+    if (!tile) return reply.code(404).send({ error: 'Radarbild nicht verfügbar' });
+    // Messungen ändern sich nicht mehr, Vorhersagen mit jedem neuen Lauf (alle 5 Minuten)
+    const maxAge = (await radar.isMeasured(time)) ? 86_400 : 120;
+    return reply.header('content-type', tile.contentType).header('cache-control', `public, max-age=${maxAge}`).send(tile.data);
+  });
 
   app.get('/api/map/tiles/:source/:z/:x/:y', async (req, reply) => {
     const { source, z: zoom, x, y } = parse(tileParams, req.params);

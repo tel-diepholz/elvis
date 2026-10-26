@@ -18,6 +18,7 @@ import { Modal } from '../components/ui';
 import { AREA_STYLE, MapObjectsLayer, objectBounds, useMapObjects } from '../components/map/objects';
 import { UnitsLayer, useMapUnits } from '../components/map/units';
 import { ALTITUDE_LEGEND } from '../components/map/aircraftIcons';
+import { RadarControl, RadarLayer, useRadar } from '../components/map/radar';
 import { AircraftLayer, ShipLayer, readLayers, saveLayers, trafficObject, type TrafficLayers, type TrafficStatus } from '../components/map/traffic';
 import { PrintDialog } from './map/PrintDialog';
 import { MapSearch } from './map/search';
@@ -122,6 +123,7 @@ export function MapPage() {
   const [layers, setLayers] = useState<TrafficLayers>(readLayers);
   const chooseLayers = (l: TrafficLayers) => (setLayers(l), saveLayers(l));
   const [aircraftStatus, setAircraftStatus] = useState<TrafficStatus | null>(null);
+  const radar = useRadar(layers.radar);
   const [shipStatus, setShipStatus] = useState<TrafficStatus | null>(null);
   /** Offenes Kartenstil-Menü schiebt die Objektliste nach unten */
   const [styleMenuPx, setStyleMenuPx] = useState(0);
@@ -238,6 +240,7 @@ export function MapPage() {
         ref={mapRef}
       >
         {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} attribution={source.attribution} maxZoom={source.maxZoom} />}
+        {layers.radar && <RadarLayer radar={radar} />}
         {layers.aircraft && <AircraftLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setAircraftStatus} />}
         {layers.ships && <ShipLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setShipStatus} />}
         <MapObjectsLayer objects={objects} wind={wind} now={now} links />
@@ -367,8 +370,10 @@ export function MapPage() {
         onMenuHeight={setStyleMenuPx}
       />
 
+      {layers.radar && <RadarControl radar={radar} />}
+
       {(layers.aircraft || layers.ships) && (
-        <div className="map-overlay map-traffic-status" role="status">
+        <div className={`map-overlay map-traffic-status ${layers.radar ? 'above-radar' : ''}`} role="status">
           {layers.aircraft && aircraftStatus && (
             <span title={aircraftStatus.problem ?? undefined}>
               <Plane size={15} />
