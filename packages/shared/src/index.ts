@@ -25,3 +25,4 @@ export * from './weather';
 export * from './applink';
 export * from './personnel';
 export * from './mapsources';
+export * from './traffic';

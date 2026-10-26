@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Eye, EyeOff, MapPin, Shapes, Square, Trash2, Truck, Wind as WindIcon } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Eye, EyeOff, MapPin, Plane, Shapes, Ship, Square, Trash2, Truck, Wind as WindIcon } from 'lucide-react';
 import {
   COLORABLE_KINDS,
   DEFAULT_OBJECT_COLORS,
@@ -8,6 +8,7 @@ import {
   MAP_OBJECT_LABELS,
   SECTOR_LENGTHS,
   UNIT_STATUS,
+  formatAltitude,
   objectColor,
   unitChildren,
   type GaussSettings,
@@ -16,6 +17,7 @@ import {
   type Unit,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
+import { fmtAgo, fmtTime } from '../../lib/format';
 import { useToast } from '../../lib/toast';
 import { Field } from '../../components/ui';
 import { TacticalSignImage } from '../../components/tactical/TacticalSign';
@@ -30,7 +32,7 @@ const readOpen = () => {
   }
 };
 
-const KIND_ICONS = { point: MapPin, area: Square, gauss: WindIcon, sector: Crosshair } as const;
+const KIND_ICONS = { point: MapPin, area: Square, gauss: WindIcon, sector: Crosshair, aircraft: Plane, ship: Ship } as const;
 
 function GaussEditor({ object, wind, now, canEdit }: { object: Extract<MapObject, { kind: 'gauss' }>; wind: Wind | undefined; now: Date; canEdit: boolean }) {
   const toast = useToast();
@@ -94,7 +96,7 @@ function unitRows(units: Unit[]): { unit: Unit; depth: number }[] {
   return out;
 }
 
-function summary(o: MapObject): string {
+function summary(o: MapObject, now: Date): string {
   switch (o.kind) {
     case 'point':
     case 'area':
@@ -103,6 +105,14 @@ function summary(o: MapObject): string {
       return `${MAP_OBJECT_LABELS.gauss}${o.data.stability === 'auto' ? '' : ` · Klasse ${o.data.stability}`}`;
     case 'sector':
       return `${MAP_OBJECT_LABELS.sector} · ${fmtDistance(o.data.sectorM)}`;
+    case 'aircraft':
+    case 'ship': {
+      const { last, lostSince, detail } = o.data;
+      if (lostSince) return `Kein Signal seit ${fmtTime(lostSince)} · ${detail}`;
+      if (!last) return `warte auf Position · ${detail}`;
+      const speed = last.speedKt != null ? `${Math.round(last.speedKt)} kn` : null;
+      return [o.kind === 'aircraft' ? formatAltitude(last.altFt, last.onGround) : null, speed, fmtAgo(last.at, now)].filter(Boolean).join(' · ');
+    }
   }
 }
 
@@ -258,7 +268,7 @@ export function ObjectList({
                 </span>
                 <span className="map-object-text">
                   <strong>{o.name}</strong>
-                  <span className="muted">{summary(o)}</span>
+                  <span className="muted">{summary(o, now)}</span>
                 </span>
               </button>
               <span className="map-object-actions">

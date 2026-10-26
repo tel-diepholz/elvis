@@ -41,6 +41,8 @@ import { SettingsService } from './services/settings.js';
 import { GeocoderService, type GeocodeFetch } from './services/geocoder.js';
 import { WeatherAlertWatch, WeatherService, type WeatherFetch } from './services/weather.js';
 import { weatherRoutes } from './routes/weather.js';
+import { trafficRoutes } from './routes/traffic.js';
+import { TrafficService, type AisSocketFactory, type TrafficFetch } from './services/traffic.js';
 import { AppLinkService } from './services/applinks.js';
 import { RelayClient, type RelayFetch } from './services/relay.js';
 import { PersonnelService } from './services/personnel.js';
@@ -79,11 +81,12 @@ export interface App {
   workstations: WorkstationService;
   appLinks: AppLinkService;
   personnel: PersonnelService;
+  traffic: TrafficService;
   start(): Promise<void>;
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; weatherFetch?: WeatherFetch; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -168,6 +171,22 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       return incident?.lat != null && incident.lon != null ? { lat: incident.lat, lon: incident.lon } : null;
     },
     (alerts) => devices.setExtraAlerts('weather', alerts),
+  );
+  // Luft- und Schiffsverkehr; das AIS-Abo folgt dem Einsatzort, sonst der Fahrzeugposition
+  const traffic = new TrafficService(
+    { ...config.traffic, userAgent: config.map.userAgent, requestGapMs: opts.trafficRequestGapMs },
+    {
+      db,
+      store,
+      incidents,
+      center: () => {
+        const incident = store.activeIncident();
+        if (incident?.lat != null && incident.lon != null) return { lat: incident.lat, lon: incident.lon };
+        return devices.adapter('weather')?.getState().position ?? null;
+      },
+    },
+    opts.trafficFetch,
+    opts.aisSocket,
   );
   const relay = new RelayClient(db, config.app.relayUrl, opts.relayFetch);
   const appLinks = new AppLinkService(db, store, incidents, (t) => hub.invalidate(t), relay);
@@ -256,6 +275,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
     mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder);
     weatherRoutes(api, weather, weatherWatch);
+    trafficRoutes(api, { traffic, store, notify: (t) => hub.invalidate(t) });
     appLinkRoutes(api, appLinks);
     personnelRoutes(api, personnel);
     api.get('/api/settings', async () => settings.get());
@@ -296,11 +316,13 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     workstations,
     appLinks,
     personnel,
+    traffic,
     async start() {
       await devices.start();
       videos.start();
       wifi.start();
       weatherWatch.start();
+      traffic.start();
       appLinks.start();
       personnel.start();
       cleanup();
@@ -321,6 +343,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       videos.stop();
       wifi.stop();
       weatherWatch.stop();
+      traffic.stop();
       appLinks.stop();
       personnel.stop();
       if (cleanupTimer) clearInterval(cleanupTimer);

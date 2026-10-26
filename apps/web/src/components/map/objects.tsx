@@ -1,10 +1,11 @@
 import { Fragment } from 'react';
-import { GeoJSON, Marker, Polygon, Tooltip } from 'react-leaflet';
+import { GeoJSON, Marker, Polygon, Polyline, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { useQuery } from '@tanstack/react-query';
-import { DEFAULT_OBJECT_COLORS, objectColor, type MapObject } from '@elvis/shared';
+import { DEFAULT_OBJECT_COLORS, formatAltitude, objectColor, type MapObject } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { dispersionSector, usePlume, type Wind } from './dispersion';
+import { aircraftIcon, shipIcon } from './traffic';
 
 /** Darstellung je Farbe (Karte, Vorschau und – über dieselben Werte – Druck) */
 export const areaStyle = (color: string) => ({ color, weight: 3, dashArray: '8 6', fillColor: color, fillOpacity: 0.08 });
@@ -49,6 +50,30 @@ function GaussLayer({ object, wind, now }: { object: Extract<MapObject, { kind: 
   );
 }
 
+/** Verfolgtes Flugzeug oder Schiff: Spur, Symbol in Bewegungsrichtung, Beschriftung; ohne Signal blass */
+function TrackedLayer({ object, labels }: { object: Extract<MapObject, { kind: 'aircraft' | 'ship' }>; labels: boolean }) {
+  const color = objectColor(object);
+  const { trail, last, lostSince } = object.data;
+  const lost = !!lostSince;
+  const icon =
+    object.kind === 'aircraft' ? aircraftIcon(color, last?.track ?? null, lost) : shipIcon(color, last?.track ?? null, (last?.speedKt ?? 0) >= 0.5, lost);
+  const sub = object.kind === 'aircraft' && last ? formatAltitude(last.altFt, last.onGround) : null;
+  return (
+    <>
+      {trail.length > 1 && <Polyline positions={trail} pathOptions={{ color, weight: 2, opacity: lost ? 0.35 : 0.8, dashArray: '4 4' }} interactive={false} />}
+      <Marker position={[object.lat, object.lon]} icon={icon}>
+        {labels && (
+          <Tooltip direction="right" offset={[12, 0]} permanent className="map-tracked-label">
+            {object.name}
+            {sub && ` · ${sub}`}
+            {lost && ' · kein Signal'}
+          </Tooltip>
+        )}
+      </Marker>
+    </>
+  );
+}
+
 /** Sichtbare Kartenobjekte zeichnen: Flächen, Punkte und Ausbreitungen (mit aktuellem Wind) */
 export function MapObjectsLayer({ objects, wind, now, labels = true }: { objects: MapObject[]; wind: Wind | undefined; now: Date; labels?: boolean }) {
   return (
@@ -75,6 +100,9 @@ export function MapObjectsLayer({ objects, wind, now, labels = true }: { objects
                   <Marker position={[o.lat, o.lon]} icon={sourceIcon} interactive={false} />
                 </Fragment>
               );
+            case 'aircraft':
+            case 'ship':
+              return <TrackedLayer key={o.id} object={o} labels={labels} />;
           }
         })}
     </>
