@@ -1,6 +1,7 @@
 import { BatteryCharging, Bluetooth } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { VICTRON_BALANCER_LABELS, VICTRON_READOUT_LABELS, VICTRON_STATE_LABELS, type BluetoothDeviceLive, type VictronReadout } from '@elvis/shared';
+import { VICTRON_BALANCER_LABELS, VICTRON_READOUT_LABELS, VICTRON_STATE_LABELS, type BluetoothDeviceLive, type VictronCellVoltage, type VictronReadout } from '@elvis/shared';
 import { useAuth } from '../lib/auth';
 import { fmtDateTime, fmtMinutes, fmtNum, fmtOpt, fmtTime } from '../lib/format';
 import { useDevice } from '../lib/live';
@@ -9,40 +10,70 @@ import { Badge, Card, EmptyState, Meter, PageHeader, Stat, type Tone } from '../
 
 const state = (s: number | null) => (s === null ? '–' : (VICTRON_STATE_LABELS[s] ?? `Zustand ${s}`));
 
+type LithiumReadout = Extract<VictronReadout, { type: 'lithium' }>;
+
+/** Füllhöhe einer Zelle: LiFePO4 von 2,80 V (leer) bis 3,65 V (voll) – zeigt die Spannung, nicht den Ladezustand */
+const CELL_EMPTY_V = 2.8;
+const CELL_FULL_V = 3.65;
+/** Außerhalb davon ist die Zelle fast leer bzw. voll (Warnung); „low“/„high“ meldet die Batterie selbst (Alarm) */
+const CELL_WARN_LOW_V = 3.0;
+const CELL_WARN_HIGH_V = 3.6;
+/** Ab diesem Abstand zwischen höchster und niedrigster Zelle fällt der Ausgleich auf */
+const SPREAD_WARN_V = 0.05;
+
+const cellTone = (c: VictronCellVoltage): Tone => (typeof c !== 'number' ? 'alarm' : c < CELL_WARN_LOW_V || c > CELL_WARN_HIGH_V ? 'warn' : 'ok');
+const cellFill = (c: VictronCellVoltage) => (c === 'low' ? 0 : c === 'high' ? 100 : Math.max(0, Math.min(100, ((c - CELL_EMPTY_V) / (CELL_FULL_V - CELL_EMPTY_V)) * 100)));
+const cellLabel = (c: VictronCellVoltage) => (c === 'low' ? '< 2,61' : c === 'high' ? '> 3,85' : fmtNum(c, 2));
+
+/** Lithium Battery Smart als Batterieblock: je Zelle eine Säule, Füllhöhe nach Zellspannung */
+function BatteryPack({ r, warnBelowV }: { r: LithiumReadout; warnBelowV: number | null }) {
+  const volts = r.cells.filter((c): c is number => typeof c === 'number');
+  const min = volts.length > 1 ? Math.min(...volts) : null;
+  const max = volts.length > 1 ? Math.max(...volts) : null;
+  const spread = min !== null && max !== null ? max - min : null;
+  const vTone: Tone | undefined = r.voltageV !== null && warnBelowV !== null && r.voltageV < warnBelowV ? 'warn' : undefined;
+  return (
+    <>
+      <div className="battery" role="img" aria-label={`Zellen: ${r.cells.map(cellLabel).join(', ')} V`}>
+        <div className="battery-cells" style={{ '--cells': Math.max(r.cells.length, 1) } as CSSProperties}>
+          {r.cells.length === 0 && <p className="muted battery-empty">Keine Zellwerte</p>}
+          {r.cells.map((c, i) => (
+            <div key={i} className={`battery-cell tone-${cellTone(c)}`}>
+              <div className="battery-cell-fill" style={{ height: `${cellFill(c)}%` }} />
+              <span className="battery-cell-no">Zelle {i + 1}</span>
+              <span className="battery-cell-v">
+                {cellLabel(c)}
+                <small>V</small>
+              </span>
+              {spread !== null && spread > 0 && (c === min || c === max) && <span className="battery-cell-tag">{c === min ? 'min' : 'max'}</span>}
+            </div>
+          ))}
+        </div>
+        <div className="battery-terminal" />
+      </div>
+      <div className="battery-stats">
+        <Stat label="Spannung" value={fmtOpt(r.voltageV, 2)} unit="V" tone={vTone} />
+        <Stat label="Temperatur" value={fmtOpt(r.temperatureC, 0)} unit="°C" />
+        <Stat label="Zelldifferenz" value={spread === null ? '–' : Math.round(spread * 1000)} unit="mV" tone={spread !== null && spread >= SPREAD_WARN_V ? 'warn' : undefined} />
+        <Stat
+          label="Ausgleich"
+          value={<span className="battery-balancer">{r.balancer ? VICTRON_BALANCER_LABELS[r.balancer] : '–'}</span>}
+          tone={r.balancer === 'imbalance' ? 'warn' : r.balancer === 'balancing' ? 'info' : undefined}
+        />
+      </div>
+      {r.errorFlags !== 0 && (
+        <p className="tone-alarm">
+          Batteriefehler <span className="mono">0x{r.errorFlags.toString(16)}</span>
+        </p>
+      )}
+    </>
+  );
+}
+
 function Readout({ r, warnBelowV }: { r: VictronReadout; warnBelowV: number | null }) {
+  if (r.type === 'lithium') return <BatteryPack r={r} warnBelowV={warnBelowV} />;
   const vTone = (v: number | null): Tone | undefined => (v !== null && warnBelowV !== null && v < warnBelowV ? 'warn' : undefined);
   switch (r.type) {
-    case 'lithium':
-      return (
-        <>
-          <div className="grid-2">
-            <Stat label="Spannung" value={fmtOpt(r.voltageV, 2)} unit="V" tone={vTone(r.voltageV)} />
-            <Stat label="Temperatur" value={fmtOpt(r.temperatureC, 0)} unit="°C" />
-          </div>
-          {r.cells.length > 0 && (
-            <dl className="kv">
-              <dt>Zellen</dt>
-              <dd className="mono">
-                {r.cells.map((c, i) => (
-                  <span key={i} className={typeof c === 'number' ? undefined : 'tone-alarm'}>
-                    {i > 0 && ' · '}
-                    {c === 'low' ? '< 2,61' : c === 'high' ? '> 3,85' : fmtNum(c, 2)}
-                  </span>
-                ))}{' '}
-                V
-              </dd>
-              <dt>Ausgleich</dt>
-              <dd className={r.balancer === 'imbalance' ? 'tone-warn' : undefined}>{r.balancer ? VICTRON_BALANCER_LABELS[r.balancer] : '–'}</dd>
-              {r.errorFlags !== 0 && (
-                <>
-                  <dt>Fehler</dt>
-                  <dd className="tone-alarm mono">0x{r.errorFlags.toString(16)}</dd>
-                </>
-              )}
-            </dl>
-          )}
-        </>
-      );
     case 'battery-monitor':
       return (
         <>
@@ -114,12 +145,33 @@ function DeviceBadge({ d }: { d: BluetoothDeviceLive }) {
   return <Badge tone="ok">{VICTRON_READOUT_LABELS[d.readout.type]}</Badge>;
 }
 
+function DeviceCard({ d }: { d: BluetoothDeviceLive }) {
+  return (
+    <Card title={d.name} icon={<BatteryCharging size={18} />} actions={<DeviceBadge d={d} />}>
+      {d.readout ? (
+        <div className={d.stale ? 'energy-readout stale' : 'energy-readout'}>
+          <Readout r={d.readout} warnBelowV={d.warnBelowV} />
+        </div>
+      ) : (
+        <p className="muted">{d.stale ? 'Seit dem Start nichts empfangen – Adresse, Schlüssel und Reichweite prüfen.' : 'Noch keine Werte empfangen.'}</p>
+      )}
+      <p className="cell-sub">
+        {[d.advertisedName !== d.name ? d.advertisedName : null, d.rssi !== null && !d.stale ? `${d.rssi} dBm` : null, d.seenAt ? (d.stale ? `zuletzt ${fmtDateTime(d.seenAt)}` : `empfangen ${fmtTime(d.seenAt)}`) : null]
+          .filter(Boolean)
+          .join(' · ')}
+      </p>
+    </Card>
+  );
+}
+
 /** Akkus, Laderegler und Ladegeräte im Fahrzeug (live vom Modul „Bluetooth“) */
 export function EnergyPage() {
   const bt = useDevice('bluetooth');
   const user = useAuth().user;
   if (!bt) return <ModuleDisabled name="Bluetooth" module="bluetooth" />;
   const { devices, adapter } = bt.state;
+  const packs = devices.filter((d) => d.readout?.type === 'lithium');
+  const others = devices.filter((d) => d.readout?.type !== 'lithium');
 
   return (
     <>
@@ -135,24 +187,22 @@ export function EnergyPage() {
           )}
         </EmptyState>
       ) : (
-        <div className="grid">
-          {devices.map((d) => (
-            <Card key={d.id} title={d.name} icon={<BatteryCharging size={18} />} actions={<DeviceBadge d={d} />}>
-              {d.readout ? (
-                <div className={d.stale ? 'energy-readout stale' : 'energy-readout'}>
-                  <Readout r={d.readout} warnBelowV={d.warnBelowV} />
-                </div>
-              ) : (
-                <p className="muted">{d.stale ? 'Seit dem Start nichts empfangen – Adresse, Schlüssel und Reichweite prüfen.' : 'Noch keine Werte empfangen.'}</p>
-              )}
-              <p className="cell-sub">
-                {[d.advertisedName !== d.name ? d.advertisedName : null, d.rssi !== null && !d.stale ? `${d.rssi} dBm` : null, d.seenAt ? (d.stale ? `zuletzt ${fmtDateTime(d.seenAt)}` : `empfangen ${fmtTime(d.seenAt)}`) : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-            </Card>
-          ))}
-        </div>
+        <>
+          {packs.length > 0 && (
+            <div className="energy-packs">
+              {packs.map((d) => (
+                <DeviceCard key={d.id} d={d} />
+              ))}
+            </div>
+          )}
+          {others.length > 0 && (
+            <div className="grid">
+              {others.map((d) => (
+                <DeviceCard key={d.id} d={d} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </>
   );
