@@ -128,6 +128,8 @@ export interface PrintMarker {
   sign?: Partial<TacticalSign>;
   /** Farbe eines Punkts (#rrggbb), sonst Blau */
   color?: string;
+  /** Symbol eines Punkts (Lucide-Name) */
+  icon?: string;
   lat: number;
   lon: number;
   label: string;
@@ -139,6 +141,12 @@ export interface PrintPolygon {
   fill: string;
   fillOpacity: number;
   dashed?: boolean;
+}
+
+/** Linie aus der Objektliste (Straße, Gewässer, Leitung); Punkte [Breite, Länge] */
+export interface PrintLine {
+  points: [number, number][];
+  color: string;
 }
 
 export interface PrintLegendItem {
@@ -156,6 +164,7 @@ export interface MapPrintRequest {
   subtitle?: string;
   markers: PrintMarker[];
   polygons: PrintPolygon[];
+  lines?: PrintLine[];
   legend: PrintLegendItem[];
   notes: string[];
 }

@@ -69,6 +69,19 @@ const configSchema = z.object({
        * bleiben im Datenverzeichnis (data/outlines). null = nur lokal.
        */
       outlineUrl: z.string().url().nullable().default('https://nominatim.openstreetmap.org'),
+      /**
+       * Öffentlicher Overpass-Server für Abfragen in der Karte, solange die Overpass-API des Addons „OSM-Daten“
+       * nicht bereit ist (oder ausfällt); null = nur lokal.
+       */
+      overpassUrl: z.string().url().nullable().default('https://overpass-api.de'),
+      /** Regenradar des DWD (GeoServer-WMS mit Zeitachse, Messung und Vorhersage); wmsUrl null = aus. */
+      radar: z
+        .object({
+          wmsUrl: z.string().url().nullable().default('https://maps.dwd.de/geoserver/dwd/wms'),
+          layer: z.string().default('Niederschlagsradar'),
+          attribution: z.string().default('Radar © Deutscher Wetterdienst'),
+        })
+        .default({}),
     })
     .default({}),
   weather: z

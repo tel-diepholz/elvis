@@ -27,6 +27,7 @@ import { describeError, type HostService } from '../docker/hosts.js';
 import type { TileService } from '../services/tiles.js';
 import { JobRuns, followLogs, type JobRunRow } from './jobs.js';
 import type { GeocoderProvision, GeocoderService } from '../services/geocoder.js';
+import type { OverpassProvision, OverpassService } from '../services/overpass.js';
 import type { OfficeProvision, OfficeService } from '../services/office.js';
 import type { GuestPrinterProvision, PrintServerProvision, PrintService } from '../services/printing.js';
 import type { WorkstationProvision, WorkstationService } from '../services/workstations.js';
@@ -834,6 +835,14 @@ export class AddonManager {
     this.updateMapSources();
   }
 
+  private overpass: OverpassService | null = null;
+
+  /** Overpass-APIs laufender Addons (provides.overpass) an diesen Dienst melden */
+  attachOverpass(overpass: OverpassService): void {
+    this.overpass = overpass;
+    this.updateMapSources();
+  }
+
   private office: OfficeService | null = null;
 
   /** Office-Server laufender Addons (provides.office) an diesen Dienst melden */
@@ -862,6 +871,7 @@ export class AddonManager {
     const sources: MapSourceConfig[] = [];
     const videos: VideoProvision[] = [];
     const geocoders: GeocoderProvision[] = [];
+    const overpass: OverpassProvision[] = [];
     const offices: OfficeProvision[] = [];
     const printServers: PrintServerProvision[] = [];
     const guestPrinters: GuestPrinterProvision[] = [];
@@ -895,6 +905,9 @@ export class AddonManager {
       for (const g of manifest.provides.geocoders ?? []) {
         geocoders.push({ id: `${r.id}-${g.id}`, name: g.name, type: g.type, url: renderTemplate(g.url, ctx) });
       }
+      for (const o of manifest.provides.overpass ?? []) {
+        overpass.push({ id: `${r.id}-${o.id}`, name: o.name, url: renderTemplate(o.url, ctx) });
+      }
       for (const o of manifest.provides.office ?? []) {
         offices.push({ id: `${r.id}-${o.id}`, name: o.name, url: renderTemplate(o.url, ctx), wopiBase: renderTemplate(o.wopiBase, ctx) });
       }
@@ -911,6 +924,7 @@ export class AddonManager {
     if (this.tiles.setAddonSources(sources)) this.notify(['mapSources']);
     if (this.videos?.setProvisions(videos)) this.notify(['videoSources']);
     this.geocoder?.setProvisions(geocoders);
+    this.overpass?.setProvisions(overpass);
     this.office?.setProvisions(offices);
     this.printing?.setProvisions(printServers, guestPrinters);
     this.workstations?.setProvisions(workstations);

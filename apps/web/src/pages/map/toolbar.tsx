@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, ChevronDown, Crosshair, Layers, MapPin, Plane, Shapes, Ship, Wind as WindIcon } from 'lucide-react';
-import type { MapSource } from '@elvis/shared';
+import { Check, ChevronDown, CloudRain, Crosshair, Database, Loader2, Search, X, Layers, MapPin, Plane, Shapes, Ship, Wind as WindIcon } from 'lucide-react';
+import type { MapSource, OverpassQuery } from '@elvis/shared';
+import { MapIcon } from '../../components/map/mapIcons';
 import { compass, fmtOpt } from '../../lib/format';
 import { WindCompass } from '../../components/WindCompass';
 import type { TrafficLayers } from '../../components/map/traffic';
@@ -52,45 +53,90 @@ function Dropdown({
 
 export type PlaceKind = 'incident' | 'gauss' | 'sector';
 
-/** Menü „Objekte“: Einsatzort setzen, Ausbreitung einfügen (danach in die Karte tippen), Flugzeug/Schiff suchen */
+/**
+ * Menü „Objekte“: Einsatzort setzen, Ausbreitung einfügen (danach in die Karte tippen), Flugzeug/Schiff suchen –
+ * das braucht einen laufenden Einsatz – sowie OpenStreetMap-Daten abfragen (nur angemeldet): die Vorlagen aus den
+ * Einstellungen laufen sofort im Kartenausschnitt, „OpenStreetMap abfragen …“ öffnet den Abfragebereich.
+ */
 export function ObjectMenu({
+  loggedIn,
   enabled,
   reason,
   hasLocation,
+  templates,
+  overpass,
+  overpassRunning,
   onPlace,
   onSearchTraffic,
+  onTemplate,
+  onOverpass,
+  onClearOverpass,
 }: {
+  loggedIn: boolean;
+  /** Objekte des Einsatzes ändern */
   enabled: boolean;
   reason: string;
   hasLocation: boolean;
+  /** Overpass-Vorlagen aus den Einstellungen */
+  templates: OverpassQuery[];
+  /** Letzte Overpass-Abfrage und ihre Trefferzahl, null = keine Treffer angezeigt */
+  overpass: { name: string; count: number } | null;
+  /** Name der gerade laufenden Overpass-Abfrage, null = keine */
+  overpassRunning: string | null;
   onPlace: (k: PlaceKind) => void;
   onSearchTraffic: () => void;
+  onTemplate: (q: OverpassQuery) => void;
+  onOverpass: () => void;
+  onClearOverpass: () => void;
 }) {
+  const edit = { disabled: !enabled, title: enabled ? undefined : reason };
   return (
     <Dropdown
       label="Objekte"
-      disabled={!enabled}
-      title={enabled ? undefined : reason}
+      disabled={!loggedIn}
+      title={loggedIn ? undefined : 'Zum Bearbeiten anmelden'}
       button={
         <>
-          <Shapes size={18} /> Objekte <ChevronDown size={16} />
+          {overpassRunning ? <Loader2 size={18} className="spin" aria-label={`„${overpassRunning}“ wird abgefragt`} /> : <Shapes size={18} />} Objekte <ChevronDown size={16} />
         </>
       }
     >
       {(close) => (
         <>
-          <button type="button" role="menuitem" className="map-dropdown-item" onClick={() => (close(), onPlace('incident'))}>
+          <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onPlace('incident'))}>
             <MapPin size={18} /> {hasLocation ? 'Einsatzort verschieben' : 'Einsatzort setzen'}
           </button>
-          <button type="button" role="menuitem" className="map-dropdown-item" onClick={() => (close(), onPlace('gauss'))}>
+          <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onPlace('gauss'))}>
             <WindIcon size={18} /> Gauß-Fahne einfügen
           </button>
-          <button type="button" role="menuitem" className="map-dropdown-item" onClick={() => (close(), onPlace('sector'))}>
+          <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onPlace('sector'))}>
             <Crosshair size={18} /> Sektor 60° einfügen
           </button>
-          <button type="button" role="menuitem" className="map-dropdown-item" onClick={() => (close(), onSearchTraffic())}>
+          <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onSearchTraffic())}>
             <Plane size={18} /> Flugzeug oder Schiff suchen …
           </button>
+          <div className="map-dropdown-heading">OpenStreetMap</div>
+          {templates.map((q, i) => (
+            <button key={i} type="button" role="menuitem" className={`map-dropdown-item ${overpassRunning === q.name ? 'running' : ''}`} disabled={!!overpassRunning} onClick={() => (close(), onTemplate(q))}>
+              {q.icon ? <MapIcon name={q.icon} size={18} /> : <Database size={18} />} {q.name}
+              {overpassRunning === q.name ? (
+                <span className="muted map-dropdown-loading">
+                  <Loader2 size={14} className="spin" /> lädt …
+                </span>
+              ) : (
+                overpass?.name === q.name && <span className="muted">{overpass.count} Treffer</span>
+              )}
+            </button>
+          ))}
+          <button type="button" role="menuitem" className="map-dropdown-item" onClick={() => (close(), onOverpass())}>
+            <Search size={18} /> OpenStreetMap abfragen …
+          </button>
+          {overpass && (
+            <button type="button" role="menuitem" className="map-dropdown-item" onClick={() => (close(), onClearOverpass())}>
+              <X size={18} /> Treffer entfernen
+              <span className="muted">{overpass.count}</span>
+            </button>
+          )}
         </>
       )}
     </Dropdown>
@@ -140,6 +186,7 @@ export function MapStylePicker({
             <div className="map-dropdown-heading">Ebenen</div>
             {layer('aircraft', <Plane size={16} />, 'Flugzeuge')}
             {layer('ships', <Ship size={16} />, 'Schiffe')}
+            {layer('radar', <CloudRain size={16} />, 'Regenradar')}
           </>
         )}
       </Dropdown>

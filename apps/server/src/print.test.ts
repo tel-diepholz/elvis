@@ -7,7 +7,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { MapPrintRequest } from '@elvis/shared';
 import { buildApp, type App } from './app.js';
 import { parseConfig } from './config.js';
-import { pdfText } from './services/print.js';
+import PDFDocument from 'pdfkit';
+import { mapIconList } from '@elvis/shared/mapIcons';
+import { drawMapIcon, pdfText } from './services/print.js';
 import { adminCookie } from './test-helpers.js';
 
 // 1×1 PNG (grau)
@@ -58,7 +60,9 @@ const request: MapPrintRequest = {
     { kind: 'vehicle', lat: 51.1657, lon: 10.4515, label: 'ELW 2' },
     { kind: 'incident', lat: 51.1662, lon: 10.456, label: 'Einsatzort' },
     { kind: 'point', lat: 51.1655, lon: 10.452, label: 'Hydrant Industriestr.', color: '#43a047' },
+    { kind: 'point', lat: 51.1659, lon: 10.453, label: 'Brandstelle', color: '#e53935', icon: 'Flame' },
   ],
+  lines: [{ points: [[51.165, 10.45], [51.166, 10.455], [51.167, 10.46]], color: '#4ea1ff' }],
   polygons: [{ points: [[51.1662, 10.456], [51.17, 10.47], [51.165, 10.47]], stroke: '#e53935', fill: '#e53935', fillOpacity: 0.3 }],
   legend: [{ color: '#e53935', label: 'hoch ≥ 1·10⁻³ s/m³' }],
   notes: ['Wind 3,9 m/s aus WSW'],
@@ -116,5 +120,11 @@ describe('PDF-Text', () => {
   it('ersetzt Zeichen außerhalb von WinAnsi lesbar', () => {
     expect(pdfText('hoch ≥ 1·10⁻³ s/m³')).toBe('hoch >= 1·10^-3 s/m³');
     expect(pdfText('Brandbekämpfung → EA Nord')).toBe('Brandbekämpfung -> EA Nord');
+  });
+
+  it('zeichnet jedes Lucide-Symbol', () => {
+    const doc = new PDFDocument({ size: 'A4' });
+    for (const { name } of mapIconList()) drawMapIcon(doc, name, 100, 100, 12, '#ffffff');
+    doc.end();
   });
 });

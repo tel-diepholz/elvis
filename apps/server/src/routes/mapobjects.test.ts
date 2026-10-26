@@ -47,7 +47,14 @@ describe('Kartenobjekte', () => {
     expect(gauss.data).toEqual({ stability: 'auto', cloudOktas: 4, terrain: 'rural', sourceHeightM: 0, releaseRateKgS: null });
     const sector = (await req<MapObject>('POST', url, { kind: 'sector', name: 'Sektor', lat: 52.7, lon: 8.5 })).body;
     expect(sector.data).toEqual({ sectorM: 1000 });
-    await req('POST', url, { kind: 'point', name: 'Lange Straße 3', lat: 52.709, lon: 8.506, data: { detail: '49406 Barnstorf' } });
+    const point = (await req<MapObject>('POST', url, { kind: 'point', name: 'Lange Straße 3', lat: 52.709, lon: 8.506, data: { detail: '49406 Barnstorf' } })).body;
+
+    // Symbol für Punkte (Lucide-Name); andere Objekte und unbekannte Namen werden abgewiesen
+    expect((await req<MapObject>('PATCH', `/api/map-objects/${point.id}`, { icon: 'Flame' })).body.data).toEqual({ detail: '49406 Barnstorf', icon: 'Flame' });
+    expect((await req<MapObject>('PATCH', `/api/map-objects/${point.id}`, { icon: null })).body.data).toEqual({ detail: '49406 Barnstorf', icon: null });
+    expect((await req('PATCH', `/api/map-objects/${point.id}`, { icon: 'GibtEsNicht' })).status).toBe(400);
+    expect((await req('PATCH', `/api/map-objects/${area.body.id}`, { icon: 'Flame' })).status).toBe(400);
+    expect((await req('POST', url, { kind: 'point', name: 'X', lat: 52.7, lon: 8.5, data: { detail: '', icon: 'GibtEsNicht' } })).status).toBe(400);
 
     // Ungültiges wird abgewiesen
     expect((await req('POST', url, { kind: 'kreis', name: 'X', lat: 1, lon: 1 })).status).toBe(400);

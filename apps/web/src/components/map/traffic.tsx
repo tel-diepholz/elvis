@@ -22,6 +22,7 @@ import { aircraftMarker } from './aircraftIcons';
 export interface TrafficLayers {
   aircraft: boolean;
   ships: boolean;
+  radar: boolean;
 }
 
 const LAYERS_KEY = 'elvis.map.layers';
@@ -29,9 +30,9 @@ const LAYERS_KEY = 'elvis.map.layers';
 export function readLayers(): TrafficLayers {
   try {
     const v = JSON.parse(localStorage.getItem(LAYERS_KEY) ?? '{}') as Partial<TrafficLayers>;
-    return { aircraft: v.aircraft === true, ships: v.ships === true };
+    return { aircraft: v.aircraft === true, ships: v.ships === true, radar: v.radar === true };
   } catch {
-    return { aircraft: false, ships: false };
+    return { aircraft: false, ships: false, radar: false };
   }
 }
 

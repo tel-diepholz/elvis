@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Eye, EyeOff, MapPin, Plane, Shapes, Ship, Square, Trash2, Truck, Wind as WindIcon } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Eye, EyeOff, MapPin, Plane, Route, Shapes, Ship, Square, Trash2, Truck, Wind as WindIcon } from 'lucide-react';
 import {
   COLORABLE_KINDS,
   DEFAULT_OBJECT_COLORS,
@@ -21,6 +21,7 @@ import { fmtAgo, fmtTime } from '../../lib/format';
 import { useToast } from '../../lib/toast';
 import { Field } from '../../components/ui';
 import { TacticalSignImage } from '../../components/tactical/TacticalSign';
+import { MapIcon, MapIconPicker } from '../../components/map/mapIcons';
 import { GaussControls, NoWindWarning, fmtDistance, usePlume, type Wind } from '../../components/map/dispersion';
 
 const OPEN_KEY = 'elvis.map.objectsOpen';
@@ -32,7 +33,7 @@ const readOpen = () => {
   }
 };
 
-const KIND_ICONS = { point: MapPin, area: Square, gauss: WindIcon, sector: Crosshair, aircraft: Plane, ship: Ship } as const;
+const KIND_ICONS = { point: MapPin, area: Square, line: Route, gauss: WindIcon, sector: Crosshair, aircraft: Plane, ship: Ship } as const;
 
 function GaussEditor({ object, wind, now, canEdit }: { object: Extract<MapObject, { kind: 'gauss' }>; wind: Wind | undefined; now: Date; canEdit: boolean }) {
   const toast = useToast();
@@ -100,6 +101,7 @@ function summary(o: MapObject, now: Date): string {
   switch (o.kind) {
     case 'point':
     case 'area':
+    case 'line':
       return o.data.detail || MAP_OBJECT_LABELS[o.kind];
     case 'gauss':
       return `${MAP_OBJECT_LABELS.gauss}${o.data.stability === 'auto' ? '' : ` · Klasse ${o.data.stability}`}`;
@@ -168,7 +170,7 @@ export function ObjectList({
   };
 
   const patch = useMutation({
-    mutationFn: ({ id, ...p }: { id: number; visible?: boolean; color?: string | null; data?: { sectorM: number } }) => api.patchMapObject(id, p),
+    mutationFn: ({ id, ...p }: { id: number; visible?: boolean; color?: string | null; icon?: string | null; data?: { sectorM: number } }) => api.patchMapObject(id, p),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mapObjects', incident.id] }),
     onError: (e) => toast('error', e.message),
   });
@@ -264,7 +266,7 @@ export function ObjectList({
             <li key={o.id} className={`map-object ${o.visible ? '' : 'hidden'}`}>
               <button type="button" className="map-object-main" onClick={() => onFly(o)}>
                 <span className={`map-object-icon ${o.kind}`} style={colorable ? { color, background: `${color}26` } : undefined}>
-                  <Icon size={16} />
+                  {o.kind === 'point' && o.data.icon ? <MapIcon name={o.data.icon} /> : <Icon size={16} />}
                 </span>
                 <span className="map-object-text">
                   <strong>{o.name}</strong>
@@ -283,8 +285,8 @@ export function ObjectList({
                     className="icon-btn"
                     onClick={() => setColoring(coloring === o.id ? null : o.id)}
                     aria-expanded={coloring === o.id}
-                    aria-label="Farbe"
-                    title="Farbe"
+                    aria-label={o.kind === 'point' ? 'Farbe und Symbol' : 'Farbe'}
+                    title={o.kind === 'point' ? 'Farbe und Symbol' : 'Farbe'}
                   >
                     <span className="map-color-dot" style={{ background: color }} />
                   </button>
@@ -300,7 +302,10 @@ export function ObjectList({
                   </>
                 )}
               </span>
-              {coloring === o.id && canEdit && <ColorPalette object={o} onPick={(c) => (patch.mutate({ id: o.id, color: c }), setColoring(null))} />}
+              {coloring === o.id && canEdit && <ColorPalette object={o} onPick={(c) => (patch.mutate({ id: o.id, color: c }), o.kind !== 'point' && setColoring(null))} />}
+              {coloring === o.id && canEdit && o.kind === 'point' && (
+                <MapIconPicker value={o.data.icon ?? null} label={`Symbol von ${o.name}`} onPick={(icon) => (patch.mutate({ id: o.id, icon }), setColoring(null))} />
+              )}
               {isOpen && o.kind === 'gauss' && <GaussEditor object={o} wind={wind} now={now} canEdit={canEdit} />}
               {isOpen && o.kind === 'sector' && (
                 <div className="dispersion-panel">

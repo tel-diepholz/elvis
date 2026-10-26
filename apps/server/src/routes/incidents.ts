@@ -9,6 +9,7 @@ import {
   mapObjectPatchSchema,
   newMapObjectSchema,
   newUnitSchema,
+  overpassQuerySchema,
   unitPatchSchema,
   type ForceImportPreview,
   type ForceImportResult,
@@ -114,6 +115,21 @@ export function incidentRoutes(
 
   app.delete('/api/map-objects/:id', async (req, reply) => {
     incidents.removeMapObject(parse(idParam, req.params).id, operatorOf(req));
+    return reply.code(204).send();
+  });
+
+  // Gespeicherte Overpass-Abfragen
+  app.get('/api/incidents/:id/overpass-queries', async (req) => incidents.overpassQueries(parse(idParam, req.params).id));
+
+  app.post('/api/incidents/:id/overpass-queries', async (req, reply) => {
+    const { id } = parse(idParam, req.params);
+    return reply.code(201).send(incidents.addOverpassQuery(id, parse(overpassQuerySchema, req.body), operatorOf(req)));
+  });
+
+  app.put('/api/overpass-queries/:id', async (req) => incidents.saveOverpassQuery(parse(idParam, req.params).id, parse(overpassQuerySchema, req.body)));
+
+  app.delete('/api/overpass-queries/:id', async (req, reply) => {
+    incidents.removeOverpassQuery(parse(idParam, req.params).id);
     return reply.code(204).send();
   });
 
