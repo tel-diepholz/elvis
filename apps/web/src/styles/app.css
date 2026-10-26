@@ -3959,6 +3959,125 @@ select.unit-status.has-children {
 .energy-readout .meter {
   margin-bottom: 0.75rem;
 }
+.energy-readout:has(.battery) {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.energy-packs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* Lithium-Batterie als Block: Gehäuse mit Pol rechts, je Zelle eine Säule */
+.battery {
+  display: flex;
+  align-items: center;
+}
+.battery-cells {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border: 3px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--bg-input);
+  container-type: inline-size;
+}
+.battery-terminal {
+  flex: none;
+  width: 10px;
+  height: 56px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 0;
+  background: var(--border-strong);
+}
+.battery-empty {
+  padding: 40px 12px;
+  margin: 0 auto;
+}
+.battery-cell {
+  --cell: var(--ok);
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 168px;
+  border-radius: 8px;
+  background: var(--muted-bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.battery-cell.tone-warn {
+  --cell: var(--warn);
+}
+.battery-cell.tone-alarm {
+  --cell: var(--alarm);
+}
+.battery-cell-fill {
+  position: absolute;
+  inset: auto 0 0;
+  background: linear-gradient(to top, color-mix(in srgb, var(--cell) 22%, transparent), color-mix(in srgb, var(--cell) 42%, transparent));
+  transition: height 0.6s ease;
+}
+.battery-cell > span {
+  position: relative;
+}
+.battery-cell-no {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.battery-cell-v {
+  /* --cells: Anzahl der Zellen, damit auch acht Zellen (25,6 V) nebeneinander passen */
+  font-size: clamp(12px, calc(22cqi / var(--cells, 4)), 22px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+.battery-cell-v small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+.battery-cell.tone-warn .battery-cell-v,
+.battery-cell.tone-alarm .battery-cell-v {
+  color: var(--cell);
+}
+.battery-cell > .battery-cell-tag {
+  position: absolute;
+  bottom: 8px;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.battery-stats {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  justify-content: space-between;
+  gap: 12px;
+}
+.battery-balancer {
+  font-size: 16px;
+  white-space: nowrap;
+}
+@media (max-width: 520px) {
+  .battery-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .battery-cell {
+    height: 136px;
+  }
+}
 
 /* ---------- ELW-Router ---------- */
 .router-grid.stale {
