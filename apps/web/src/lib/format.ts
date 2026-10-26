@@ -20,6 +20,14 @@ export function fmtDuration(fromIso: string, to: Date | string = new Date()): st
   return `${p(h)}:${p(m)}:${p(s % 60)}`;
 }
 
+/** „gerade eben“, „vor 3 min“, „vor 2 h“ */
+export function fmtAgo(iso: string, now: Date = new Date()): string {
+  const min = Math.floor((now.getTime() - new Date(iso).getTime()) / 60_000);
+  if (min < 1) return 'gerade eben';
+  if (min < 60) return `vor ${min} min`;
+  return `vor ${Math.floor(min / 60)} h`;
+}
+
 export function fmtMinutes(min: number | null): string {
   if (min === null) return '–';
   if (min < 60) return `${min} min`;

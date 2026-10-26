@@ -125,6 +125,13 @@ export function incidentRoutes(
     return reply.code(201).send(incidents.deploy(id, parse(deployUnitSchema, req.body), operatorOf(req)));
   });
 
+  app.get('/api/units/:id', async (req) => {
+    const { id } = parse(idParam, req.params);
+    const unit = store.unit(id);
+    if (!unit) throw new HttpError(404, `Einheit ${id} nicht gefunden`);
+    return unit;
+  });
+
   app.patch('/api/units/:id', async (req) => {
     const { id } = parse(idParam, req.params);
     return incidents.patchUnit(id, parse(unitPatchSchema, req.body), operatorOf(req));

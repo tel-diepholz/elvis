@@ -8,6 +8,7 @@ import {
   FolderTree,
   Laptop,
   ListTodo,
+  Map as MapIcon,
   MonitorPlay,
   MonitorSmartphone,
   Network,
@@ -15,6 +16,7 @@ import {
   Radio,
   Router,
   ScanLine,
+  Smartphone,
   Truck,
   UserRoundCog,
   Users,
@@ -25,11 +27,13 @@ import { api } from '../lib/api';
 import { useSettings } from '../lib/hooks';
 import { SettingsGroup, SettingsSection } from '../components/SettingsSection';
 import { Loading, PageHeader } from '../components/ui';
+import { AppRelayCard } from './system/AppRelayCard';
 import { BluetoothCard } from './system/BluetoothCard';
 import { CamerasCard } from './system/CamerasCard';
 import { DisplaysCard } from './system/DisplaysCard';
 import { DocumentFoldersCard } from './system/DocumentFoldersCard';
 import { ForcesCard } from './system/ForcesCard';
+import { MapSourcesCard } from './system/MapSourcesCard';
 import { ModuleSection } from './system/ModuleSection';
 import { MonitoringCard } from './system/MonitoringCard';
 import { PrintSettingsCard } from './system/PrintSettingsCard';
@@ -100,6 +104,9 @@ export function SettingsPage() {
           <SettingsSection id="arbeitsplaetze" title="Arbeitsplätze" icon={<Laptop {...ICON} />} summary="Notebooks per PXE, Updates">
             <WorkstationsCard />
           </SettingsSection>
+          <SettingsSection id="karten" title="Kartenquellen" icon={<MapIcon {...ICON} />} summary="Kartenstile, Luftbilder (WMS)">
+            <MapSourcesCard />
+          </SettingsSection>
           <SettingsSection id="drucken" title="Druckserver" icon={<Printer {...ICON} />} summary="Ablage im Einsatz, vorausgewählter Drucker">
             <PrintSettingsCard />
           </SettingsSection>
@@ -108,6 +115,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="dokumente" title="Ordnervorgabe für Dokumente" icon={<FolderTree {...ICON} />} summary="Ordner je Einsatz">
             <DocumentFoldersCard />
+          </SettingsSection>
+          <SettingsSection id="app" title="App-Anbindung" icon={<Smartphone {...ICON} />} summary="Positionen von Einsatzkräften per App">
+            <AppRelayCard />
           </SettingsSection>
         </SettingsGroup>
 

@@ -8,7 +8,7 @@ Einsatzführung (Einsatztagebuch, Kräfte, Dokumente) in einer Anwendung zusamme
 
 | Bereich | Verfügbarkeit | Inhalt |
 | --- | --- | --- |
-| **Fahrzeug** | immer | Übersicht, Fahrzeugzustand, Karte, Wetterstation, Netzwerk, Medien |
+| **Fahrzeug** | immer | Übersicht, Karte, Wetter, Netzwerk |
 | **Einsatz** | Unterseiten erst mit aufgelegtem Einsatz | Einsatztagebuch, Kräfteübersicht, Dokumente |
 | **Verwaltung** | immer | Einsatzarchiv (schreibgeschützt); nur Admins: Bedienprotokoll, Einstellungen |
 
@@ -87,6 +87,82 @@ Typische Schnittstellen: Victron/Modbus-TCP (Energie), CAN/FMS-Gateway (Fahrgest
 (Licht, Mast), TETRA-PEI (Funk), Router-API/SNMP (Netzwerk), RS-232/IP (Videomatrix), ONVIF (Kameras).
 Befehle mit dem Präfix `sim.` gibt es nur im Simulator.
 
+## Wetter
+
+Die Seite „Wetter“ zeigt für den Fahrzeugstandort (GPS der Wetterstation, ohne GPS der Einsatzort) die
+**amtlichen Warnungen des DWD** (Gemeinde-Warngebiet, über [Bright Sky](https://brightsky.dev)) und eine
+**Prognose** von [Open-Meteo](https://open-meteo.com): aktuelle Lage, die nächsten 24 Stunden und 7 Tage.
+Böen ab 70 % bzw. 100 % von `alerts.stormWarnMs` werden hervorgehoben. Darunter stehen die Live-Werte der
+Wetterstation, sofern das Modul aktiv ist.
+
+Das Backend fragt beide Dienste ab (Standort auf ca. 1 km gerundet) und hält die Antworten vor – Prognose
+15 Minuten, Warnungen 5 Minuten. Ist ein Dienst nicht erreichbar, bleibt der letzte Stand bis zu 12 Stunden sichtbar.
+Unwetterwarnungen (Stufe 3, Stufe 4 als Alarm) erscheinen zusätzlich unter „Meldungen“; Bildschirme zeigen
+Warnungen und Prognose in den Kacheln „Wetter“ und „Wettervorhersage“.
+
+```json
+"weather": { "forecastUrl": "https://api.open-meteo.com", "warningsUrl": "https://api.brightsky.dev" }
+```
+
+`null` schaltet den jeweiligen Dienst ab.
+
+## App-Anbindung (Positionen von Einsatzkräften)
+
+Einsatzkräfte können ihre Position mit der Android-App [ELVIS Ortung](https://github.com/tel-diepholz/elvis-app)
+an den ELW senden. Die Positionen laufen über ein kleines **Cloud-Relay** ([ELVIS Relay](https://github.com/tel-diepholz/elvis-relay),
+Cloudflare Worker mit D1).
+ELVIS holt sie dort ausgehend ab, der ELW braucht also keine öffentliche Adresse.
+
+```
+App ──HTTPS──▶ Relay (Cloudflare) ◀──Abruf alle 15 s── ELVIS ──▶ Kräfteübersicht / Karte
+```
+
+- **Koppeln:** Die App zeigt nach dem Start eine App-ID (z. B. `K7M2-QX9P`) und einen 6-stelligen Code. In der
+  Kräfteübersicht bei der Einheit auf das Smartphone-Symbol tippen und beides eintragen. Der Code gilt einmal;
+  nach 5 Fehlversuchen zeigt die App einen neuen. Eine Einheit hat höchstens eine App, eine App gehört zu einem ELW.
+- **Ortung:** Die App meldet die erste Position sofort, danach ab 10 m Bewegung, spätestens alle 10 Minuten (Regel
+  `shouldSendPosition` in `packages/shared/src/applink.ts`). ELVIS setzt die Einheit auf der Karte. Ins Tagebuch
+  kommen nur „App gekoppelt/entkoppelt“ und der Wechsel auf „Position per App“, nicht jede Meldung. Die Karte zeigt
+  Alter und Genauigkeit im Tooltip und blasst Einheiten ohne Meldung seit 20 Minuten ab. Verschiebt man eine
+  Einheit von Hand, gilt das bis zur nächsten App-Meldung.
+- **Ende:** Die Kopplung endet beim Entkoppeln (Smartphone-Symbol), beim Entlassen der Einheit und mit dem Einsatz.
+  Die App erfährt es mit ihrer nächsten Meldung und hört auf zu orten. Ist das Relay gerade nicht erreichbar,
+  holt ELVIS das Entkoppeln nach. Die Einsatzkraft kann die Ortung in der App jederzeit stoppen.
+- **Datenschutz:** Das Relay kennt nur zufällige IDs, keine Namen. Positionen löscht es mit der Abholung,
+  spätestens nach 24 Stunden; unbenutzte App-IDs nach 90 Tagen. Hinweise für Nutzer: `<relay>/datenschutz`.
+- **Zustand:** *Einstellungen → Dienste → App-Anbindung* zeigt Relay, Anmeldung, gekoppelte Apps und den letzten Abruf.
+
+Das Relay läuft unter **`https://elvis-relay.hhansen06.workers.dev`** (Cloudflare Worker). Einrichtung und Betrieb beschreibt das Repo
+[elvis-relay](https://github.com/tel-diepholz/elvis-relay). ELVIS und die App nutzen diese Adresse als Vorgabe; der ELW
+meldet sich beim ersten Koppeln selbst beim Relay an. Ein anderes Relay oder `null` (aus) lässt sich in ELVIS
+eintragen:
+
+```json
+"app": { "relayUrl": "https://elvis-relay.hhansen06.workers.dev" }
+```
+
+oder per Umgebungsvariable `ELVIS_APP_RELAY_URL` (`off` = aus). In der App ist die Adresse unter „Relay-Adresse“
+änderbar. Zum Ausprobieren das Relay lokal starten (siehe elvis-relay, Port 8787) und ELVIS mit
+`ELVIS_APP_RELAY_URL=http://localhost:8787` starten.
+
+## Personal der Einheiten (Personalbögen)
+
+Ein Klick auf eine Einheit in der Kräfteübersicht öffnet ihre **Detailseite** (`/einsatz/kraefte/:id`) mit Stammdaten,
+Untereinheiten und dem **Personal**. Über *Personalbogen ausfüllen* werden eine oder mehrere Personen erfasst: Name,
+Geburtsdatum, Einordnung (Führer / Unterführer / Mannschaft), Funktion, Qualifikationen, Organisation, Telefon,
+Anschrift, Arbeitgeber, Notfallkontakt und Bemerkung. Weicht die daraus gezählte Stärke von der Einheit ab, lässt sie
+sich mit einem Klick übernehmen. *An andere Einheit übergeben* verschiebt ausgewählte Personen zu einer anderen Einheit
+des Einsatzes (z. B. bei falsch zugeordnetem Bogen). Ins Einsatztagebuch kommen nur Anzahlen, keine Namen.
+
+**Cloud-Personalabfrage:** Im *Dokumenten-Eingang* erzeugt ELVIS einen Link (6–72 Stunden gültig, längstens bis zum
+Einsatzende; QR-Code und Kopieren). Einheitsführer tragen dort zuerst *Einheit / Fahrzeug* (Freitext) und dann ihr
+Personal ein. Der Browser verschlüsselt den Bogen mit dem öffentlichen Schlüssel dieses ELW (RSA-OAEP-256 +
+AES-256-GCM); das Relay speichert nur Unlesbares und löscht es mit der Abholung, spätestens nach 7 Tagen. ELVIS holt
+alle 15 s ab, solange ein Link gilt. Neue Bögen markiert ein Zähler am Menüpunkt *Dokumenten-Eingang*; dort werden sie einer
+Einheit zugeordnet oder als neue Einheit angelegt (Stärke aus dem Personal); danach verschwinden sie aus dem Eingang
+und stehen beim Personal der Einheit. Nicht zugeordnete Bögen bleiben 30 Tage im Dokumenten-Eingang. Mit dem Ende des Links verwirft
+ELVIS den privaten Schlüssel.
+
 ## Ausbreitungsberechnung (Karte)
 
 Über „Objekte“ in der Karte lassen sich beliebig viele **Gauß-Fahnen** und schematische **60°-Sektoren** in
@@ -123,7 +199,27 @@ festgelegt:
 ```
 
 Platzhalter: `{z}`, `{x}`, `{y}`, optional `{s}` (Subdomain aus `subdomains`) und `{r}` (`@2x` bei
-`"pixelRatio": 2`). Sind mehrere Quellen konfiguriert, erscheint auf der Karte und im Druckdialog eine Auswahl.
+`"pixelRatio": 2`). WMS-Dienste werden mit `{bbox}` (Ausschnitt der Kachel in EPSG:3857), `{width}` und `{height}`
+(256 bzw. 512 px) eingebunden. Sind mehrere Quellen konfiguriert, erscheint auf der Karte und im Druckdialog eine Auswahl.
+
+**Kartenquellen in den Einstellungen:** Admins können unter **Einstellungen → Kartenquellen** weitere Quellen
+anlegen, ohne `elvis.json` zu ändern (`/api/system/map-sources`). Quellen aus `elvis.json` und von Addons erscheinen dort
+nur zur Ansicht. „Testen“ lädt eine Kachel am Einsatzort (sonst in Niedersachsen) und zeigt die Fehlermeldung des Dienstes.
+Ändert sich die URL einer Quelle, verwirft ELVIS ihre zwischengespeicherten Kacheln. Die Vorlage **Luftbild Niedersachsen**
+bindet das Digitale Orthophoto (DOP20, 20 cm) des LGLN als WMS ein:
+
+```
+https://opendata.lgln.niedersachsen.de/doorman/noauth/dop_wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=ni_dop20&STYLES=&CRS=EPSG:3857&BBOX={bbox}&WIDTH={width}&HEIGHT={height}&FORMAT=image/jpeg
+```
+
+Die Daten stehen unter CC BY 4.0, die Quellenangabe lautet „© GeoBasis-DE/LGLN <Jahr>“
+([OpenGeoData Niedersachsen](https://ni-lgln-opengeodata.hub.arcgis.com/pages/geodatendienste)).
+
+Über „Vorlage einfügen …“ stehen außerdem die freien DOP20-Dienste von Baden-Württemberg, Bayern, Berlin/Brandenburg,
+Bremen, Hamburg, Hessen, Mecklenburg-Vorpommern, Nordrhein-Westfalen, Rheinland-Pfalz, dem Saarland, Sachsen,
+Schleswig-Holstein und Thüringen bereit (Sachsen-Anhalt hat derzeit keinen erreichbaren Open-Data-WMS). Die
+Quellenangaben folgen den Dienstbeschreibungen. Vor dem Einsatz die Lizenz des Landes prüfen. Weitere WMS-Dienste lassen
+sich genauso eintragen, sofern sie EPSG:3857 unterstützen.
 
 **Bedienung:** Oben links stehen Suche, das Menü „Objekte“ (Einsatzort setzen, Gauß-Fahne oder Sektor 60°
 einfügen) und „Drucken“, oben rechts die Wahl des Kartenstils, unten links der Wind. Rechts liegt die einklappbare
@@ -279,12 +375,17 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
   per Schloss schützen; sie lässt sich dann weder überschreiben noch löschen (umbenennen und aufrufen geht weiter). Sie bleiben unabhängig vom Einsatz erhalten,
   und jede Aktion landet im Bedienprotokoll. Beim Entkoppeln eines Bildschirms werden seine Szenen gelöscht.
 - **Kacheln:** Lagekarte (Fahrzeug und Einsatzort, Kartenstil, Mittelpunkt, Mitführen, Zoom), Kamera (Livebild),
-  Wetter, Uhr (DTG), Meldungen, Netzwerk (Router/Failover), Gast-WLAN (QR-Code, Netzname und Passwort des Gastnetzes
-  im laufenden Einsatz, siehe „WLAN“). Eine mitgeführte Karte folgt Fahrzeug bzw. Einsatzort und
+  Wetter (mit amtlichen Warnungen), Wettervorhersage (24 Stunden und/oder 7 Tage), Uhr (DTG), Meldungen, Netzwerk (Router/Failover), Gast-WLAN (QR-Code, Netzname und Passwort des Gastnetzes
+  im laufenden Einsatz, siehe „WLAN“), Bild (hochgeladenes PNG, JPEG, GIF oder WebP bis 20 MB, ohne Kachelrahmen) und
+  Szenenwahl (Szenen und Hell/Dunkel per Touch am Bildschirm). Eine mitgeführte Karte folgt Fahrzeug bzw. Einsatzort und
   lässt sich nicht verschieben. Ohne Mitführen lässt sie sich am Bildschirm per Touch und unter „Bildschirme“ direkt in
   der Vorschau verschieben und zoomen – der Bildschirm folgt und behält den Ausschnitt, auch nach „Neu laden“.
+- **Design:** Jeder Bildschirm ist hell oder dunkel (Standard), umschaltbar unter „Bildschirme“ oder am Bildschirm über
+  die Kachel „Szenenwahl“. Im dunklen Design ist der Hintergrund hinter den Kacheln schwarz.
 - **Rechte:** Gekoppelte Bildschirme dürfen ohne Benutzeranmeldung zusätzlich den laufenden Einsatz lesen (für den
-  Einsatzort auf der Karte) und das Gastnetz (Kachel „Gast-WLAN“), sonst nur, was auch anonyme Arbeitsplätze sehen.
+  Einsatzort auf der Karte), das Gastnetz (Kachel „Gast-WLAN“) und die Bilder der Kachel „Bild“, sonst nur, was auch
+  anonyme Arbeitsplätze sehen. Szenen aufrufen und das Design wechseln darf ein Bildschirm selbst nur, solange er eine
+  Kachel „Szenenwahl“ zeigt.
 - **Kiosk-Browser:** mit dauerhaftem Profil starten, nicht im Inkognito-Modus, sonst geht die Kopplung bei jedem
   Neustart verloren. Beispiel: `chromium --kiosk --noerrdialogs --disable-session-crashed-bubble http://<elvis>:8080/bildschirm`.
 - **Smart-TV / Android:** Die App [ELVIS Bildschirm](https://github.com/tel-diepholz/elvis-tv) zeigt `/bildschirm` im
@@ -299,7 +400,7 @@ Typ (Axis oder Demo ohne Hardware), Adresse, Benutzer, Passwort und die Auflösu
 zeigt Modell und Funktionen der Kamera.
 
 - **Livebild:** ELVIS holt das MJPEG-Bild von der Kamera (Digest-Anmeldung, MD5 oder SHA-256) und reicht es an den
-  Browser weiter (`/api/cameras/<id>/stream`). Zugangsdaten verlassen den Server nicht. Wie der Fahrzeugzustand ist das
+  Browser weiter (`/api/cameras/<id>/stream`). Zugangsdaten verlassen den Server nicht. Wie der Fahrzeugbereich ist das
   Bild auch für anonyme Arbeitsplätze sichtbar, bedienen können nur angemeldete Benutzer.
 - **Bedienung je nach Kamera:** ELVIS erkennt beim Verbinden, welche Funktionen eine Kamera hat, und zeigt nur die passenden Bedienelemente. „Verbindung testen“ zeigt, welche Schnittstelle was übernimmt.
   - Neuere Kameras mit Motorobjektiv: Optics Control API (`opticscontrol.cgi`, Version wird ausgehandelt) für Zoom,
@@ -458,8 +559,8 @@ VictronConnect lässt sich weiter parallel nutzen.
     auch neue Benutzer anlegen, aber ohne Admin-Rechte.
   - **Nur Admins** dürfen das Admin-Flag vergeben, andere Benutzer bearbeiten oder löschen, deren PIN zurücksetzen
     und Addons sowie Docker-Hosts verwalten. Der letzte Admin kann weder herabgestuft noch gelöscht werden.
-  - **Anonyme Arbeitsplätze** sehen den Fahrzeugbereich (Übersicht, Fahrzeugzustand, Karte, Wetter, Netzwerk,
-    Medien) nur lesend. Einsatzdaten, Archiv, Benutzer und System erfordern eine Anmeldung. Der Server setzt das
+  - **Anonyme Arbeitsplätze** sehen den Fahrzeugbereich (Übersicht, Karte, Wetter, Netzwerk)
+    nur lesend. Einsatzdaten, Archiv, Benutzer und System erfordern eine Anmeldung. Der Server setzt das
     durch (`apps/server/src/auth/access.ts`). Unbekannte Endpunkte verlangen standardmäßig eine Anmeldung.
 - **Sicherheit:**
   - Die PINs werden mit scrypt gehasht gespeichert.
@@ -674,13 +775,13 @@ Voraussetzung: Docker und Node auf dem Entwicklungsrechner.
     den Gastdrucker-Port (TCP 8631) und mDNS (UDP 5353) zum Docker-Host freigeben, nicht ELVIS oder Port 631.
   - Kein TLS (`ipps`) und kein WSD: Windows vor 10 21H2 findet den Drucker unter Umständen nicht.
 
-## Scannen (Scan-Eingang)
+## Scannen (Eingang)
 
 Multifunktionsgeräte wie der HP Color LaserJet Pro MFP 3302sdwg schicken Scans per **Scan an E-Mail** direkt an ELVIS.
 ELVIS betreibt dafür einen eigenen SMTP-Empfänger (Port 2525, `scan.smtpPort` in der Konfiguration bzw.
 `ELVIS_SCAN_PORT`, `off` schaltet ihn ab). Weitere Dienste braucht es nicht.
 
-- **Scan-Eingang** (*Fahrzeug → Scan-Eingang*, angemeldet): Jeder PDF-Anhang wird ein Scan mit Absender, Betreff und
+- **Dokumenten-Eingang** (*Fahrzeug → Dokumenten-Eingang*, angemeldet): Jeder PDF-Anhang wird ein Scan mit Absender, Betreff und
   Zeit. Ansehen, herunterladen, aus dem Eingang löschen oder nachträglich im laufenden Einsatz ablegen. Scans im Eingang
   werden nach der eingestellten Frist (Vorgabe 14 Tage) gelöscht; abgelegte Dokumente bleiben im Einsatz.
 - **Ablage:** Ist ein Einsatz eröffnet, legt ELVIS jeden Scan zusätzlich in dessen Dokumentverwaltung ab (Vorgabe

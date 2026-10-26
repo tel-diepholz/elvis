@@ -60,6 +60,9 @@ const toUnit = (r: Row): Unit => ({
   status: r.status as UnitStatus,
   lat: (r.lat as number | null) ?? null,
   lon: (r.lon as number | null) ?? null,
+  positionSource: (r.position_source as Unit['positionSource']) ?? null,
+  positionAt: (r.position_at as string | null) ?? null,
+  positionAccuracyM: (r.position_accuracy_m as number | null) ?? null,
   mapVisible: r.map_visible !== 0,
   createdAt: r.created_at as string,
   arrivedAt: (r.arrived_at as string | null) ?? null,
@@ -83,6 +86,9 @@ const unitParams = (u: Omit<Unit, 'id' | 'incidentId' | 'createdAt' | 'updatedAt
   status: u.status,
   lat: u.lat,
   lon: u.lon,
+  positionSource: u.positionSource,
+  positionAt: u.positionAt,
+  positionAccuracyM: u.positionAccuracyM,
   mapVisible: u.mapVisible ? 1 : 0,
   arrivedAt: u.arrivedAt,
   releasedAt: u.releasedAt,
@@ -263,9 +269,9 @@ export class Store {
     const info = this.db
       .prepare(
         `INSERT INTO units (incident_id, parent_id, role, source_id, name, callsign, organization, notes, sign, leaders, sub_leaders, crew,
-           section, status, lat, lon, map_visible, created_at, arrived_at, released_at, updated_at)
+           section, status, lat, lon, position_source, position_at, position_accuracy_m, map_visible, created_at, arrived_at, released_at, updated_at)
          VALUES (@incidentId, @parentId, @role, @sourceId, @name, @callsign, @organization, @notes, @sign, @leaders, @subLeaders, @crew,
-           @section, @status, @lat, @lon, @mapVisible, @ts, @arrivedAt, @releasedAt, @ts)`,
+           @section, @status, @lat, @lon, @positionSource, @positionAt, @positionAccuracyM, @mapVisible, @ts, @arrivedAt, @releasedAt, @ts)`,
       )
       .run({ ...unitParams(u), incidentId: u.incidentId, ts });
     return this.unit(Number(info.lastInsertRowid))!;
@@ -276,7 +282,7 @@ export class Store {
       .prepare(
         `UPDATE units SET parent_id=@parentId, role=@role, source_id=@sourceId, name=@name, callsign=@callsign, organization=@organization,
          notes=@notes, sign=@sign, leaders=@leaders, sub_leaders=@subLeaders, crew=@crew, section=@section, status=@status, lat=@lat,
-         lon=@lon, map_visible=@mapVisible, arrived_at=@arrivedAt, released_at=@releasedAt, updated_at=@ts WHERE id=@id`,
+         lon=@lon, position_source=@positionSource, position_at=@positionAt, position_accuracy_m=@positionAccuracyM, map_visible=@mapVisible, arrived_at=@arrivedAt, released_at=@releasedAt, updated_at=@ts WHERE id=@id`,
       )
       .run({ ...unitParams(u), id: u.id, ts: now() });
     return this.unit(u.id)!;

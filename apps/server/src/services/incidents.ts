@@ -208,13 +208,16 @@ export class IncidentService {
     return parent;
   }
 
-  private create(incidentId: number, u: Omit<Unit, 'id' | 'incidentId' | 'createdAt' | 'updatedAt' | 'arrivedAt' | 'releasedAt' | 'lat' | 'lon' | 'mapVisible'>): Unit {
+  private create(incidentId: number, u: Omit<Unit, 'id' | 'incidentId' | 'createdAt' | 'updatedAt' | 'arrivedAt' | 'releasedAt' | 'lat' | 'lon' | 'positionSource' | 'positionAt' | 'positionAccuracyM' | 'mapVisible'>): Unit {
     const ts = new Date().toISOString();
     return this.store.addUnit({
       ...u,
       incidentId,
       lat: null,
       lon: null,
+      positionSource: null,
+      positionAt: null,
+      positionAccuracyM: null,
       mapVisible: true,
       arrivedAt: isOnScene(u.status) ? ts : null,
       releasedAt: u.status === 'entlassen' ? ts : null,
@@ -278,6 +281,38 @@ export class IncidentService {
     return root;
   }
 
+  /** Systemeintrag im Tagebuch (z. B. Online-Formular bereitgestellt) */
+  incidentEvent(incidentId: number, text: string, operator: string): void {
+    this.system(incidentId, text, operator);
+    this.notify(['journal']);
+  }
+
+  /** Tagebucheintrag zu einer Einheit (z. B. App gekoppelt) */
+  unitEvent(unitId: number, text: string, operator: string): void {
+    const unit = this.store.unit(unitId);
+    if (!unit) throw new HttpError(404, `Einheit ${unitId} nicht gefunden`);
+    this.system(unit.incidentId, `${unit.name}: ${text}`, operator);
+    this.notify(['journal']);
+  }
+
+  /**
+   * Position aus der App übernehmen. Ins Tagebuch kommt nur der Wechsel auf App-Ortung, nicht jede
+   * Meldung. Ältere Meldungen als die gespeicherte Position werden verworfen.
+   */
+  setUnitPositionFromApp(unitId: number, pos: { lat: number; lon: number; accuracyM: number | null; ts: string }): Unit | null {
+    const before = this.store.unit(unitId);
+    if (!before || before.status === 'entlassen' || this.store.incident(before.incidentId)?.closedAt) return null;
+    if (before.positionSource === 'app' && before.positionAt && before.positionAt >= pos.ts) return null;
+    const first = before.positionSource !== 'app';
+    const saved = this.store.transaction(() => {
+      const u = this.store.saveUnit({ ...before, lat: pos.lat, lon: pos.lon, positionSource: 'app', positionAt: pos.ts, positionAccuracyM: pos.accuracyM });
+      if (first) this.system(u.incidentId, `${u.name}: Position per App${before.lat === null ? '' : ' (statt von Hand)'}`, 'App');
+      return u;
+    });
+    this.notify(first ? ['units', 'journal'] : ['units']);
+    return saved;
+  }
+
   patchUnit(unitId: number, patch: z.output<typeof unitPatchSchema>, operator: string): Unit {
     const before = this.store.unit(unitId);
     if (!before) throw new HttpError(404, `Einheit ${unitId} nicht gefunden`);
@@ -302,7 +337,13 @@ export class IncidentService {
         ...(patch.section !== undefined && { section: patch.section }),
         ...(patch.parentId !== undefined && { parentId: patch.parentId }),
         ...(patch.role !== undefined && { role: patch.role }),
-        ...(patch.lat !== undefined && { lat: patch.lat, lon: patch.lon ?? null }),
+        ...(patch.lat !== undefined && {
+          lat: patch.lat,
+          lon: patch.lon ?? null,
+          positionSource: patch.lat === null ? null : ('manual' as const),
+          positionAt: patch.lat === null ? null : ts,
+          positionAccuracyM: null,
+        }),
         ...(patch.mapVisible !== undefined && { mapVisible: patch.mapVisible }),
       },
       status,

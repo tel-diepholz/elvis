@@ -549,6 +549,93 @@ const MIGRATIONS: Migration[] = [
     created_at TEXT NOT NULL
   );
   `,
+  // Farbschema je Bildschirm (Kachel „Szenenwahl“)
+  (db) => {
+    const columns = db.prepare('PRAGMA table_info(displays)').all() as { name: string }[];
+    if (!columns.some((c) => c.name === 'theme')) db.exec("ALTER TABLE displays ADD COLUMN theme TEXT NOT NULL DEFAULT 'dark'");
+  },
+  // Bilder für die Kachel „Bild“ (Datei unter display-images/<id>)
+  `
+  CREATE TABLE display_images (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL
+  );
+  `,
+  // App-Anbindung: Herkunft der Einheitenposition und gekoppelte Apps (über das Cloud-Relay)
+  `
+  ALTER TABLE units ADD COLUMN position_source TEXT;
+  ALTER TABLE units ADD COLUMN position_at TEXT;
+  ALTER TABLE units ADD COLUMN position_accuracy_m REAL;
+  UPDATE units SET position_source = 'manual', position_at = updated_at WHERE lat IS NOT NULL;
+  CREATE TABLE app_links (
+    id INTEGER PRIMARY KEY,
+    unit_id INTEGER NOT NULL REFERENCES units(id),
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    device_id TEXT NOT NULL,
+    paired_at TEXT NOT NULL,
+    paired_by TEXT NOT NULL,
+    ended_at TEXT,
+    relay_pending INTEGER NOT NULL DEFAULT 0,
+    last_position_at TEXT,
+    accuracy_m REAL,
+    battery REAL
+  );
+  CREATE INDEX app_links_active ON app_links (device_id) WHERE ended_at IS NULL;
+  `,
+  // Personal der Einheiten; Personalbögen aus dem Online-Formular (über das Relay) im Eingang
+  `
+  CREATE TABLE personnel_forms (
+    id TEXT PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    url TEXT NOT NULL,
+    private_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    closed_at TEXT,
+    relay_pending INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE personnel_sheets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    form_id TEXT,
+    incident_id INTEGER REFERENCES incidents(id) ON DELETE SET NULL,
+    unit_label TEXT NOT NULL,
+    persons TEXT NOT NULL,
+    submitted_at TEXT NOT NULL,
+    received_at TEXT NOT NULL,
+    read_at TEXT,
+    unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
+    assigned_at TEXT,
+    assigned_by TEXT
+  );
+  CREATE INDEX personnel_sheets_received ON personnel_sheets(received_at);
+  CREATE TABLE personnel (
+    id INTEGER PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    unit_id INTEGER NOT NULL REFERENCES units(id),
+    sheet_id INTEGER REFERENCES personnel_sheets(id) ON DELETE SET NULL,
+    last_name TEXT NOT NULL,
+    first_name TEXT NOT NULL,
+    birth_date TEXT NOT NULL DEFAULT '',
+    grade TEXT NOT NULL,
+    function TEXT NOT NULL DEFAULT '',
+    qualifications TEXT NOT NULL DEFAULT '[]',
+    organization TEXT NOT NULL DEFAULT '',
+    phone TEXT NOT NULL DEFAULT '',
+    address TEXT NOT NULL DEFAULT '',
+    employer TEXT NOT NULL DEFAULT '',
+    emergency_contact TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX personnel_unit ON personnel(unit_id);
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

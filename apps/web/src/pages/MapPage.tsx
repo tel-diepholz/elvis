@@ -23,6 +23,23 @@ import { ObjectList } from './map/objectlist';
 import { MapStylePicker, ObjectMenu, WindTile, type PlaceKind } from './map/toolbar';
 
 const VIEW_KEY = 'elvis.map.view';
+/** Gewählter Kartenstil (pro Browser); fehlt die Quelle inzwischen, gilt wieder „Automatisch“ */
+const SOURCE_KEY = 'elvis.map.source';
+const readSource = () => {
+  try {
+    return localStorage.getItem(SOURCE_KEY);
+  } catch {
+    return null;
+  }
+};
+const saveSource = (id: string | null) => {
+  try {
+    if (id === null) localStorage.removeItem(SOURCE_KEY);
+    else localStorage.setItem(SOURCE_KEY, id);
+  } catch {
+    /* nur Komfort */
+  }
+};
 
 const incidentIcon = L.divIcon({ className: 'map-marker incident', html: '<span>!</span>', iconSize: [30, 30], iconAnchor: [15, 15] });
 const searchIcon = L.divIcon({ className: 'map-marker search', html: '<span></span>', iconSize: [20, 20], iconAnchor: [10, 10] });
@@ -99,7 +116,8 @@ export function MapPage() {
   const [saved] = useState(() => loadMapView(VIEW_KEY));
   const { data: sources = [] } = useQuery({ queryKey: ['mapSources'], queryFn: api.mapSources, staleTime: Infinity });
   // null = automatisch passend zum Design (dunkle Kacheln im Dunkelmodus)
-  const [sourceId, setSourceId] = useState<string | null>(null);
+  const [sourceId, setSourceId] = useState<string | null>(readSource);
+  const chooseSource = (id: string | null) => (setSourceId(id), saveSource(id));
   const dark = effectiveTheme(useTheme()) === 'dark';
   const source = sources.find((s) => s.id === sourceId) ?? autoSource(sources, dark);
 
@@ -286,7 +304,7 @@ export function MapPage() {
         </div>
       )}
 
-      <MapStylePicker sources={sources} value={sourceId} auto={autoSource(sources, dark)} onChange={setSourceId} onMenuHeight={setStyleMenuPx} />
+      <MapStylePicker sources={sources} value={sources.some((s) => s.id === sourceId) ? sourceId : null} auto={autoSource(sources, dark)} onChange={chooseSource} onMenuHeight={setStyleMenuPx} />
 
       {incident && (
         <ObjectList

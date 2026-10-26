@@ -38,15 +38,15 @@ export function accessLevel(method: string, rawUrl: string): AccessLevel {
 
   if (read) {
     if (url === '/api/health' || url === '/api/info' || url === '/api/live' || url === '/api/alerts') return 'public';
-    if (url.startsWith('/api/devices') || url.startsWith('/api/map/')) return 'public';
+    if (url.startsWith('/api/devices') || url.startsWith('/api/map/') || url === '/api/weather' || url.startsWith('/api/weather/')) return 'public';
     // Livebild wie der Fahrzeugzustand; gespeicherte Positionen sind Einsatzdaten (Anmeldung)
     if (/^\/api\/cameras\/[^/]+\/stream$/.test(url)) return 'public';
   }
   return 'user';
 }
 
-/** Endpunkte, die gekoppelte Bildschirme ohne Benutzeranmeldung lesen dürfen (Einsatzort, Kartenobjekte, Kräfte, Aufgaben, Gastnetz) */
+/** Endpunkte, die gekoppelte Bildschirme ohne Benutzeranmeldung lesen dürfen (Einsatzort, Kartenobjekte, Kräfte, Aufgaben, Gastnetz, Bilder) */
 export function displayReadable(method: string, rawUrl: string): boolean {
   const url = rawUrl.split('?')[0]!;
-  return (method === 'GET' || method === 'HEAD') && (url === '/api/incidents/active' || url === '/api/wifi/guest' || /^\/api\/incidents\/\d+\/(objects|units|tasks)$/.test(url));
+  return (method === 'GET' || method === 'HEAD') && (url === '/api/incidents/active' || url === '/api/wifi/guest' || /^\/api\/incidents\/\d+\/(objects|units|tasks)$/.test(url) || /^\/api\/displays\/images\/\d+$/.test(url));
 }

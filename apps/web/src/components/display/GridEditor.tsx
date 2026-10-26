@@ -1,9 +1,11 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Trash2 } from 'lucide-react';
-import { DISPLAY_TEXT_MAX, DISPLAY_TILE_TYPES, tilesOverlap, type DisplayLayout, type DisplayScreen, type DisplayTile } from '@elvis/shared';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Trash2, Upload } from 'lucide-react';
+import { DISPLAY_IMAGE_MAX_BYTES, DISPLAY_TEXT_MAX, DISPLAY_TILE_TYPES, tilesOverlap, type DisplayLayout, type DisplayScreen, type DisplayTile } from '@elvis/shared';
 import { api } from '../../lib/api';
+import { fmtBytes } from '../../lib/format';
 import { useDevice } from '../../lib/live';
+import { useToast } from '../../lib/toast';
 import { Field, Segmented, Toggle } from '../ui';
 import { DEFAULT_SCREEN } from './DisplayCanvas';
 import { TILE_ICONS } from './tiles';
@@ -24,7 +26,9 @@ const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(mi
 function useTileSummary() {
   const cams = useDevice('cameras')?.state.cameras ?? [];
   const { data: videos } = useQuery({ queryKey: ['videoSources'], queryFn: api.videoSources });
+  const { data: images } = useQuery({ queryKey: ['displays', 'images'], queryFn: api.displayImages });
   return (t: DisplayTile) => {
+    if (t.type === 'image') return typeof t.config.imageId === 'number' ? (images?.find((i) => i.id === t.config.imageId)?.name ?? 'Bild fehlt') : 'kein Bild';
     if (t.type === 'video') return videos?.streams.find((s) => s.id === t.config.streamId)?.name ?? (t.config.streamId ? 'Quelle nicht verfügbar' : 'erste Quelle');
     if (t.type === 'camera') return cams.find((c) => c.id === t.config.cameraId)?.name ?? (t.config.cameraId ? 'Kamera fehlt' : 'erste Kamera');
     if (t.type === 'text') {
@@ -34,6 +38,8 @@ function useTileSummary() {
     if (t.type === 'guestWifi') return String(t.config.title ?? '').trim() || 'Gastnetz des Einsatzes';
     if (t.type === 'tasks') return t.config.personal === true ? 'mit persönlichen Aufgaben' : 'ohne persönliche Aufgaben';
     if (t.type === 'forces') return [t.config.subunits !== false ? 'mit Untereinheiten' : 'nur oberste Ebene', t.config.planned === true && 'mit geplanten'].filter(Boolean).join(', ');
+    if (t.type === 'forecast') return t.config.range === '24h' ? '24 Stunden' : t.config.range === '7d' ? '7 Tage' : '24 Stunden und 7 Tage';
+    if (t.type === 'scenes') return t.config.theme !== false ? 'mit Hell/Dunkel' : 'nur Szenen';
     if (t.type === 'map') return `${t.config.center === 'incident' ? 'Einsatzort' : 'Fahrzeug'}${t.config.follow !== false ? ', mitgeführt' : ''}`;
     return '';
   };
@@ -195,6 +201,7 @@ export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; 
         </>
       )}
       {tile.type === 'video' && <VideoTileSettings tile={tile} set={set} />}
+      {tile.type === 'image' && <ImageTileSettings tile={tile} set={set} />}
       {tile.type === 'text' && (
         <>
           <Field label="Text">
@@ -241,6 +248,23 @@ export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; 
           <p className="field-hint">Zeigt Netzname, Passwort und QR-Code des Gastnetzes, solange ein Einsatz läuft. Einrichten unter Einstellungen → WLAN-Accesspoints.</p>
         </>
       )}
+      {tile.type === 'forecast' && (
+        <>
+          <Field label="Zeitraum">
+            <Segmented
+              label="Zeitraum"
+              value={tile.config.range === '24h' || tile.config.range === '7d' ? tile.config.range : 'both'}
+              onChange={(v) => set('range', v)}
+              options={[
+                { value: 'both', label: 'Beides' },
+                { value: '24h', label: '24 Stunden' },
+                { value: '7d', label: '7 Tage' },
+              ]}
+            />
+          </Field>
+          <p className="field-hint">Prognose von Open-Meteo am Fahrzeugstandort (GPS der Wetterstation, sonst Einsatzort). Böen über der Sturmwarnschwelle sind rot.</p>
+        </>
+      )}
       {tile.type === 'tasks' && (
         <>
           <Toggle label="Persönliche Aufgaben anzeigen" checked={tile.config.personal === true} onChange={(on) => set('personal', on)} />
@@ -260,11 +284,95 @@ export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; 
           </p>
         </>
       )}
+      {tile.type === 'scenes' && (
+        <>
+          <Toggle label="Umschalter Hell/Dunkel anzeigen" checked={tile.config.theme !== false} onChange={(on) => set('theme', on)} />
+          <p className="field-hint">
+            Zeigt die gespeicherten Szenen dieses Bildschirms zum Antippen; die angezeigte ist hervorgehoben. Die Kachel in jede Szene aufnehmen – sonst lässt sich am
+            Bildschirm nicht zurückwechseln. Das Design gilt für den ganzen Bildschirm und lässt sich auch unter „Bildschirme“ in der Vorschau umschalten.
+          </p>
+        </>
+      )}
       {(tile.type === 'clock' || tile.type === 'weather' || tile.type === 'alerts' || tile.type === 'network') && <p className="muted">Keine weiteren Einstellungen.</p>}
       <button type="button" className="btn" onClick={onRemove}>
         <Trash2 size={16} /> Kachel entfernen
       </button>
     </div>
+  );
+}
+
+function ImageTileSettings({ tile, set }: { tile: DisplayTile; set: (k: string, v: string | number | boolean) => void }) {
+  const toast = useToast();
+  const input = useRef<HTMLInputElement>(null);
+  const { data: images = [] } = useQuery({ queryKey: ['displays', 'images'], queryFn: api.displayImages });
+  const current = typeof tile.config.imageId === 'number' ? tile.config.imageId : null;
+  const selected = images.find((i) => i.id === current);
+  const upload = useMutation({
+    mutationFn: api.uploadDisplayImage,
+    onSuccess: (img) => set('imageId', img.id),
+    onError: (e) => toast('error', e.message),
+  });
+  const remove = useMutation({
+    mutationFn: api.removeDisplayImage,
+    onSuccess: () => set('imageId', ''),
+    onError: (e) => toast('error', e.message),
+  });
+  const choose = (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > DISPLAY_IMAGE_MAX_BYTES) toast('error', `Bild größer als ${fmtBytes(DISPLAY_IMAGE_MAX_BYTES)}`);
+    else upload.mutate(file);
+  };
+  return (
+    <>
+      {current !== null && (
+        <div className="tile-image-preview">
+          <img src={api.displayImageUrl(current)} alt={selected?.name ?? ''} />
+        </div>
+      )}
+      <Field label="Bild">
+        <select value={current ?? ''} onChange={(e) => set('imageId', e.target.value ? Number(e.target.value) : '')}>
+          <option value="">Kein Bild</option>
+          {current !== null && !selected && <option value={current}>Bild fehlt</option>}
+          {images.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.name} ({fmtBytes(i.sizeBytes)})
+            </option>
+          ))}
+        </select>
+      </Field>
+      <span className="btn-row">
+        <input ref={input} type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden onChange={(e) => (choose(e.target.files?.[0]), (e.target.value = ''))} />
+        <button type="button" className="btn" disabled={upload.isPending} onClick={() => input.current?.click()}>
+          <Upload size={16} /> {upload.isPending ? 'Lädt hoch …' : 'Bild hochladen'}
+        </button>
+        {selected && (
+          <button
+            type="button"
+            className="btn"
+            disabled={remove.isPending || selected.uses > 0}
+            title={selected.uses > 0 ? `Wird noch in ${selected.uses} gespeicherten Kachel(n) oder Szenen angezeigt` : 'Bild endgültig löschen'}
+            onClick={() => window.confirm(`Bild „${selected.name}“ löschen?`) && remove.mutate(selected.id)}
+          >
+            <Trash2 size={16} /> Bild löschen
+          </button>
+        )}
+      </span>
+      <Field label="Darstellung">
+        <Segmented
+          label="Darstellung"
+          value={tile.config.fit === 'cover' ? 'cover' : 'contain'}
+          onChange={(v) => set('fit', v)}
+          options={[
+            { value: 'contain', label: 'Ganz zeigen' },
+            { value: 'cover', label: 'Kachel füllen' },
+          ]}
+        />
+      </Field>
+      <p className="field-hint">
+        PNG, JPEG, GIF oder WebP bis {fmtBytes(DISPLAY_IMAGE_MAX_BYTES)}. „Ganz zeigen“ passt das Bild ein, „Kachel füllen“ schneidet die Ränder ab. Hochgeladene Bilder
+        stehen allen Bildschirmen zur Auswahl.
+      </p>
+    </>
   );
 }
 

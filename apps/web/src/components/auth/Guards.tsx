@@ -25,7 +25,7 @@ export function RequireLogin({ children, admin }: { children: ReactNode; admin?:
   if (!user) {
     return (
       <EmptyState icon={<Lock size={40} />} title="Anmeldung erforderlich">
-        <p>Ohne Anmeldung steht nur der Fahrzeugzustand zur Ansicht bereit.</p>
+        <p>Ohne Anmeldung steht nur der Fahrzeugbereich zur Ansicht bereit.</p>
         <LoginButton />
       </EmptyState>
     );

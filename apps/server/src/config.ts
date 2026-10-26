@@ -13,7 +13,7 @@ const driverSchema = z.object({
 const mapSourceSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string(),
-  /** XYZ-Vorlage mit {z}, {x}, {y} und optional {s} (Subdomain) bzw. {r} (Retina-Suffix). */
+  /** XYZ-Vorlage mit {z}, {x}, {y} und optional {s} (Subdomain) bzw. {r} (Retina-Suffix); WMS mit {bbox} (EPSG:3857), {width}, {height}. */
   url: z.string(),
   attribution: z.string(),
   maxZoom: z.number().int().default(19),
@@ -71,6 +71,14 @@ const configSchema = z.object({
       outlineUrl: z.string().url().nullable().default('https://nominatim.openstreetmap.org'),
     })
     .default({}),
+  weather: z
+    .object({
+      /** Open-Meteo für die Wetterprognose am Fahrzeugstandort; null = aus. */
+      forecastUrl: z.string().url().nullable().default('https://api.open-meteo.com'),
+      /** Bright Sky für die amtlichen Warnungen des DWD (nur Deutschland); null = aus. */
+      warningsUrl: z.string().url().nullable().default('https://api.brightsky.dev'),
+    })
+    .default({}),
   docker: z
     .object({
       /** Docker- und Addon-Verwaltung in ELVIS anbieten. */
@@ -91,6 +99,12 @@ const configSchema = z.object({
     .object({
       /** Port des SMTP-Empfängers für „Scan an E-Mail“; null = aus. Über 1024, da der Container nicht als root läuft. */
       smtpPort: z.coerce.number().int().min(0).max(65535).nullable().default(2525),
+    })
+    .default({}),
+  app: z
+    .object({
+      /** Cloud-Relay der ELVIS-App (tel-diepholz/elvis-relay), über das Einsatzkräfte ihre Position senden; null = aus. */
+      relayUrl: z.string().url().nullable().default('https://elvis-relay.hhansen06.workers.dev'),
     })
     .default({}),
   alerts: z
@@ -115,6 +129,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ElvisConfig {
     ...(env.PORT && { port: env.PORT }),
     ...(env.ELVIS_DATA_DIR && { dataDir: env.ELVIS_DATA_DIR }),
     ...(env.ELVIS_WEB_DIST && { webDist: env.ELVIS_WEB_DIST }),
+    ...(env.ELVIS_APP_RELAY_URL && { app: { ...fromFile.app, relayUrl: env.ELVIS_APP_RELAY_URL === 'off' ? null : env.ELVIS_APP_RELAY_URL } }),
     ...(env.ELVIS_SCAN_PORT && { scan: { ...fromFile.scan, smtpPort: env.ELVIS_SCAN_PORT === 'off' ? null : env.ELVIS_SCAN_PORT } }),
     ...((env.ELVIS_ADDONS_DIR || env.ELVIS_ADDON_REPOSITORIES) && {
       addons: {

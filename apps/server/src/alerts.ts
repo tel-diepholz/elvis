@@ -128,5 +128,10 @@ export function evaluateAlerts(get: StateGetter, offline: DeviceId[], limits: El
     }
   }
 
-  return out.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
+  return sortAlerts(out);
+}
+
+/** Schwerste zuerst; bei gleicher Schwere bleibt die Reihenfolge */
+export function sortAlerts(alerts: AlertDraft[]): AlertDraft[] {
+  return [...alerts].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }

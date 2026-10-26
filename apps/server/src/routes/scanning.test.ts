@@ -115,7 +115,7 @@ describe('Scan-Eingang', () => {
     expect(scans.map((s) => s.archivedPath).sort()).toEqual([`Scans/${today()}/a.pdf`, `Scans/${today()}/b.pdf`]);
     const listing = (await inject<DocumentListing>('GET', `/api/incidents/${incident.id}/documents`)).body;
     expect(listing.documents.map((d) => d.filename).sort()).toEqual(['a.pdf', 'b.pdf']);
-    expect(listing.documents[0]).toMatchObject({ uploadedBy: 'Scan-Eingang', mimeType: 'application/pdf', description: 'Scan: Scan vom HP' });
+    expect(listing.documents[0]).toMatchObject({ uploadedBy: 'Eingang', mimeType: 'application/pdf', description: 'Scan: Scan vom HP' });
     const journal = (await inject<JournalEntry[]>('GET', `/api/incidents/${incident.id}/journal`)).body;
     expect(journal.some((j) => j.text.includes(`Scans/${today()}/a.pdf`))).toBe(true);
   });

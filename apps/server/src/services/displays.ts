@@ -8,6 +8,7 @@ import {
   type DisplayScene,
   type DisplayScreen,
   type DisplaySelf,
+  type DisplayTheme,
 } from '@elvis/shared';
 import type { Db } from '../db/index.js';
 import { HttpError } from '../errors.js';
@@ -24,6 +25,7 @@ interface Row {
   name: string;
   layout: string;
   screen: string | null;
+  theme: string;
   user_agent: string;
   sort: number;
   paired_at: string;
@@ -82,6 +84,7 @@ export class DisplayService {
       layout,
       online: this.online.has(r.id),
       screen: r.screen ? (JSON.parse(r.screen) as DisplayScreen) : null,
+      theme: r.theme === 'light' ? 'light' : 'dark',
       userAgent: r.user_agent,
       pairedAt: r.paired_at,
       lastSeenAt: r.last_seen_at,
@@ -153,6 +156,13 @@ export class DisplayService {
   rename(id: string, name: string): DisplayDevice {
     this.get(id);
     this.db.prepare('UPDATE displays SET name = ? WHERE id = ?').run(name.trim(), id);
+    this.changed();
+    return this.get(id);
+  }
+
+  setTheme(id: string, theme: DisplayTheme): DisplayDevice {
+    this.get(id);
+    this.db.prepare('UPDATE displays SET theme = ? WHERE id = ?').run(theme, id);
     this.changed();
     return this.get(id);
   }

@@ -158,6 +158,11 @@ export interface Unit {
   /** Position auf der Karte; null = noch nicht gesetzt */
   lat: number | null;
   lon: number | null;
+  /** Woher die Position stammt: von Hand auf der Karte oder per App; null = keine Position */
+  positionSource: 'manual' | 'app' | null;
+  positionAt: string | null;
+  /** Genauigkeit der App-Ortung in Metern */
+  positionAccuracyM: number | null;
   mapVisible: boolean;
   createdAt: string;
   /** Erstmals vor Ort (Eingetroffen, In Ruhe, Im Einsatz) */

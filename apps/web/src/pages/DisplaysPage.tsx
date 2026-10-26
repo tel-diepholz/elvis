@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Eye, LayoutGrid, MonitorSmartphone, Plus, RotateCw, Save, X } from 'lucide-react';
+import { Eye, LayoutGrid, MonitorSmartphone, Moon, Plus, RotateCw, Save, Sun, X } from 'lucide-react';
 import { DISPLAY_TILE_IDS, DISPLAY_TILE_TYPES, findFreeSpot, type DisplayDevice, type DisplayLayout, type DisplayTileType } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -10,7 +10,7 @@ import { useToast } from '../lib/toast';
 import { DisplayCanvas, ScaledScreen } from '../components/display/DisplayCanvas';
 import { GridEditor, TileSettings } from '../components/display/GridEditor';
 import { ScenesBar } from '../components/display/ScenesBar';
-import { MapSyncContext, type MapSync } from '../components/display/tiles';
+import { DisplayControlContext, MapSyncContext, type DisplayControl, type MapSync } from '../components/display/tiles';
 import { Badge, Card, EmptyState, PageHeader } from '../components/ui';
 
 const SELECTED_KEY = 'elvis.display';
@@ -131,6 +131,7 @@ export function DisplaysPage() {
     mutationFn: ({ id, action }: { id: string; action: 'reload' | 'identify' }) => api.displayCommand(id, action),
     onError: (e) => toast('error', e.message),
   });
+  const themeToggle = useMutation({ mutationFn: (d: DisplayDevice) => api.setDisplayTheme(d.id, d.theme === 'dark' ? 'light' : 'dark'), onError: (e) => toast('error', e.message) });
   const header = <PageHeader title="Bildschirme" subtitle="Inhalte der Bildschirme im Fahrzeug steuern" />;
 
   if (!displays) return header;
@@ -160,6 +161,12 @@ export function DisplaysPage() {
     views: display.mapViews,
     onMove: (tileId, view) => void api.displayMapView(display.id, tileId, view).catch((e: Error) => toast('error', e.message)),
   };
+  // Kachel „Szenenwahl“ in der Vorschau bedient den Bildschirm mit der eigenen Anmeldung
+  const control: DisplayControl = {
+    display,
+    applyScene: (id) => api.applyDisplayScene(display.id, id),
+    setTheme: (t) => api.setDisplayTheme(display.id, t),
+  };
 
   return (
     <>
@@ -185,6 +192,9 @@ export function DisplaysPage() {
               </div>
             </div>
             <span className="btn-row">
+              <button type="button" className="btn" disabled={themeToggle.isPending} onClick={() => themeToggle.mutate(display)} title={`Bildschirm ${display.theme === 'dark' ? 'hell' : 'dunkel'} anzeigen`}>
+                {display.theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />} {display.theme === 'dark' ? 'Hell' : 'Dunkel'}
+              </button>
               <button type="button" className="btn" disabled={!display.online || command.isPending} onClick={() => command.mutate({ id: display.id, action: 'identify' })} title="Namen auf dem Bildschirm einblenden">
                 <Eye size={16} /> Erkennen
               </button>
@@ -197,10 +207,12 @@ export function DisplaysPage() {
             </span>
           </div>
           <ScenesBar display={display} />
-          <ScaledScreen screen={display.screen} className="display-preview">
+          <ScaledScreen screen={display.screen} className={`display-preview display-theme-${display.theme}`}>
             {display.layout.tiles.length ? (
               <MapSyncContext.Provider value={mapSync}>
-                <DisplayCanvas layout={display.layout} />
+                <DisplayControlContext.Provider value={control}>
+                  <DisplayCanvas layout={display.layout} />
+                </DisplayControlContext.Provider>
               </MapSyncContext.Provider>
             ) : (
               <div className="display-center display-pairing">

@@ -1,13 +1,14 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useQuery } from '@tanstack/react-query';
-import { Bell, Cctv, Clock, CloudSun, ListChecks, Map as MapIcon, Network, Repeat, Type, Users, Video, Wifi } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Bell, Cctv, CalendarDays, Clock, CloudSun, Image as ImageIcon, Layers, ListChecks, Map as MapIcon, Moon, Network, Repeat, Sun, Type, Users, Video, Wifi } from 'lucide-react';
 import {
   DEFAULT_VEHICLE_SIGN,
   DISPLAY_TILE_TYPES,
   UNIT_STATUS,
+  WARNING_LEVEL,
   fmtInterval,
   formatDtg,
   formatStrength,
@@ -17,14 +18,16 @@ import {
   taskIsDue,
   unitChildren,
   unitDescendants,
+  type DisplayDevice,
   type DisplayMapView,
   type DisplayTile,
+  type DisplayTheme,
   type DisplayTileType,
   type Unit,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { compass, fmtDate, fmtOpt, fmtTime } from '../../lib/format';
-import { useNow, useSettings } from '../../lib/hooks';
+import { useInfo, useNow, useSettings } from '../../lib/hooks';
 import { autoSource } from '../../lib/mapSources';
 import { DISPLAY_MAP_VIEW_EVENT, useAlerts, useDevice } from '../../lib/live';
 import { loadMapView, sameMapView, saveMapView } from '../../lib/mapView';
@@ -32,13 +35,14 @@ import { AlertList } from '../AlertPanel';
 import { CameraImage } from '../camera/CameraImage';
 import { TacticalSignImage, tacticalIcon } from '../tactical/TacticalSign';
 import { WindCompass } from '../WindCompass';
+import { WeatherIcon, WindArrow, gustTone } from '../WeatherIcon';
 import { WebRtcPlayer } from './WebRtcPlayer';
 import { MapObjectsLayer, useMapObjects } from '../map/objects';
 import { UnitsLayer, useMapUnits } from '../map/units';
 import { WifiQr } from '../WifiQr';
 import { fmtRelative } from '../tasks/taskActions';
 
-export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users };
+export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, forecast: CalendarDays, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users, scenes: Layers, image: ImageIcon };
 
 const date = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 const time = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -54,29 +58,120 @@ function ClockTile() {
   );
 }
 
+/** Amtliche Warnungen am Fahrzeugstandort; mehrere als Laufliste, schwerste zuerst */
+function WeatherWarningsBanner() {
+  const { data } = useQuery({ queryKey: ['vehicleWeatherWarnings'], queryFn: api.vehicleWeatherWarnings, refetchInterval: 60_000 });
+  const items = data?.items ?? [];
+  if (!items.length) return null;
+  return (
+    <ul className="tile-wx-warnings">
+      {items.map((w) => (
+        <li key={w.id} className={`sev-${w.severity}`}>
+          <strong>{w.event.charAt(0) + w.event.slice(1).toLowerCase()}</strong>
+          <span>
+            Stufe {WARNING_LEVEL[w.severity].level}
+            {w.expires && ` · bis ${fmtTime(w.expires)}`}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function WeatherTile() {
   const w = useDevice('weather')?.state;
-  if (!w) return <TileEmpty text="Wetterstation nicht aktiviert" />;
+  if (!w)
+    return (
+      <div className="tile-weather-wrap">
+        <WeatherWarningsBanner />
+        <TileEmpty text="Wetterstation nicht aktiviert" />
+      </div>
+    );
   const dir = w.windDirectionDeg;
   return (
-    <div className="tile-weather">
-      <WindCompass directionDeg={dir} size={160} />
-      <dl>
-        <dt>Wind</dt>
-        <dd>
-          {fmtOpt(w.windSpeedMs)} <small>m/s</small>
-        </dd>
-        <dt>Böen</dt>
-        <dd>
-          {fmtOpt(w.windGustMs)} <small>m/s</small>
-        </dd>
-        <dt>aus / nach</dt>
-        <dd>{dir === null ? '–' : `${compass(dir)} → ${compass((dir + 180) % 360)}`}</dd>
-        <dt>Temperatur</dt>
-        <dd>
-          {fmtOpt(w.temperatureC)} <small>°C</small>
-        </dd>
-      </dl>
+    <div className="tile-weather-wrap">
+      <WeatherWarningsBanner />
+      <div className="tile-weather">
+        <WindCompass directionDeg={dir} size={160} />
+        <dl>
+          <dt>Wind</dt>
+          <dd>
+            {fmtOpt(w.windSpeedMs)} <small>m/s</small>
+          </dd>
+          <dt>Böen</dt>
+          <dd>
+            {fmtOpt(w.windGustMs)} <small>m/s</small>
+          </dd>
+          <dt>aus / nach</dt>
+          <dd>{dir === null ? '–' : `${compass(dir)} → ${compass((dir + 180) % 360)}`}</dd>
+          <dt>Temperatur</dt>
+          <dd>
+            {fmtOpt(w.temperatureC)} <small>°C</small>
+          </dd>
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+const fcDay = new Intl.DateTimeFormat('de-DE', { weekday: 'short' });
+const deg = (t: number | null) => (t === null ? '–' : `${Math.round(t)}°`);
+
+/** Prognose am Fahrzeugstandort: 24 Stunden (alle 2 bzw. 3 Stunden) und/oder 7 Tage als Spalten */
+function ForecastTile({ tile }: { tile: DisplayTile }) {
+  const { data, isLoading } = useQuery({ queryKey: ['vehicleWeather'], queryFn: api.vehicleWeather, refetchInterval: 5 * 60_000 });
+  const limit = useInfo().data?.limits.stormWarnMs ?? 17;
+  const range = tile.config.range === '24h' || tile.config.range === '7d' ? tile.config.range : 'both';
+  if (isLoading) return <TileEmpty text="Lade Prognose …" />;
+  if (data === null) return <TileEmpty text="Kein Standort: GPS der Wetterstation fehlt, kein Einsatzort" />;
+  const fc = data?.forecast;
+  if (!fc) return <TileEmpty text={`Keine Prognose${data?.forecastError ? ` – ${data.forecastError}` : ''}`} />;
+  const tone = (gust: number | null) => {
+    const t = gustTone(gust, limit);
+    return t ? `tone-${t}` : 'muted';
+  };
+  const hours = fc.hourly.filter((_, i) => i % (range === 'both' ? 3 : 2) === 0);
+  return (
+    <div className={`tile-fc range-${range}`}>
+      {range !== '7d' && (
+        <section>
+          <h4>24 Stunden</h4>
+          <div className="tile-fc-cols">
+            {hours.map((h) => (
+              <div key={h.time}>
+                <span className="muted">{fmtTime(h.time)}</span>
+                <WeatherIcon code={h.weatherCode} isDay={h.isDay} />
+                <strong>{deg(h.temperatureC)}</strong>
+                <span className="tile-fc-rain">{h.precipitationProbability === null ? '' : `${h.precipitationProbability} %`}</span>
+                <span>
+                  <WindArrow deg={h.windDirectionDeg} /> {fmtOpt(h.windSpeedMs, 0)}
+                </span>
+                <span className={tone(h.windGustMs)}>{fmtOpt(h.windGustMs, 0)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      {range !== '24h' && (
+        <section>
+          <h4>7 Tage</h4>
+          <div className="tile-fc-cols">
+            {fc.daily.map((d, i) => (
+              <div key={d.date}>
+                <span className="muted">{i === 0 ? 'Heute' : fcDay.format(new Date(d.date))}</span>
+                <WeatherIcon code={d.weatherCode} />
+                <strong>{deg(d.tempMaxC)}</strong>
+                <span className="muted">{deg(d.tempMinC)}</span>
+                <span className="tile-fc-rain">{d.precipitationMm === null ? '' : `${fmtOpt(d.precipitationMm)} mm`}</span>
+                <span className={tone(d.windGustMaxMs)}>
+                  <WindArrow deg={d.windDirectionDeg} /> {fmtOpt(d.windGustMaxMs, 0)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      <p className="tile-fc-legend muted">{range === '7d' ? 'Höchst-/Tiefstwert, Niederschlag, Böen in m/s' : 'Regenwahrscheinlichkeit, Wind und Böen in m/s'}</p>
     </div>
   );
 }
@@ -483,6 +578,72 @@ function ForcesTile({ tile }: { tile: DisplayTile }) {
   );
 }
 
+/** Hochgeladenes Bild, eingepasst oder kachelfüllend */
+function ImageTile({ tile }: { tile: DisplayTile }) {
+  const id = typeof tile.config.imageId === 'number' ? tile.config.imageId : null;
+  const [failed, setFailed] = useState<number | null>(null);
+  if (id === null) return <TileEmpty text="Kein Bild gewählt" />;
+  if (failed === id) return <TileEmpty text="Bild nicht gefunden" />;
+  return <img className={`tile-image fit-${tile.config.fit === 'cover' ? 'cover' : 'contain'}`} src={api.displayImageUrl(id)} alt="" draggable={false} onError={() => setFailed(id)} />;
+}
+
+/**
+ * Bedienung des Bildschirms für die Kachel „Szenenwahl“: auf dem Bildschirm über dessen Gerätecookie, in der Vorschau
+ * unter „Bildschirme“ mit der Anmeldung des Benutzers. Ohne Kontext (Editor) bleibt die Kachel unbedienbar.
+ */
+export interface DisplayControl {
+  display: DisplayDevice;
+  applyScene: (sceneId: number) => Promise<unknown>;
+  setTheme: (theme: DisplayTheme) => Promise<unknown>;
+}
+
+export const DisplayControlContext = createContext<DisplayControl | null>(null);
+
+/** Szenen des Bildschirms als große Schaltflächen, darunter hell/dunkel */
+function ScenesTile({ tile }: { tile: DisplayTile }) {
+  const ctl = useContext(DisplayControlContext);
+  const apply = useMutation({ mutationFn: (id: number) => ctl!.applyScene(id) });
+  const theme = useMutation({ mutationFn: (t: DisplayTheme) => ctl!.setTheme(t) });
+  if (!ctl) return <TileEmpty text="Szenenwahl" />;
+  const { display } = ctl;
+  const busy = apply.isPending || theme.isPending;
+  const error = apply.error ?? theme.error;
+  const showTheme = tile.config.theme !== false;
+  return (
+    <div className="tile-scenes">
+      {display.scenes.length ? (
+        <div className="tile-scenes-list" role="group" aria-label="Szenen">
+          {display.scenes.map((s) => {
+            const active = s.id === display.activeSceneId;
+            return (
+              <button key={s.id} type="button" className={active ? 'active' : undefined} aria-pressed={active} disabled={busy} onClick={() => !active && apply.mutate(s.id)}>
+                {s.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <TileEmpty text="Keine Szenen gespeichert" />
+      )}
+      {error && <div className="tile-scenes-error">{error.message}</div>}
+      {showTheme && (
+        <div className="tile-scenes-theme" role="radiogroup" aria-label="Design">
+          {(
+            [
+              ['light', Sun, 'Hell'],
+              ['dark', Moon, 'Dunkel'],
+            ] as const
+          ).map(([value, Icon, label]) => (
+            <button key={value} type="button" role="radio" aria-checked={display.theme === value} className={display.theme === value ? 'active' : undefined} disabled={busy} onClick={() => display.theme !== value && theme.mutate(value)}>
+              <Icon size="1.1em" /> {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TileEmpty({ text }: { text: string }) {
   return <div className="tile-empty">{text}</div>;
 }
@@ -494,6 +655,8 @@ export function TileView({ tile }: { tile: DisplayTile }) {
       return <ClockTile />;
     case 'weather':
       return <WeatherTile />;
+    case 'forecast':
+      return <ForecastTile tile={tile} />;
     case 'alerts':
       return <AlertsTile />;
     case 'network':
@@ -512,6 +675,10 @@ export function TileView({ tile }: { tile: DisplayTile }) {
       return <TasksTile tile={tile} />;
     case 'forces':
       return <ForcesTile tile={tile} />;
+    case 'scenes':
+      return <ScenesTile tile={tile} />;
+    case 'image':
+      return <ImageTile tile={tile} />;
     default:
       return <TileEmpty text={`Unbekannte Kachel ${DISPLAY_TILE_TYPES[tile.type as DisplayTileType]?.label ?? tile.type}`} />;
   }

@@ -7,11 +7,9 @@ import {
   FileStack,
   FileText,
   History,
-  Gauge,
   LayoutDashboard,
   ListChecks,
   Map,
-  MonitorPlay,
   Package,
   Printer,
   ScanLine,
@@ -39,6 +37,8 @@ export interface NavItem {
   requiresLogin?: boolean;
   /** Only shown to admins. */
   requiresAdmin?: boolean;
+  /** Zähler für Ungelesenes (siehe Layout) */
+  badge?: 'personnelSheets';
 }
 
 export interface NavGroup {
@@ -51,17 +51,15 @@ export const NAV: NavGroup[] = [
     label: 'Fahrzeug',
     items: [
       { to: '/', label: 'Übersicht', icon: LayoutDashboard },
-      { to: '/fahrzeug', label: 'Fahrzeugzustand', icon: Gauge },
       { to: '/karte', label: 'Karte', icon: Map },
-      { to: '/wetter', label: 'Wetterstation', icon: CloudSun },
+      { to: '/wetter', label: 'Wetter', icon: CloudSun },
       { to: '/energie', label: 'Energie', icon: BatteryCharging },
       { to: '/netzwerk', label: 'Netzwerk', icon: Network },
       { to: '/monitoring', label: 'Monitoring', icon: Activity },
       { to: '/kameras', label: 'Kameras', icon: Cctv },
       { to: '/bildschirme', label: 'Bildschirme', icon: MonitorSmartphone },
-      { to: '/medien', label: 'Medien', icon: MonitorPlay },
       { to: '/drucken', label: 'Drucken', icon: Printer },
-      { to: '/scans', label: 'Scan-Eingang', icon: ScanLine, requiresLogin: true },
+      { to: '/scans', label: 'Dokumenten-Eingang', icon: ScanLine, requiresLogin: true, badge: 'personnelSheets' },
     ],
   },
   {
@@ -90,4 +88,4 @@ export const NAV: NavGroup[] = [
 ];
 
 /** Primary destinations in the mobile bottom bar; everything else lives in the menu drawer. */
-export const MOBILE_PRIMARY = ['/', '/fahrzeug', '/karte', '/einsatz'];
+export const MOBILE_PRIMARY = ['/', '/karte', '/wetter', '/einsatz'];

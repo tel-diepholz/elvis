@@ -9,7 +9,7 @@ import { Badge, Card, Field, Loading, Toggle } from '../../components/ui';
 
 type Form = Omit<ScanSettingsInput, 'allowedHosts'> & { allowedHosts: string };
 
-/** Scan-Eingang (SMTP für „Scan an E-Mail“): Annahme, Ablage im Einsatz, Absender und Anmeldung. Nur Admins. */
+/** Eingang (SMTP für „Scan an E-Mail“): Annahme, Ablage im Einsatz, Absender und Anmeldung. Nur Admins. */
 export function ScanSettingsCard() {
   const toast = useToast();
   const { data } = useQuery({ queryKey: ['scans', 'system'], queryFn: api.scanSettings });
@@ -66,7 +66,7 @@ export function ScanSettingsCard() {
       }
     >
       <p className="muted">
-        Multifunktionsgeräte schicken Scans per <em>Scan an E-Mail</em> an ELVIS. Jeder Scan erscheint im <em>Scan-Eingang</em>; läuft ein Einsatz, wird er
+        Multifunktionsgeräte schicken Scans per <em>Scan an E-Mail</em> an ELVIS. Jeder Scan erscheint im <em>Dokumenten-Eingang</em>; läuft ein Einsatz, wird er
         zusätzlich in dessen Dokumenten abgelegt.
         {status?.lastReceivedAt && ` Letzter Scan: ${fmtDateTime(status.lastReceivedAt)}.`}
       </p>
@@ -79,7 +79,7 @@ export function ScanSettingsCard() {
         <Field label="Ablageort im Einsatz" hint="Leer = oberste Ebene. Fehlende Ordner werden angelegt.">
           <input value={form.folderPath} onChange={(e) => change({ folderPath: e.target.value })} maxLength={200} placeholder="Scans/{{datum.iso}}" disabled={!form.archive} />
         </Field>
-        <Field label="Aufbewahrung im Eingang (Tage)" hint="Danach werden Scans aus dem Eingang gelöscht; abgelegte Dokumente bleiben.">
+        <Field label="Aufbewahrung im Dokumenten-Eingang (Tage)" hint="Danach werden Scans aus dem Dokumenten-Eingang gelöscht; abgelegte Dokumente bleiben.">
           <input type="number" min={1} max={365} value={form.retentionDays} onChange={(e) => change({ retentionDays: Number(e.target.value) })} />
         </Field>
         <Field label="Erlaubte Geräte (IP-Adressen)" hint="Leer = alle Geräte im Netz. Mehrere durch Komma trennen.">
@@ -144,7 +144,7 @@ export function ScanSettingsCard() {
           Absender z. B. <code>scanner@elvis</code>; im Adressbuch einen Empfänger wie <code>scan@elvis</code> anlegen (die Adresse selbst ist beliebig).
         </li>
         <li>
-          Dateityp <em>PDF</em> wählen. Am Gerät dann <em>Scannen → E-Mail</em> mit diesem Profil – der Scan erscheint sofort im Scan-Eingang.
+          Dateityp <em>PDF</em> wählen. Am Gerät dann <em>Scannen → E-Mail</em> mit diesem Profil – der Scan erscheint sofort im Dokumenten-Eingang.
         </li>
       </ol>
     </Card>

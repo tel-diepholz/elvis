@@ -17,18 +17,17 @@ import { DashboardPage } from './pages/DashboardPage';
 import { DockerHostsPage } from './pages/DockerHostsPage';
 import { DocumentsPage, JournalPage, TasksPage, UnitsPage } from './pages/IncidentAreaPages';
 import { IncidentPage } from './pages/IncidentPage';
+import { UnitDetailPage } from './pages/incident/UnitDetailPage';
 import { MapPage } from './pages/MapPage';
 import { CamerasPage } from './pages/CamerasPage';
 import { DisplayScreenPage } from './pages/DisplayScreenPage';
 import { DisplaysPage } from './pages/DisplaysPage';
-import { MediaPage } from './pages/MediaPage';
 import { DocumentEditorPage, TemplateEditorPage } from './pages/OfficeEditorPage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { SignGeneratorPage } from './pages/SignGeneratorPage';
 import { PrintPage } from './pages/PrintPage';
 import { ScanPage } from './pages/ScanPage';
 import { UsersPage } from './pages/UsersPage';
-import { VehiclePage } from './pages/VehiclePage';
 import { WeatherPage } from './pages/WeatherPage';
 import { AuditPage } from './pages/AuditPage';
 import { EnergyPage } from './pages/EnergyPage';
@@ -56,7 +55,6 @@ createRoot(document.getElementById('root')!).render(
               <Route element={<Layout />}>
                 {/* Fahrzeugbereich – immer verfügbar */}
                 <Route index element={<DashboardPage />} />
-                <Route path="fahrzeug" element={<ViewOnlyUnlessLoggedIn><VehiclePage /></ViewOnlyUnlessLoggedIn>} />
                 <Route path="karte" element={<MapPage />} />
                 <Route path="wetter" element={<WeatherPage />} />
                 <Route path="energie" element={<EnergyPage />} />
@@ -64,14 +62,17 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="netzwerk" element={<ViewOnlyUnlessLoggedIn><CommsPage /></ViewOnlyUnlessLoggedIn>} />
                 {/* alte Adresse (Lesezeichen) */}
                 <Route path="kommunikation" element={<Navigate to="/netzwerk" replace />} />
+                <Route path="fahrzeug" element={<Navigate to="/" replace />} />
                 <Route path="bildschirme" element={<ViewOnlyUnlessLoggedIn><DisplaysPage /></ViewOnlyUnlessLoggedIn>} />
                 <Route path="kameras" element={<ViewOnlyUnlessLoggedIn><CamerasPage /></ViewOnlyUnlessLoggedIn>} />
-                <Route path="medien" element={<ViewOnlyUnlessLoggedIn><MediaPage /></ViewOnlyUnlessLoggedIn>} />
+                <Route path="medien" element={<Navigate to="/" replace />} />
                 {/* Einsatzbereich – Unterseiten erst mit aufgelegtem Einsatz */}
                 <Route path="einsatz" element={<RequireLogin><IncidentPage /></RequireLogin>} />
                 <Route path="einsatz/tagebuch" element={<RequireLogin><JournalPage /></RequireLogin>} />
                 <Route path="einsatz/aufgaben" element={<RequireLogin><TasksPage /></RequireLogin>} />
                 <Route path="einsatz/kraefte" element={<RequireLogin><UnitsPage /></RequireLogin>} />
+                {/* auch für abgeschlossene Einsätze (aus dem Archiv) */}
+                <Route path="einsatz/kraefte/:id" element={<RequireLogin><UnitDetailPage /></RequireLogin>} />
                 <Route path="einsatz/dokumente" element={<RequireLogin><DocumentsPage /></RequireLogin>} />
                 <Route path="dokument/:id" element={<RequireLogin><DocumentEditorPage /></RequireLogin>} />
                 {/* Verwaltung */}
