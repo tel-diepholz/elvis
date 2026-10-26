@@ -9,6 +9,7 @@ const lat = z.coerce.number().min(-90).max(90);
 const lon = z.coerce.number().min(-180).max(180);
 const near = z.object({ lat, lon, radius: z.coerce.number().min(1).max(MAX_TRAFFIC_RADIUS_NM) });
 const box = z.object({ south: lat, west: lon, north: lat, east: lon });
+const hexParam = z.object({ hex: z.string().regex(/^~?[0-9a-f]{6}$/, 'ICAO-Adresse ungültig') });
 
 export function trafficRoutes(app: FastifyInstance, deps: { traffic: TrafficService; store: Store; notify: (topics: Topic[]) => void }): void {
   const { traffic } = deps;
@@ -18,6 +19,15 @@ export function trafficRoutes(app: FastifyInstance, deps: { traffic: TrafficServ
     const q = parse(near, req.query);
     return traffic.aircraftNear(q.lat, q.lon, q.radius);
   });
+
+  /** Ein Flugzeug mit allen Angaben (Detailseite) */
+  app.get('/api/traffic/aircraft/:hex', async (req) => traffic.aircraftDetail(parse(hexParam, req.params).hex));
+
+  /** Foto zum Flugzeug (planespotters.net) oder null */
+  app.get('/api/traffic/aircraft/:hex/photo', async (req) => ({ photo: await traffic.aircraftPhoto(parse(hexParam, req.params).hex) }));
+
+  /** Ein Schiff (Detailseite), soweit im AIS-Empfang */
+  app.get('/api/traffic/ships/:mmsi', async (req) => traffic.ship(parse(z.object({ mmsi: z.string().regex(/^\d{9}$/) }), req.params).mmsi));
 
   /** Schiffe im Kartenausschnitt (nur innerhalb des AIS-Abos um Einsatzort bzw. Fahrzeug) */
   app.get('/api/traffic/ships', async (req) => traffic.shipsIn(parse(box, req.query)));

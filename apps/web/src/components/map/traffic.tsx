@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { useQuery } from '@tanstack/react-query';
@@ -6,6 +7,7 @@ import { ListPlus } from 'lucide-react';
 import {
   MAX_TRAFFIC_RADIUS_NM,
   NAV_STATUS,
+  AIRCRAFT_CATEGORIES,
   formatAltitude,
   shipTypeLabel,
   type Aircraft,
@@ -14,6 +16,7 @@ import {
   type TrafficHit,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
+import { aircraftMarker } from './aircraftIcons';
 
 /** Ebenen der Karte (pro Browser gemerkt) */
 export interface TrafficLayers {
@@ -42,12 +45,8 @@ export function saveLayers(l: TrafficLayers): void {
 
 /** Darunter zeigen die Ebenen nichts (zu viele Ziele, zu große Abfragen) */
 export const TRAFFIC_MIN_ZOOM = 7;
-export const AIRCRAFT_COLOR = '#f5b400';
-
 // --- Symbole ---
 
-const PLANE =
-  'M12 1.5c.9 0 1.4.9 1.4 2v5.3l8.1 4.7v2.2l-8.1-2.5v4.9l2.5 1.9v1.7L12 20.7l-3.9 1v-1.7l2.5-1.9v-4.9l-8.1 2.5v-2.2l8.1-4.7V3.5c0-1.1.5-2 1.4-2z';
 const HULL = 'M12 2l5 13.5-1.5 6.5h-7L7 15.5z';
 
 const icons = new Map<string, L.DivIcon>();
@@ -58,17 +57,6 @@ function cached(key: string, html: () => string, size: number): L.DivIcon {
     icons.set(key, icon);
   }
   return icon;
-}
-
-/** Flugzeug in Flugrichtung gedreht (auf 5° gerundet, damit sich die Symbole zwischenspeichern lassen) */
-export function aircraftIcon(color: string, track: number | null, faded = false): L.DivIcon {
-  const rot = Math.round((track ?? 0) / 5) * 5;
-  return cached(
-    `a:${color}:${rot}:${faded}`,
-    () =>
-      `<svg viewBox="0 0 24 24" width="26" height="26" style="transform:rotate(${rot}deg);opacity:${faded ? 0.45 : 1}"><path d="${PLANE}" fill="${color}" stroke="#1a1a1a" stroke-width="0.8" stroke-linejoin="round"/></svg>`,
-    26,
-  );
 }
 
 /** Schiff: Rumpf in Kursrichtung, ohne Fahrt als Kreis */
@@ -107,19 +95,32 @@ export function hitDetail(h: TrafficHit): string {
 
 export function trafficObject(h: TrafficHit): NewMapObject {
   const base = { name: hitName(h), lat: h.lat, lon: h.lon };
-  return h.kind === 'aircraft' ? { ...base, kind: 'aircraft', data: { id: h.hex, detail: hitDetail(h) } } : { ...base, kind: 'ship', data: { id: h.mmsi, detail: hitDetail(h) } };
+  return h.kind === 'aircraft'
+    ? { ...base, kind: 'aircraft', data: { id: h.hex, detail: hitDetail(h), category: h.category, aircraftType: h.type } }
+    : { ...base, kind: 'ship', data: { id: h.mmsi, detail: hitDetail(h) } };
 }
+
+/** Detailseite eines Flugzeugs bzw. Schiffs */
+export const trafficPath = (kind: 'aircraft' | 'ship', id: string) => (kind === 'aircraft' ? `/karte/flugzeug/${id}` : `/karte/schiff/${id}`);
+
+const fpm = (v: number | null) => (v == null || Math.abs(v) < 200 ? null : `${v > 0 ? '↑' : '↓'} ${Math.abs(Math.round(v / 10) * 10).toLocaleString('de-DE')} ft/min`);
 
 const kmh = (kn: number | null) => (kn == null ? null : `${Math.round(kn)} kn (${Math.round(kn * 1.852)} km/h)`);
 
 function AircraftDetails({ a }: { a: Aircraft }) {
   return (
     <>
-      <strong>{a.callsign ?? a.registration ?? a.hex.toUpperCase()}</strong> <span className={`badge badge-${a.source === 'mlat' ? 'warn' : 'info'}`}>{a.source === 'mlat' ? 'MLAT' : a.source === 'adsb' ? 'ADS-B' : 'sonstige'}</span>
+      <Link to={trafficPath('aircraft', a.hex)} className="map-popup-title" title="Details">
+        {a.callsign ?? a.registration ?? a.hex.toUpperCase()}
+      </Link>{' '}
+      <span className={`badge badge-${a.source === 'mlat' ? 'warn' : 'info'}`}>{a.source === 'mlat' ? 'MLAT' : a.source === 'adsb' ? 'ADS-B' : 'sonstige'}</span>
+      <br />
+      {a.description ?? (a.category && AIRCRAFT_CATEGORIES[a.category]) ?? a.type}
       <br />
       {[a.type, a.registration, a.hex.toUpperCase()].filter(Boolean).join(' · ')}
       <br />
       {formatAltitude(a.altFt, a.onGround)}
+      {fpm(a.vertRateFpm) && ` ${fpm(a.vertRateFpm)}`}
       {a.speedKt != null && ` · ${kmh(a.speedKt)}`}
       {a.track != null && ` · Kurs ${Math.round(a.track)}°`}
       {a.squawk && (
@@ -136,7 +137,9 @@ function AircraftDetails({ a }: { a: Aircraft }) {
 function ShipDetails({ s }: { s: Ship }) {
   return (
     <>
-      <strong>{s.name ?? `MMSI ${s.mmsi}`}</strong>
+      <Link to={trafficPath('ship', s.mmsi)} className="map-popup-title" title="Details">
+        {s.name ?? `MMSI ${s.mmsi}`}
+      </Link>
       <br />
       {[shipTypeLabel(s.shipType), s.callsign, `MMSI ${s.mmsi}`].filter(Boolean).join(' · ')}
       <br />
@@ -223,7 +226,7 @@ export function AircraftLayer({ tracked, onAdd, onStatus }: LayerProps) {
   return (
     <>
       {visible.map((a) => (
-        <Marker key={a.hex} position={[a.lat, a.lon]} icon={aircraftIcon(AIRCRAFT_COLOR, a.track, a.onGround)}>
+        <Marker key={a.hex} position={[a.lat, a.lon]} icon={aircraftMarker(a)}>
           <Tooltip direction="top" offset={[0, -10]}>
             {a.callsign ?? a.registration ?? a.hex.toUpperCase()}
           </Tooltip>

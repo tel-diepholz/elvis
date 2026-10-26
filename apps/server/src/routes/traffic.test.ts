@@ -2,14 +2,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Aircraft, Incident, JournalEntry, MapObject, Ship, TrackedData, TrafficHit, TrafficResult, TrafficSettings, User } from '@elvis/shared';
+import type { Aircraft, AircraftDetail, AircraftPhoto, Incident, JournalEntry, MapObject, Ship, TrackedData, TrafficHit, TrafficResult, TrafficSettings, User } from '@elvis/shared';
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
 import { TrafficHttpError, type AisSocket } from '../services/traffic.js';
 import { adminCookie, sessionCookie } from '../test-helpers.js';
 
 // Antworten wie von opendata.adsb.fi (gekürzt)
-const RYANAIR = { hex: '4cadc1', type: 'adsb_icao', flight: 'RYR963Z ', r: 'EI-IGO', t: 'B38M', alt_baro: 35000, gs: 568.9, track: 105.18, squawk: '4635', category: 'A3', lat: 52.1386, lon: 7.4736, seen_pos: 0.4 };
+const RYANAIR = { hex: '4cadc1', type: 'adsb_icao', flight: 'RYR963Z ', r: 'EI-IGO', t: 'B38M', desc: 'BOEING 737 MAX 8', ownOp: 'Ryanair', year: '2021', emergency: 'none', baro_rate: -64, ias: 290, mach: 0.78, alt_baro: 35000, gs: 568.9, track: 105.18, squawk: '4635', category: 'A3', lat: 52.1386, lon: 7.4736, seen_pos: 0.4 };
 const MLAT = { hex: '3c4b26', type: 'mlat', flight: 'CHX31   ', r: 'D-HDSN', t: 'EC35', alt_baro: 1500, gs: 110, track: 270, category: 'A7', lat: 52.61, lon: 8.35, seen_pos: 2 };
 const GROUND = { hex: '3c6444', type: 'adsb_icao', flight: 'DLH4AB', alt_baro: 'ground', gs: 3, lat: 53.63, lon: 9.99, seen_pos: 1 };
 const NOPOS = { hex: '3c0001', type: 'mode_s', alt_baro: 12000 };
@@ -157,6 +157,22 @@ describe('Flugzeuge', () => {
   });
 });
 
+describe('Detailseiten', () => {
+  it('liefern ein Flugzeug mit Typ, Halter und Foto (planespotters, einen Tag gemerkt)', async () => {
+    responses['/api/v2/hex/4cadc1'] = { ac: [RYANAIR] };
+    responses['/pub/photos/hex/4cadc1'] = {
+      photos: [{ thumbnail_large: { src: 'https://t.plnspttrs.net/1_280.jpg', size: { width: 420, height: 280 } }, link: 'https://www.planespotters.net/photo/1', photographer: 'Karl D.' }],
+    };
+    const detail = (await req<{ aircraft: AircraftDetail; problem: string | null }>('GET', '/api/traffic/aircraft/4cadc1')).body;
+    expect(detail.aircraft).toMatchObject({ callsign: 'RYR963Z', description: 'BOEING 737 MAX 8', operator: 'Ryanair', year: '2021', vertRateFpm: -64, iasKt: 290, mach: 0.78, emergency: null });
+    const photo = async () => (await req<{ photo: AircraftPhoto | null }>('GET', '/api/traffic/aircraft/4cadc1/photo')).body.photo;
+    expect(await photo()).toEqual({ src: 'https://t.plnspttrs.net/1_280.jpg', width: 420, height: 280, link: 'https://www.planespotters.net/photo/1', photographer: 'Karl D.' });
+    await photo();
+    expect(requests.filter((u) => u.includes('planespotters'))).toEqual(['https://api.planespotters.net/pub/photos/hex/4cadc1']);
+    expect((await req('GET', '/api/traffic/aircraft/XYZ')).status).toBe(400);
+  });
+});
+
 describe('Verfolgte Flugzeuge', () => {
   it('folgen der Live-Position ohne Tagebuchflut und melden Signalverlust einmal', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -237,6 +253,8 @@ describe('Schiffe (AIS)', () => {
     ws.emit('message', JSON.stringify({ MessageType: 'ShipStaticData', MetaData: { MMSI: 211234560 }, Message: { ShipStaticData: { UserID: 211234560, Name: 'WESERSTAR@@@@', CallSign: 'DA1234', Type: 79, Destination: 'BREMEN' } } }));
     ws.emit('message', position(211999999, 55.5, 8.0, 'FERN')); // außerhalb des Ausschnitts
 
+    expect((await req<{ ship: Ship | null }>('GET', '/api/traffic/ships/211234560')).body.ship).toMatchObject({ name: 'WESERSTAR', destination: 'BREMEN' });
+    expect((await req<{ ship: Ship | null }>('GET', '/api/traffic/ships/211000000')).body.ship).toBeNull();
     const ships = (await req<TrafficResult<Ship>>('GET', '/api/traffic/ships?south=53&west=8.5&north=53.2&east=9')).body;
     expect(ships.items).toHaveLength(1);
     expect(ships.items[0]).toMatchObject({ mmsi: '211234560', name: 'WESERSTAR', callsign: 'DA1234', shipType: 79, destination: 'BREMEN', sogKn: 8.4, cog: 312.5, heading: null });

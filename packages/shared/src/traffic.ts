@@ -14,6 +14,8 @@ export interface Aircraft {
   registration: string | null;
   /** ICAO-Typkürzel, z. B. A320 */
   type: string | null;
+  /** Typbeschreibung aus der Datenbank des Dienstes, z. B. „AIRBUS A-320“ */
+  description: string | null;
   lat: number;
   lon: number;
   /** Barometrische Höhe in Fuß; null = unbekannt */
@@ -22,12 +24,39 @@ export interface Aircraft {
   speedKt: number | null;
   /** Kurs über Grund in Grad */
   track: number | null;
+  /** Steig-/Sinkrate in ft/min */
+  vertRateFpm: number | null;
   squawk: string | null;
   /** ADS-B-Kategorie, z. B. A3 (Verkehrsflugzeug), A7 (Hubschrauber) */
   category: string | null;
   source: AircraftSource;
   /** Alter der Position in Sekunden */
   seenS: number;
+}
+
+/** Zusätzliche Angaben für die Detailseite */
+export interface AircraftDetail extends Aircraft {
+  /** Halter bzw. Betreiber laut Datenbank */
+  operator: string | null;
+  year: string | null;
+  /** Geometrische (GPS-)Höhe in Fuß */
+  altGeomFt: number | null;
+  /** Am Autopiloten gewählte Höhe */
+  selectedAltFt: number | null;
+  iasKt: number | null;
+  tasKt: number | null;
+  mach: number | null;
+  /** Notfallstatus (none, general, lifeguard, minfuel, nordo, unlawful, downed) */
+  emergency: string | null;
+}
+
+/** Foto von planespotters.net (Fotograf und Link müssen angezeigt werden) */
+export interface AircraftPhoto {
+  src: string;
+  width: number;
+  height: number;
+  link: string;
+  photographer: string;
 }
 
 export interface Ship {
@@ -58,6 +87,51 @@ export interface TrafficResult<T> {
 }
 
 export type TrafficHit = ({ kind: 'aircraft' } & Aircraft) | ({ kind: 'ship' } & Ship);
+
+/** ADS-B-Kategorien (DO-260B) */
+export const AIRCRAFT_CATEGORIES: Record<string, string> = {
+  A1: 'Leichtflugzeug',
+  A2: 'Kleinflugzeug',
+  A3: 'Verkehrsflugzeug',
+  A4: 'Verkehrsflugzeug (Wirbelschleppe hoch)',
+  A5: 'Großraumflugzeug',
+  A6: 'Hochleistungsflugzeug',
+  A7: 'Hubschrauber',
+  B1: 'Segelflugzeug',
+  B2: 'Ballon/Luftschiff',
+  B3: 'Fallschirmspringer',
+  B4: 'Ultraleichtflugzeug',
+  B6: 'Drohne',
+  B7: 'Raumfahrzeug',
+  C1: 'Einsatzfahrzeug (Boden)',
+  C2: 'Servicefahrzeug (Boden)',
+  C3: 'Hindernis',
+};
+
+export const EMERGENCY_LABELS: Record<string, string> = {
+  general: 'Notfall (7700)',
+  lifeguard: 'Ambulanzflug',
+  minfuel: 'Treibstoffmangel',
+  nordo: 'Funkausfall (7600)',
+  unlawful: 'Entführung (7500)',
+  downed: 'abgestürzt',
+};
+
+/** Flaggenstaat aus den ersten drei Ziffern der MMSI (Auswahl) */
+const MID: Record<string, string> = {
+  '211': 'Deutschland', '218': 'Deutschland', '219': 'Dänemark', '220': 'Dänemark', '244': 'Niederlande', '245': 'Niederlande', '246': 'Niederlande',
+  '205': 'Belgien', '226': 'Frankreich', '227': 'Frankreich', '228': 'Frankreich', '232': 'Vereinigtes Königreich', '233': 'Vereinigtes Königreich',
+  '234': 'Vereinigtes Königreich', '235': 'Vereinigtes Königreich', '257': 'Norwegen', '258': 'Norwegen', '259': 'Norwegen', '265': 'Schweden',
+  '266': 'Schweden', '261': 'Polen', '230': 'Finnland', '276': 'Estland', '275': 'Lettland', '277': 'Litauen', '273': 'Russland', '209': 'Zypern',
+  '210': 'Zypern', '212': 'Zypern', '229': 'Malta', '248': 'Malta', '249': 'Malta', '215': 'Malta', '255': 'Madeira (Portugal)', '263': 'Portugal',
+  '224': 'Spanien', '225': 'Spanien', '247': 'Italien', '237': 'Griechenland', '239': 'Griechenland', '240': 'Griechenland', '241': 'Griechenland',
+  '236': 'Gibraltar', '304': 'Antigua und Barbuda', '305': 'Antigua und Barbuda', '308': 'Bahamas', '309': 'Bahamas', '311': 'Bahamas',
+  '351': 'Panama', '352': 'Panama', '353': 'Panama', '354': 'Panama', '355': 'Panama', '356': 'Panama', '357': 'Panama', '370': 'Panama',
+  '371': 'Panama', '372': 'Panama', '373': 'Panama', '374': 'Panama', '636': 'Liberia', '637': 'Liberia', '538': 'Marshallinseln',
+  '477': 'Hongkong', '563': 'Singapur', '564': 'Singapur', '565': 'Singapur', '566': 'Singapur', '412': 'China', '413': 'China', '414': 'China',
+  '366': 'USA', '367': 'USA', '368': 'USA', '369': 'USA', '316': 'Kanada', '256': 'Malta', '271': 'Türkei', '272': 'Ukraine',
+};
+export const shipFlag = (mmsi: string): string | null => MID[mmsi.slice(0, 3)] ?? null;
 
 /** Höchster Radius einer Abfrage (Nautische Meilen) */
 export const MAX_TRAFFIC_RADIUS_NM = 250;

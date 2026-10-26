@@ -17,6 +17,7 @@ import { useToast } from '../lib/toast';
 import { Modal } from '../components/ui';
 import { AREA_STYLE, MapObjectsLayer, objectBounds, useMapObjects } from '../components/map/objects';
 import { UnitsLayer, useMapUnits } from '../components/map/units';
+import { ALTITUDE_LEGEND } from '../components/map/aircraftIcons';
 import { AircraftLayer, ShipLayer, readLayers, saveLayers, trafficObject, type TrafficLayers, type TrafficStatus } from '../components/map/traffic';
 import { PrintDialog } from './map/PrintDialog';
 import { MapSearch } from './map/search';
@@ -222,7 +223,7 @@ export function MapPage() {
         {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} attribution={source.attribution} maxZoom={source.maxZoom} />}
         {layers.aircraft && <AircraftLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setAircraftStatus} />}
         {layers.ships && <ShipLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setShipStatus} />}
-        <MapObjectsLayer objects={objects} wind={wind} now={now} />
+        <MapObjectsLayer objects={objects} wind={wind} now={now} links />
         <UnitsLayer units={units} onMove={canEdit ? (unit, lat, lon) => moveUnit.mutate({ unit, lat, lon }) : undefined} />
         {showVehicle && (
           <Marker position={vPos!} icon={vehicleIcon}>
@@ -335,6 +336,13 @@ export function MapPage() {
             <span title={aircraftStatus.problem ?? undefined}>
               <Plane size={15} />
               {aircraftStatus.tooFar ? 'zum Anzeigen hineinzoomen' : aircraftStatus.problem && !aircraftStatus.count ? aircraftStatus.problem : `${aircraftStatus.count} Flugzeuge`}
+            </span>
+          )}
+          {layers.aircraft && (
+            <span className="altitude-legend" title="Farbe nach Flughöhe (wie tar1090)">
+              <span className="muted">0</span>
+              <span className="altitude-legend-bar" style={{ background: `linear-gradient(to right, ${ALTITUDE_LEGEND.map((l) => l.color).join(', ')})` }} />
+              <span className="muted">FL400</span>
             </span>
           )}
           {layers.ships && shipStatus && (

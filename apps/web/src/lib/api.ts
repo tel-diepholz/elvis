@@ -78,6 +78,8 @@ import {
   type MapSourceSettings,
   type MapSourceTestResult,
   type Aircraft,
+  type AircraftDetail,
+  type AircraftPhoto,
   type Ship,
   type TrafficHit,
   type TrafficResult,
@@ -416,6 +418,9 @@ export const api = {
     request<TrafficResult<Aircraft>>('GET', `/api/traffic/aircraft?lat=${q.lat.toFixed(3)}&lon=${q.lon.toFixed(3)}&radius=${Math.round(q.radius)}`),
   trafficShips: (b: { south: number; west: number; north: number; east: number }) =>
     request<TrafficResult<Ship>>('GET', `/api/traffic/ships?${new URLSearchParams({ south: b.south.toFixed(4), west: b.west.toFixed(4), north: b.north.toFixed(4), east: b.east.toFixed(4) })}`),
+  trafficAircraftDetail: (hex: string) => request<{ aircraft: AircraftDetail | null; problem: string | null }>('GET', `/api/traffic/aircraft/${encodeURIComponent(hex)}`),
+  trafficAircraftPhoto: (hex: string) => request<{ photo: AircraftPhoto | null }>('GET', `/api/traffic/aircraft/${encodeURIComponent(hex)}/photo`),
+  trafficShip: (mmsi: string) => request<{ ship: Ship | null; problem: string | null }>('GET', `/api/traffic/ships/${mmsi}`),
   trafficSearch: (q: string) => request<TrafficResult<TrafficHit>>('GET', `/api/traffic/search?${new URLSearchParams({ q })}`),
   trafficSettings: () => request<TrafficSettings>('GET', '/api/system/traffic'),
   saveTrafficSettings: (input: TrafficSettingsInput) => request<TrafficSettings>('PUT', '/api/system/traffic', input),

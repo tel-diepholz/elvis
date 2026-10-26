@@ -19,6 +19,7 @@ import { DocumentsPage, JournalPage, TasksPage, UnitsPage } from './pages/Incide
 import { IncidentPage } from './pages/IncidentPage';
 import { UnitDetailPage } from './pages/incident/UnitDetailPage';
 import { MapPage } from './pages/MapPage';
+import { AircraftDetailPage, ShipDetailPage } from './pages/map/TrafficDetailPage';
 import { CamerasPage } from './pages/CamerasPage';
 import { DisplayScreenPage } from './pages/DisplayScreenPage';
 import { DisplaysPage } from './pages/DisplaysPage';
@@ -56,6 +57,8 @@ createRoot(document.getElementById('root')!).render(
                 {/* Fahrzeugbereich – immer verfügbar */}
                 <Route index element={<DashboardPage />} />
                 <Route path="karte" element={<MapPage />} />
+                <Route path="karte/flugzeug/:hex" element={<AircraftDetailPage />} />
+                <Route path="karte/schiff/:mmsi" element={<ShipDetailPage />} />
                 <Route path="wetter" element={<WeatherPage />} />
                 <Route path="energie" element={<EnergyPage />} />
                 <Route path="monitoring" element={<MonitoringPage />} />

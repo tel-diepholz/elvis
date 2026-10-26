@@ -85,6 +85,8 @@ const configSchema = z.object({
       aircraftUrl: z.string().url().nullable().default('https://opendata.adsb.fi/api'),
       /** Pfadschema: „adsbfi“ oder „readsb“ (v2 wie adsb.lol – dort höchstens 500 Anfragen am Tag). */
       aircraftApi: z.enum(['adsbfi', 'readsb']).default('adsbfi'),
+      /** planespotters.net für Flugzeugfotos auf der Detailseite (nicht kommerziell, mit Fotografen-Nennung); null = aus. */
+      photosUrl: z.string().url().nullable().default('https://api.planespotters.net'),
       /** aisstream.io-Websocket für Schiffe (Schlüssel in den Einstellungen); null = aus. */
       aisUrl: z.string().url().nullable().default('wss://stream.aisstream.io/v0/stream'),
     })

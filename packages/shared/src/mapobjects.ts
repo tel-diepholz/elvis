@@ -32,6 +32,9 @@ export interface TrackedData {
   id: string;
   /** Typ, Kennzeichen o. Ä. für die Liste */
   detail: string;
+  /** Flugzeuge: ADS-B-Kategorie und ICAO-Typ für das Kartensymbol */
+  category?: string | null;
+  aircraftType?: string | null;
   /** Bisherige Positionen [lat, lon], älteste zuerst */
   trail: [number, number][];
   /** Letzter empfangener Stand */
@@ -123,7 +126,9 @@ const gauss = z.object({
 const sector = z.object({ sectorM: z.number().int().min(50).max(20_000) });
 const detail = z.string().max(300).default('');
 const tracked = (id: z.ZodString) =>
-  z.object({ id, detail }).transform((d): TrackedData => ({ ...d, trail: [], last: null, lostSince: null }));
+  z
+    .object({ id, detail, category: z.string().max(4).nullable().optional(), aircraftType: z.string().max(8).nullable().optional() })
+    .transform((d): TrackedData => ({ ...d, trail: [], last: null, lostSince: null }));
 
 export const newMapObjectSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('point'), name, lat, lon, data: z.object({ detail }) }),
@@ -140,7 +145,7 @@ export type NewMapObject = {
     name: string;
     lat: number;
     lon: number;
-    data: K extends 'gauss' | 'sector' ? MapObjectData[K] | undefined : K extends TrackedKind ? { id: string; detail?: string } : MapObjectData[K];
+    data: K extends 'gauss' | 'sector' ? MapObjectData[K] | undefined : K extends TrackedKind ? { id: string; detail?: string; category?: string | null; aircraftType?: string | null } : MapObjectData[K];
   };
 }[MapObjectKind];
 

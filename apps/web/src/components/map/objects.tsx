@@ -1,11 +1,13 @@
 import { Fragment } from 'react';
-import { GeoJSON, Marker, Polygon, Polyline, Tooltip } from 'react-leaflet';
+import { GeoJSON, Marker, Polygon, Polyline, Popup, Tooltip } from 'react-leaflet';
+import { Link } from 'react-router-dom';
 import L from 'leaflet';
 import { useQuery } from '@tanstack/react-query';
 import { DEFAULT_OBJECT_COLORS, formatAltitude, objectColor, type MapObject } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { dispersionSector, usePlume, type Wind } from './dispersion';
-import { aircraftIcon, shipIcon } from './traffic';
+import { aircraftMarker } from './aircraftIcons';
+import { shipIcon, trafficPath } from './traffic';
 
 /** Darstellung je Farbe (Karte, Vorschau und – über dieselben Werte – Druck) */
 export const areaStyle = (color: string) => ({ color, weight: 3, dashArray: '8 6', fillColor: color, fillOpacity: 0.08 });
@@ -51,17 +53,44 @@ function GaussLayer({ object, wind, now }: { object: Extract<MapObject, { kind: 
 }
 
 /** Verfolgtes Flugzeug oder Schiff: Spur, Symbol in Bewegungsrichtung, Beschriftung; ohne Signal blass */
-function TrackedLayer({ object, labels }: { object: Extract<MapObject, { kind: 'aircraft' | 'ship' }>; labels: boolean }) {
+function TrackedLayer({ object, labels, links }: { object: Extract<MapObject, { kind: 'aircraft' | 'ship' }>; labels: boolean; links: boolean }) {
   const color = objectColor(object);
   const { trail, last, lostSince } = object.data;
   const lost = !!lostSince;
   const icon =
-    object.kind === 'aircraft' ? aircraftIcon(color, last?.track ?? null, lost) : shipIcon(color, last?.track ?? null, (last?.speedKt ?? 0) >= 0.5, lost);
+    object.kind === 'aircraft'
+      ? aircraftMarker(
+          { category: object.data.category, type: object.data.aircraftType, altFt: last?.altFt ?? null, onGround: last?.onGround ?? false, track: last?.track ?? null },
+          { color, faded: lost, selected: true },
+        )
+      : shipIcon(color, last?.track ?? null, (last?.speedKt ?? 0) >= 0.5, lost);
   const sub = object.kind === 'aircraft' && last ? formatAltitude(last.altFt, last.onGround) : null;
   return (
     <>
       {trail.length > 1 && <Polyline positions={trail} pathOptions={{ color, weight: 2, opacity: lost ? 0.35 : 0.8, dashArray: '4 4' }} interactive={false} />}
       <Marker position={[object.lat, object.lon]} icon={icon}>
+        {/* Popup mit Link zur Detailseite nur an Arbeitsplätzen, nicht auf Bildschirmen */}
+        {links && (
+          <Popup>
+            <Link to={trafficPath(object.kind, object.data.id)} className="map-popup-title" title="Details">
+              {object.name}
+            </Link>
+            <br />
+            {object.data.detail}
+            {sub && (
+              <>
+                <br />
+                {sub}
+              </>
+            )}
+            {lost && (
+              <>
+                <br />
+                <span className="tone-warn">kein Signal</span>
+              </>
+            )}
+          </Popup>
+        )}
         {labels && (
           <Tooltip direction="right" offset={[12, 0]} permanent className="map-tracked-label">
             {object.name}
@@ -75,7 +104,20 @@ function TrackedLayer({ object, labels }: { object: Extract<MapObject, { kind: '
 }
 
 /** Sichtbare Kartenobjekte zeichnen: Flächen, Punkte und Ausbreitungen (mit aktuellem Wind) */
-export function MapObjectsLayer({ objects, wind, now, labels = true }: { objects: MapObject[]; wind: Wind | undefined; now: Date; labels?: boolean }) {
+export function MapObjectsLayer({
+  objects,
+  wind,
+  now,
+  labels = true,
+  links = false,
+}: {
+  objects: MapObject[];
+  wind: Wind | undefined;
+  now: Date;
+  labels?: boolean;
+  /** Popups mit Link zur Detailseite (Arbeitsplätze) */
+  links?: boolean;
+}) {
   return (
     <>
       {objects
@@ -102,7 +144,7 @@ export function MapObjectsLayer({ objects, wind, now, labels = true }: { objects
               );
             case 'aircraft':
             case 'ship':
-              return <TrackedLayer key={o.id} object={o} labels={labels} />;
+              return <TrackedLayer key={o.id} object={o} labels={labels} links={links} />;
           }
         })}
     </>

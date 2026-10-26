@@ -4,6 +4,8 @@ import {
   isTracked,
   trafficSettingsInputSchema,
   type Aircraft,
+  type AircraftDetail,
+  type AircraftPhoto,
   type AircraftSource,
   type MapObject,
   type Ship,
@@ -30,6 +32,8 @@ export interface TrafficOptions {
   aircraftUrl: string | null;
   /** Pfadschema: adsb.fi (/v2/lat/…/lon/…/dist/…) oder readsb-v2 wie adsb.lol (/v2/point/…) */
   aircraftApi: 'adsbfi' | 'readsb';
+  /** planespotters.net für Fotos auf der Detailseite, null = keine Fotos */
+  photosUrl?: string | null;
   /** Mindestabstand zwischen Anfragen (Vorgabe 1,1 s; Tests: 0) */
   requestGapMs?: number;
   /** aisstream.io-Websocket, null = keine Schiffe */
@@ -97,6 +101,8 @@ const AIS_MOVE_KM = 20;
 const AIS_RETRY_MIN_MS = 5_000;
 const AIS_RETRY_MAX_MS = 5 * 60_000;
 const TRACK_INTERVAL_MS = 10_000;
+const PHOTO_CACHE_MS = 24 * 3600_000;
+const PHOTO_CACHE_MAX = 500;
 const AIS_TYPES = ['PositionReport', 'StandardClassBPositionReport', 'ExtendedClassBPositionReport', 'ShipStaticData', 'StaticDataReport'];
 
 interface ReadsbAircraft {
@@ -113,6 +119,17 @@ interface ReadsbAircraft {
   category?: string;
   type?: string;
   seen_pos?: number;
+  desc?: string;
+  ownOp?: string;
+  year?: string;
+  baro_rate?: number;
+  geom_rate?: number;
+  alt_geom?: number;
+  nav_altitude_mcp?: number;
+  ias?: number;
+  tas?: number;
+  mach?: number;
+  emergency?: string;
 }
 
 const text = (v: unknown) => (typeof v === 'string' && v.replace(/@+$/, '').trim() ? v.replace(/@+$/, '').trim() : null);
@@ -136,16 +153,36 @@ export function toAircraft(a: ReadsbAircraft): Aircraft | null {
     callsign: text(a.flight),
     registration: text(a.r),
     type: text(a.t),
+    description: text(a.desc),
     lat,
     lon,
     altFt: a.alt_baro === 'ground' ? 0 : num(a.alt_baro),
     onGround: a.alt_baro === 'ground',
     speedKt: num(a.gs),
     track: num(a.track),
+    vertRateFpm: num(a.baro_rate) ?? num(a.geom_rate),
     squawk: text(a.squawk),
     category: text(a.category),
     source: sourceOf(a.type),
     seenS,
+  };
+}
+
+/** readsb-Eintrag mit allen Angaben für die Detailseite */
+export function toAircraftDetail(a: ReadsbAircraft): AircraftDetail | null {
+  const base = toAircraft(a);
+  if (!base) return null;
+  const emergency = text(a.emergency);
+  return {
+    ...base,
+    operator: text(a.ownOp),
+    year: text(a.year),
+    altGeomFt: num(a.alt_geom),
+    selectedAltFt: num(a.nav_altitude_mcp),
+    iasKt: num(a.ias),
+    tasKt: num(a.tas),
+    mach: num(a.mach),
+    emergency: emergency === 'none' ? null : emergency,
   };
 }
 
@@ -171,6 +208,10 @@ interface StoredSettings {
 export class TrafficService {
   private readonly areaCache = new Map<string, { at: number; result: TrafficResult<Aircraft> }>();
   private readonly inflight = new Map<string, Promise<TrafficResult<Aircraft>>>();
+  /** Detailseiten fragen alle 10 s; so lange gilt eine Abfrage je Flugzeug */
+  private readonly detailCache = new Map<string, { at: number; value: AircraftDetail | null }>();
+  /** Fotos ändern sich selten: einen Tag merken (auch „kein Foto“) */
+  private readonly photoCache = new Map<string, { at: number; value: AircraftPhoto | null }>();
   /** Anfragen an die Flugzeug-API laufen nacheinander mit Mindestabstand */
   private requestChain: Promise<unknown> = Promise.resolve();
   private lastRequestAt = 0;
@@ -324,6 +365,43 @@ export class TrafficService {
     return [...seen.values()];
   }
 
+  /** Ein Flugzeug mit allen Angaben (Detailseite) */
+  async aircraftDetail(hex: string): Promise<{ aircraft: AircraftDetail | null; problem: string | null }> {
+    const problem = this.aircraftProblem();
+    if (problem) return { aircraft: null, problem };
+    const cached = this.detailCache.get(hex);
+    if (cached && Date.now() - cached.at < AREA_CACHE_MS) return { aircraft: cached.value, problem: null };
+    try {
+      const body = await this.request(this.aircraftPath('hex', hex));
+      const value = list(body).map(toAircraftDetail).find((a) => !!a) ?? null;
+      this.detailCache.set(hex, { at: Date.now(), value });
+      if (this.detailCache.size > AREA_CACHE_MAX) this.detailCache.delete(this.detailCache.keys().next().value!);
+      return { aircraft: value, problem: null };
+    } catch (err) {
+      const e = err as Error;
+      return { aircraft: cached?.value ?? null, problem: e.message.includes('drosselt') ? e.message : `${this.aircraftSource} nicht erreichbar (${e.message})` };
+    }
+  }
+
+  /** Foto zur ICAO-Adresse von planespotters.net (Fotograf und Link sind anzuzeigen) */
+  async aircraftPhoto(hex: string): Promise<AircraftPhoto | null> {
+    if (!this.opts.photosUrl) return null;
+    const cached = this.photoCache.get(hex);
+    if (cached && Date.now() - cached.at < PHOTO_CACHE_MS) return cached.value;
+    try {
+      const body = (await this.fetchJson(`${this.opts.photosUrl}/pub/photos/hex/${encodeURIComponent(hex)}`, { timeoutMs: TIMEOUT_MS, userAgent: this.opts.userAgent })) as {
+        photos?: { thumbnail_large?: { src?: string; size?: { width?: number; height?: number } }; link?: string; photographer?: string }[];
+      };
+      const p = body.photos?.[0];
+      const value = p?.thumbnail_large?.src && p.link ? { src: p.thumbnail_large.src, width: p.thumbnail_large.size?.width ?? 420, height: p.thumbnail_large.size?.height ?? 280, link: p.link, photographer: p.photographer ?? '' } : null;
+      this.photoCache.set(hex, { at: Date.now(), value });
+      if (this.photoCache.size > PHOTO_CACHE_MAX) this.photoCache.delete(this.photoCache.keys().next().value!);
+      return value;
+    } catch {
+      return cached?.value ?? null;
+    }
+  }
+
   // --- Schiffe (AIS) ---
 
   private shipProblem(): string | null {
@@ -347,6 +425,12 @@ export class TrafficService {
     this.pruneShips();
     const items = [...this.ships.values()].filter((s) => s.lat >= box.south && s.lat <= box.north && s.lon >= box.west && s.lon <= box.east);
     return { items, source: 'aisstream.io', problem };
+  }
+
+  ship(mmsi: string): { ship: Ship | null; problem: string | null } {
+    this.ensureAis();
+    this.pruneShips();
+    return { ship: this.ships.get(mmsi) ?? null, problem: this.shipProblem() };
   }
 
   searchShips(q: string): Ship[] {

@@ -5456,3 +5456,49 @@ select.auto-width {
   cursor: default;
   opacity: 0.6;
 }
+.map-popup-title {
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--info);
+  text-underline-offset: 2px;
+}
+.map-popup-title:hover {
+  color: var(--info);
+}
+
+/* Detailseiten Flugzeug/Schiff */
+.traffic-minimap {
+  height: 320px;
+  border-radius: var(--radius-sm);
+}
+.traffic-photo {
+  margin: 0 0 12px;
+}
+.traffic-photo img {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+.traffic-photo figcaption {
+  margin-top: 4px;
+  font-size: 12px;
+}
+.traffic-alt {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border: 1px solid #000;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.altitude-legend-bar {
+  display: inline-block;
+  width: 96px;
+  height: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  border-radius: 2px;
+}
