@@ -39,6 +39,7 @@ import { ForceService } from './services/forces.js';
 import { IncidentService } from './services/incidents.js';
 import { SettingsService } from './services/settings.js';
 import { GeocoderService, type GeocodeFetch } from './services/geocoder.js';
+import { OverpassService, type OverpassFetch } from './services/overpass.js';
 import { WeatherAlertWatch, WeatherService, type WeatherFetch } from './services/weather.js';
 import { weatherRoutes } from './routes/weather.js';
 import { trafficRoutes } from './routes/traffic.js';
@@ -88,7 +89,7 @@ export interface App {
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -163,6 +164,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     { onlineUrl: config.map.geocoderUrl, outlineUrl: config.map.outlineUrl, dataDir: config.dataDir, userAgent: config.map.userAgent },
     opts.geocodeFetch,
   );
+  const overpass = new OverpassService({ onlineUrl: config.map.overpassUrl, userAgent: config.map.userAgent, retryDelaysMs: opts.overpassRetryDelaysMs }, db, opts.overpassFetch);
   const weather = new WeatherService({ ...config.weather, userAgent: config.map.userAgent }, opts.weatherFetch);
   // Unwetter am Fahrzeugstandort (GPS der Wetterstation, sonst Einsatzort) erscheinen als Meldung
   const weatherWatch = new WeatherAlertWatch(
@@ -213,6 +215,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     });
     addons.attachVideos(videos);
     addons.attachGeocoder(geocoder);
+    addons.attachOverpass(overpass);
     addons.attachOffice(office);
     addons.attachPrinting(printing);
     addons.attachWorkstations(workstations);
@@ -278,7 +281,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     wifiRoutes(api, { wifi, store, notify: (t) => hub.invalidate(t) });
     monitoringRoutes(api, { monitoring, store, notify: (t) => hub.invalidate(t) });
     bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
-    mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder);
+    mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder, overpass);
     weatherRoutes(api, weather, weatherWatch);
     trafficRoutes(api, { traffic, store, notify: (t) => hub.invalidate(t) });
     appLinkRoutes(api, appLinks);

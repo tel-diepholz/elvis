@@ -14,6 +14,7 @@ import {
   type TacticalSign,
   type VehicleInfo,
 } from '@elvis/shared';
+import { mapIconElements } from '@elvis/shared/mapIcons';
 import type { TileService } from './tiles.js';
 
 const PT_PER_MM = 72 / 25.4;
@@ -150,6 +151,16 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
     doc.restore();
   }
 
+  for (const line of req.lines ?? []) {
+    const [first, ...rest] = line.points.map(([lat, lon]) => toPt(lat, lon));
+    if (!first || !rest.length) continue;
+    doc.save();
+    doc.moveTo(...first);
+    for (const p of rest) doc.lineTo(...p);
+    doc.lineWidth(2.5 * f).lineJoin('round').lineCap('round').strokeOpacity(0.9).stroke(line.color);
+    doc.restore();
+  }
+
   const vehicleSign = buildTacticalSign(ctx.vehicleSign);
   const signScale = (36 * f) / 100; // Zeichenkörper 36 pt breit (A3)
   const outside: string[] = [];
@@ -163,6 +174,9 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
     const sign = m.kind === 'vehicle' ? vehicleSign : m.kind === 'unit' ? buildTacticalSign(m.sign ?? {}) : null;
     if (sign) {
       drawTacticalSign(doc, sign, x, y, signScale);
+    } else if (m.kind === 'point' && m.icon && mapIconElements(m.icon)) {
+      doc.circle(x, y, 9 * f).lineWidth(1.5 * f).fillAndStroke(m.color ?? '#1e6fd9', '#ffffff');
+      drawMapIcon(doc, m.icon, x, y, 12 * f, '#ffffff');
     } else if (m.kind === 'point') {
       doc.circle(x, y, 5 * f).lineWidth(1.5 * f).fillAndStroke(m.color ?? '#1e6fd9', '#ffffff');
     } else {
@@ -266,4 +280,37 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
 
   doc.end();
   return { pdf: await done, missingTiles };
+}
+
+/** Lucide-Icon (Raster 24 × 24, Linien 2 breit) zentriert auf (x, y) mit der Kantenlänge size zeichnen */
+export function drawMapIcon(doc: PDFKit.PDFDocument, name: string, x: number, y: number, size: number, color: string): void {
+  const elements = mapIconElements(name);
+  if (!elements) return;
+  const num = (v: string | number | undefined) => Number(v ?? 0);
+  const points = (v: string | number | undefined) =>
+    String(v ?? '')
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number)
+      .reduce<[number, number][]>((acc, n, i, all) => (i % 2 ? acc : [...acc, [n, all[i + 1] ?? 0]]), []);
+  doc.save();
+  doc.translate(x - size / 2, y - size / 2).scale(size / 24);
+  doc.lineWidth(2).lineCap('round').lineJoin('round').strokeColor(color).fillColor(color);
+  for (const [tag, a] of elements) {
+    if (tag === 'path') doc.path(String(a.d));
+    else if (tag === 'circle') doc.circle(num(a.cx), num(a.cy), num(a.r));
+    else if (tag === 'ellipse') doc.ellipse(num(a.cx), num(a.cy), num(a.rx), num(a.ry));
+    else if (tag === 'rect') doc.roundedRect(num(a.x), num(a.y), num(a.width), num(a.height), num(a.rx));
+    else if (tag === 'line') doc.moveTo(num(a.x1), num(a.y1)).lineTo(num(a.x2), num(a.y2));
+    else if (tag === 'polyline' || tag === 'polygon') {
+      const [first, ...rest] = points(a.points);
+      if (!first) continue;
+      doc.moveTo(...first);
+      for (const p of rest) doc.lineTo(...p);
+      if (tag === 'polygon') doc.closePath();
+    } else continue;
+    if (a.fill && a.fill !== 'none') doc.fillAndStroke();
+    else doc.stroke();
+  }
+  doc.restore();
 }

@@ -222,11 +222,13 @@ Quellenangaben folgen den Dienstbeschreibungen. Vor dem Einsatz die Lizenz des L
 sich genauso eintragen, sofern sie EPSG:3857 unterstützen.
 
 **Bedienung:** Oben links stehen Suche, das Menü „Objekte“ (Einsatzort setzen, Gauß-Fahne oder Sektor 60°
-einfügen) und „Drucken“, oben rechts die Wahl des Kartenstils, unten links der Wind. Rechts liegt die einklappbare
+einfügen, Flugzeug oder Schiff suchen, OpenStreetMap abfragen) und „Drucken“, oben rechts die Wahl des Kartenstils, unten links der Wind. Rechts liegt die einklappbare
 **Objektliste** des laufenden Einsatzes: an erster Stelle das eigene Fahrzeug (nur ausblendbar), dann Einsatzort,
-Ausbreitungen und übernommene Suchtreffer. Ein Klick fliegt
-hin; Objekte lassen sich ein- und ausblenden, einstellen, einfärben (Flächen, Punkte, Sektoren – Gauß-Fahnen
-behalten ihre Stufenfarben) und entfernen. Die Objekte gehören zum Einsatz
+Ausbreitungen und übernommene Such- und Overpass-Treffer (Punkte, Flächen, Linien). Ein Klick fliegt
+hin; Objekte lassen sich ein- und ausblenden, einstellen, einfärben (Flächen, Linien, Punkte, Sektoren – Gauß-Fahnen
+behalten ihre Stufenfarben) und entfernen. Punkte bekommen über denselben Knopf auf Wunsch ein Symbol aus allen
+rund 1.500 [Lucide](https://lucide.dev)-Icons (Suche mit englischen Namen, häufige Einsatzbegriffe wie „Feuer“,
+„Hydrant“ oder „Krankenhaus“ auch deutsch). Es erscheint auf Karte, Bildschirmen und im Druck. Die Objekte gehören zum Einsatz
 (`/api/incidents/:id/objects`): Alle Arbeitsplätze und die Kartenkacheln der Bildschirme sehen sie, sie erscheinen
 im Druck, Hinzufügen und Entfernen stehen im Einsatztagebuch, und nach dem Einsatz bleiben sie im Archiv lesbar.
 
@@ -246,6 +248,25 @@ UTMREF/MGRS (`32U MD 66507 40110`). Gesucht wird über den Server (`GET /api/map
    (`null` = nur lokal). Treffer bleiben einen Tag im Speicher und helfen auch bei kurzen Ausfällen.
 3. Umrisse ohne Addon kommen vom öffentlichen Nominatim (`"map": { "outlineUrl": "…" }`, höchstens eine Anfrage je
    Sekunde). Jeder geladene Umriss bleibt in `data/outlines/` und steht danach auch offline zur Verfügung.
+
+**Overpass-Abfragen:** Admins legen unter *Einstellungen → Overpass-Vorlagen* Abfragen an, etwa Hydranten oder
+Feuerwehrhäuser. Jede Vorlage steht in der Karte direkt im Menü **Objekte** und fragt mit einem Klick OpenStreetMap im
+aktuellen Kartenausschnitt ab. ELVIS bringt keine eigenen Vorlagen mit. **Objekte → OpenStreetMap abfragen …** öffnet
+einen Bereich für eigene Abfragen: als einfacher Tag-Filter (z. B. `amenity` = `fire_station`, alle Filter müssen
+zutreffen) oder direkt in [Overpass QL](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL). Dort steht
+`{{bbox}}` für den Ausschnitt, und `out geom;` liefert auch Linien und Flächen. Abfragen lassen sich im laufenden
+Einsatz speichern (`/api/incidents/:id/overpass-queries`).
+
+Eine Abfrage kann ein Symbol (Lucide-Icon) und ein Schild mit Tag-Werten festlegen, z. B. `DN {fire_hydrant:diameter}`.
+Fehlen alle verwendeten Tags, entfällt das Schild. Die Treffer erscheinen wie Suchtreffer: Punkte als Kreis oder mit
+dem Symbol samt Schild, Wege als Linie, geschlossene Wege und Multipolygone als Fläche. Ein Klick zeigt Tags und
+UTMREF, „Zur Objektliste“ übernimmt das Element als Punkt (mit Symbol und Schild), Linie oder Fläche.
+
+Gefragt wird über den Server (`POST /api/map/overpass`, höchstens 2000 Treffer, Ausschnitt bis 3°): Ist die
+Overpass-API des Addons **OSM-Daten** bereit, geht die Abfrage dorthin (offline). Solange das nicht der Fall ist,
+etwa weil der Job „Kartendaten bauen“ noch läuft, oder wenn sie ausfällt, fragt ELVIS den öffentlichen Server
+`overpass-api.de` (einstellbar über `"map": { "overpassUrl": "…" }`, `null` = nur lokal). Der ist oft ausgelastet:
+Er braucht dann 30–60 s oder lehnt mit HTTP 502 ab. ELVIS versucht es dann nach 2 und 5 s erneut.
 
 **Lagekarte drucken:** Auf der Karte öffnet „Drucken“ einen Dialog mit Format (A4/A3/A2/A1), Ausrichtung,
 Zoomstufe (mit Maßstabsangabe) und Kartenstil. In der Vorschau wird der Ausschnitt gewählt, indem man die Karte
@@ -710,7 +731,8 @@ provides:                                 # Integration in ELVIS
 - Laufende Addons mit `provides.mapSources` erscheinen automatisch als Kartenstil auf der Karte und im Druck.
   `provides.geocoders` (`{ id, name, type: photon|nominatim, url }`) ersetzt den öffentlichen Suchdienst der
   Ortssuche; bei Nominatim auch für Umrisse. `provides.routers` (`{ id, name, type: valhalla, url }`) und
-  `provides.overpass` (`{ id, name, url }`) melden Routing und Overpass (noch ohne Nutzung in der Oberfläche).
+  `provides.overpass` (`{ id, name, url }`) melden Routing (noch ohne Nutzung in der Oberfläche) und Overpass (ersetzt
+  den öffentlichen Overpass-Server der Karte).
   `provides.office` (`{ id, name, url, wopiBase }`) meldet einen
   Office-Server mit WOPI (Collabora) für die Dokumentbearbeitung. `shmSize` (z. B. `"1g"`) vergrößert `/dev/shm`, etwa für PostgreSQL.
 - Ein Job-Schritt mit `stopContainers: [<name>]` hält diese Container des Addons für die Dauer des Schritts an, etwa

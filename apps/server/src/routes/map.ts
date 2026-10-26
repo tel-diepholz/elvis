@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { MAX_PRINT_ZOOM, MIN_PRINT_ZOOM, formatDtg, mapSourceInputSchema, mapSourceListSchema, tacticalSignSchema, type MapPrintRequest, type Topic } from '@elvis/shared';
+import { MAX_PRINT_ZOOM, MIN_PRINT_ZOOM, formatDtg, mapSourceInputSchema, mapSourceListSchema, overpassQueryListSchema, overpassRunSchema, tacticalSignSchema, type MapPrintRequest, type Topic } from '@elvis/shared';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
 import { renderMapPdf } from '../services/print.js';
 import type { SettingsService } from '../services/settings.js';
 import type { GeocoderService } from '../services/geocoder.js';
+import type { OverpassService } from '../services/overpass.js';
 import type { TileService } from '../services/tiles.js';
 import { operatorOf, parse } from './util.js';
 
@@ -21,7 +22,7 @@ const printRequest: z.ZodType<MapPrintRequest> = z.object({
   title: z.string().trim().min(1).max(120),
   subtitle: z.string().max(200).optional(),
   markers: z
-    .array(latLon.extend({ kind: z.enum(['vehicle', 'incident', 'point', 'unit']), label: z.string().max(120), color: color.optional(), sign: tacticalSignSchema.optional() }))
+    .array(latLon.extend({ kind: z.enum(['vehicle', 'incident', 'point', 'unit']), label: z.string().max(120), color: color.optional(), icon: z.string().max(60).optional(), sign: tacticalSignSchema.optional() }))
     .max(300),
   polygons: z
     .array(
@@ -34,6 +35,7 @@ const printRequest: z.ZodType<MapPrintRequest> = z.object({
       }),
     )
     .max(100),
+  lines: z.array(z.object({ points: z.array(z.tuple([z.number(), z.number()])).min(2).max(2000), color })).max(200).optional(),
   legend: z.array(z.object({ color, label: z.string().max(160) })).max(30),
   notes: z.array(z.string().max(400)).max(20),
 });
@@ -54,7 +56,7 @@ const searchQuery = z.object({
   lon: z.coerce.number().min(-180).max(180).optional(),
 });
 
-export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notify: (topics: Topic[]) => void, geocoder: GeocoderService): void {
+export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notify: (topics: Topic[]) => void, geocoder: GeocoderService, overpass: OverpassService): void {
   app.get('/api/map/sources', async () => tiles.list());
 
   /** Ortssuche: Straßen, Orte, Adressen sowie Koordinaten und UTMREF; lat/lon bevorzugen Treffer in der Nähe */
@@ -69,6 +71,17 @@ export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store
     if (!outline) throw new HttpError(404, 'Kein Umriss verfügbar');
     return outline;
   });
+
+  /** Overpass-Abfrage für den Kartenausschnitt (lokal, sonst öffentlich); nur angemeldet */
+  app.post('/api/map/overpass', async (req) => {
+    const { query, bounds } = parse(overpassRunSchema, req.body);
+    return overpass.run(query, bounds);
+  });
+
+  app.get('/api/map/overpass/status', async () => overpass.status());
+
+  /** Vorlagen aus den Einstellungen (Menü „Objekte“) */
+  app.get('/api/map/overpass/queries', async () => overpass.settings().queries);
 
   app.get('/api/map/tiles/:source/:z/:x/:y', async (req, reply) => {
     const { source, z: zoom, x, y } = parse(tileParams, req.params);
@@ -123,6 +136,25 @@ export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store
       ].join(', ') || 'geändert',
     });
     notify(['mapSources', 'audit']);
+    return next;
+  });
+
+  // --- Overpass-Standardabfragen ---
+
+  app.get('/api/system/overpass-queries', async () => overpass.settings());
+
+  app.put('/api/system/overpass-queries', async (req) => {
+    const { queries } = parse(z.object({ queries: overpassQueryListSchema }), req.body);
+    const next = overpass.setQueries(queries, operatorOf(req));
+    store.addAudit({
+      operator: operatorOf(req),
+      target: 'karte',
+      action: 'overpass-abfragen',
+      params: '',
+      success: true,
+      message: `${queries.length} Overpass-Vorlagen gespeichert`,
+    });
+    notify(['overpassQueries', 'audit']);
     return next;
   });
 

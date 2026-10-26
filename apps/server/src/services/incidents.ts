@@ -17,6 +17,9 @@ import {
   type JournalEntry,
   type MapObject,
   type MapObjectPatch,
+  type MapObjectData,
+  type IncidentOverpassQuery,
+  type OverpassQuery,
   type TrackedData,
   type NewIncident,
   type NewJournalEntry,
@@ -27,7 +30,9 @@ import {
   type newUnitSchema,
   type unitPatchSchema,
 } from '@elvis/shared';
+import { isMapIcon } from '@elvis/shared/mapIcons';
 import type { Store } from '../db/store.js';
+import { checkOverpassIcon } from './overpass.js';
 import type { ForceService } from './forces.js';
 import { HttpError } from '../errors.js';
 
@@ -145,8 +150,10 @@ export class IncidentService {
     return this.store.mapObjects(id);
   }
 
-  addMapObject(id: number, input: Pick<MapObject, 'kind' | 'name' | 'lat' | 'lon' | 'data'>, operator: string): MapObject {
+  addMapObject(id: number, input: Pick<MapObject, 'kind' | 'name' | 'lat' | 'lon' | 'data'> & { color?: string | null }, operator: string): MapObject {
     this.requireOpen(id);
+    const icon = input.kind === 'point' ? (input.data as MapObjectData['point']).icon : null;
+    if (icon && !isMapIcon(icon)) throw new HttpError(400, `Symbol „${icon}“ gibt es nicht`);
     const created = this.store.transaction(() => {
       const o = this.store.addMapObject(id, input, operator);
       this.system(id, `Kartenobjekt hinzugefügt: ${MAP_OBJECT_LABELS[o.kind]} „${o.name}“`, operator);
@@ -163,6 +170,8 @@ export class IncidentService {
     this.requireOpen(before.incidentId);
     if (patch.data && before.kind !== 'gauss' && before.kind !== 'sector') throw new HttpError(400, 'Dieses Objekt hat keine Einstellungen');
     if (patch.color && !COLORABLE_KINDS.includes(before.kind)) throw new HttpError(400, 'Die Farben einer Gauß-Fahne stehen für die Konzentrationsstufen');
+    if (patch.icon !== undefined && before.kind !== 'point') throw new HttpError(400, 'Ein Symbol haben nur Punkte');
+    if (patch.icon && !isMapIcon(patch.icon)) throw new HttpError(400, `Symbol „${patch.icon}“ gibt es nicht`);
     if ((patch.lat !== undefined || patch.lon !== undefined) && isTracked(before.kind)) throw new HttpError(400, 'Die Position kommt live vom Empfang und lässt sich nicht verschieben');
     const next = {
       ...before,
@@ -172,6 +181,7 @@ export class IncidentService {
       ...(patch.lat !== undefined && { lat: patch.lat }),
       ...(patch.lon !== undefined && { lon: patch.lon }),
       ...(patch.data && { data: { ...before.data, ...patch.data } }),
+      ...(patch.icon !== undefined && { data: { ...before.data, icon: patch.icon } }),
     } as MapObject;
     const saved = this.store.transaction(() => {
       const o = this.store.saveMapObject(next);
@@ -229,6 +239,43 @@ export class IncidentService {
       this.system(o.incidentId, `Kartenobjekt entfernt: ${MAP_OBJECT_LABELS[o.kind]} „${o.name}“`, operator);
     });
     this.notify(['mapObjects', 'journal']);
+  }
+
+  // --- Overpass-Abfragen der Karte ---
+
+  overpassQueries(id: number): IncidentOverpassQuery[] {
+    this.get(id);
+    return this.store.overpassQueries(id);
+  }
+
+  addOverpassQuery(id: number, query: OverpassQuery, operator: string): IncidentOverpassQuery {
+    this.requireOpen(id);
+    checkOverpassIcon(query);
+    const created = this.store.transaction(() => {
+      const q = this.store.addOverpassQuery(id, query, operator);
+      this.system(id, `Overpass-Abfrage gespeichert: „${q.name}“`, operator);
+      return q;
+    });
+    this.notify(['overpassQueries', 'journal']);
+    return created;
+  }
+
+  saveOverpassQuery(queryId: number, query: OverpassQuery): IncidentOverpassQuery {
+    const before = this.store.overpassQuery(queryId);
+    if (!before) throw new HttpError(404, `Overpass-Abfrage ${queryId} nicht gefunden`);
+    this.requireOpen(before.incidentId);
+    checkOverpassIcon(query);
+    const saved = this.store.saveOverpassQuery(queryId, query);
+    this.notify(['overpassQueries']);
+    return saved;
+  }
+
+  removeOverpassQuery(queryId: number): void {
+    const q = this.store.overpassQuery(queryId);
+    if (!q) throw new HttpError(404, `Overpass-Abfrage ${queryId} nicht gefunden`);
+    this.requireOpen(q.incidentId);
+    this.store.removeOverpassQuery(queryId);
+    this.notify(['overpassQueries']);
   }
 
   // --- Kräfte ---

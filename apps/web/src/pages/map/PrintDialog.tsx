@@ -66,11 +66,12 @@ function thin<T>(points: T[], max = 2000): T[] {
 function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: Date) {
   const markers: MapPrintRequest['markers'] = [];
   const polygons: MapPrintRequest['polygons'] = [];
+  const lines: NonNullable<MapPrintRequest['lines']> = [];
   const legend: MapPrintRequest['legend'] = [];
   const notes: string[] = [];
   for (const o of objects.filter((x) => x.visible)) {
     const color = objectColor(o);
-    if (o.kind === 'point') markers.push({ kind: 'point', lat: o.lat, lon: o.lon, label: o.name, color });
+    if (o.kind === 'point') markers.push({ kind: 'point', lat: o.lat, lon: o.lon, label: o.data.badge ? `${o.name} (${o.data.badge})` : o.name, color, ...(o.data.icon && { icon: o.data.icon }) });
     if (o.kind === 'aircraft' || o.kind === 'ship') {
       const { last, lostSince } = o.data;
       const extra = lostSince ? `kein Signal seit ${fmtTime(lostSince)}` : last ? [o.kind === 'aircraft' ? formatAltitude(last.altFt, last.onGround) : null, `Stand ${fmtTime(last.at)}`].filter(Boolean).join(', ') : null;
@@ -79,6 +80,11 @@ function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: D
     if (o.kind === 'area') {
       const outers = o.data.outline.type === 'Polygon' ? [o.data.outline.coordinates[0]!] : o.data.outline.coordinates.map((p) => p[0]!);
       for (const ring of outers) polygons.push({ points: thin(ring.map(([lon, lat]) => [lat!, lon!] as [number, number])), stroke: color, fill: color, fillOpacity: 0.08, dashed: true });
+      legend.push({ color, label: o.name });
+    }
+    if (o.kind === 'line') {
+      const parts = o.data.path.type === 'LineString' ? [o.data.path.coordinates] : o.data.path.coordinates;
+      for (const part of parts) lines.push({ points: thin(part.map(([lon, lat]) => [lat!, lon!] as [number, number])), color });
       legend.push({ color, label: o.name });
     }
     if (o.kind === 'sector' && weather) {
@@ -101,7 +107,7 @@ function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: D
       );
     }
   }
-  return { markers, polygons, legend, notes };
+  return { markers, polygons, lines, legend, notes };
 }
 
 /** Hält den Druckmittelpunkt in der Mitte der Vorschaukarte – der Rahmen bleibt stehen, die Karte wird verschoben. */
@@ -186,6 +192,7 @@ export function PrintDialog(props: PrintDialogProps) {
     if (withIncident && hasIncidentPos) markers.push({ kind: 'incident', lat: incident!.lat!, lon: incident!.lon!, label: incident!.keyword || 'Einsatzort' });
 
     const polygons: MapPrintRequest['polygons'] = [];
+    const lines: NonNullable<MapPrintRequest['lines']> = [];
     const legend: MapPrintRequest['legend'] = [];
     const notes: string[] = [];
     if (withUnits) for (const u of mapUnits) markers.push({ kind: 'unit', lat: u.lat!, lon: u.lon!, label: u.name, sign: u.sign });
@@ -193,6 +200,7 @@ export function PrintDialog(props: PrintDialogProps) {
       const o = objectsForPrint(objects, weather, now);
       markers.push(...o.markers);
       polygons.push(...o.polygons);
+      lines.push(...o.lines);
       legend.push(...o.legend);
       notes.push(...o.notes);
     }
@@ -211,6 +219,7 @@ export function PrintDialog(props: PrintDialogProps) {
       subtitle: incident?.location || undefined,
       markers,
       polygons,
+      lines,
       legend,
       notes,
     };

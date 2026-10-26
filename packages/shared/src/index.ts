@@ -28,3 +28,4 @@ export * from './mapsources';
 export * from './traffic';
 export * from './messages';
 export * from './forceImport';
+export * from './overpass';

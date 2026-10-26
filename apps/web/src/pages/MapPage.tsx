@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L, { type LatLngBoundsExpression, type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ListPlus, MapPin, Plane, Printer, Ship, X } from 'lucide-react';
-import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type TrackedData, type TrafficHit, type Unit } from '@elvis/shared';
+import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type OverpassFeature, type TrackedData, type TrafficHit, type Unit } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useActiveIncident, useNow, useSettings } from '../lib/hooks';
 import { useAuth } from '../lib/auth';
@@ -24,6 +24,7 @@ import { MapSearch } from './map/search';
 import { ObjectList } from './map/objectlist';
 import { MapStylePicker, ObjectMenu, WindTile, type PlaceKind } from './map/toolbar';
 import { TrafficSearch } from './map/trafficSearch';
+import { OverpassLayer, OverpassPanel, featureObject, overpassResultText, useOverpassRun, type OverpassHits } from './map/overpass';
 
 const VIEW_KEY = 'elvis.map.view';
 /** Gewählter Kartenstil (pro Browser); fehlt die Quelle inzwischen, gilt wieder „Automatisch“ */
@@ -111,6 +112,10 @@ export function MapPage() {
   const [placingUnit, setPlacingUnit] = useState<Unit | null>(null);
   const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null);
   const [searchHit, setSearchHit] = useState<GeocodeResult | null>(null);
+  /** Treffer der letzten Overpass-Abfrage (bleiben, bis sie entfernt werden) */
+  const [overpassHits, setOverpassHits] = useState<OverpassHits | null>(null);
+  const [overpassOpen, setOverpassOpen] = useState(false);
+  const mapRef = useRef<L.Map | null>(null);
   const [printing, setPrinting] = useState(false);
   const [searchingTraffic, setSearchingTraffic] = useState(false);
   /** Ebenen Flugzeuge/Schiffe (pro Browser) und was sie gerade zeigen */
@@ -175,6 +180,17 @@ export function MapPage() {
   };
   /** Bereits verfolgte Flugzeuge (ICAO) und Schiffe (MMSI) */
   const tracked = useMemo(() => new Set(objects.filter((o) => isTracked(o.kind)).map((o) => (o.data as TrackedData).id)), [objects]);
+  /** Schon übernommene OSM-Objekte (Ortssuche, Overpass) */
+  const takenOsm = useMemo(() => new Set(objects.map((o) => (o.data as { osm?: string | null }).osm).filter((x): x is string => !!x)), [objects]);
+  const closeOverpass = useCallback(() => setOverpassOpen(false), []);
+  const addFeature = (f: OverpassFeature) => overpassHits && addObject.mutate(featureObject(f, overpassHits.query));
+  const mapBounds = () => {
+    const b = mapRef.current?.getBounds();
+    return b ? { s: b.getSouth(), w: Math.max(-180, b.getWest()), n: b.getNorth(), e: Math.min(180, b.getEast()) } : null;
+  };
+  // Vorlagen aus den Einstellungen erscheinen im Menü „Objekte“
+  const { data: overpassTemplates = [] } = useQuery({ queryKey: ['overpassQueries', 'defaults'], queryFn: api.overpassDefaults, staleTime: 300_000 });
+  const overpass = useOverpassRun(mapBounds, (h) => (setOverpassHits(h), toast('success', `„${h.query.name}“: ${overpassResultText(h.result)[0]}`)));
   const addTraffic = (h: TrafficHit) => addObject.mutate(trafficObject(h), { onSuccess: () => (setSearchingTraffic(false), fly([h.lat, h.lon], { zoom: 12 })) });
 
   const searchFocus = () => view.current ?? (vPos ? { lat: vPos[0], lon: vPos[1] } : origin);
@@ -187,7 +203,7 @@ export function MapPage() {
     if (target === 'vehicle') return vPos && fly(vPos, { zoom: 16 });
     if ('status' in target) return target.lat !== null && target.lon !== null && fly([target.lat, target.lon], { zoom: 17 });
     const b = objectBounds(target);
-    if (target.kind === 'area') fly(b.getCenter(), { bounds: b, zoom: 16 });
+    if (target.kind === 'area' || target.kind === 'line') fly(b.getCenter(), { bounds: b, zoom: 16 });
     else fly([target.lat, target.lon], { zoom: target.kind === 'point' ? 17 : isTracked(target.kind) ? 12 : 14 });
   };
 
@@ -198,7 +214,7 @@ export function MapPage() {
       ? await queryClient.fetchQuery({ queryKey: ['mapOutline', r.osm], queryFn: () => api.mapOutline(r.osm!), staleTime: Infinity }).catch(() => null)
       : null;
     addObject.mutate(
-      outline ? { ...base, kind: 'area', data: { detail: r.detail, osm: r.osm, outline } } : { ...base, kind: 'point', data: { detail: r.detail } },
+      outline ? { ...base, kind: 'area', data: { detail: r.detail, osm: r.osm, outline } } : { ...base, kind: 'point', data: { detail: r.detail, osm: r.osm } },
       { onSuccess: () => setSearchHit(null) },
     );
   };
@@ -219,11 +235,13 @@ export function MapPage() {
         zoom={saved?.zoom ?? (iPos ? 14 : vPos ? 16 : 6)}
         className={`map ${placing || placingUnit ? 'placing' : ''}`}
         zoomControl={false}
+        ref={mapRef}
       >
         {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} attribution={source.attribution} maxZoom={source.maxZoom} />}
         {layers.aircraft && <AircraftLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setAircraftStatus} />}
         {layers.ships && <ShipLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setShipStatus} />}
         <MapObjectsLayer objects={objects} wind={wind} now={now} links />
+        {overpassHits && <OverpassLayer hits={overpassHits} taken={takenOsm} adding={addObject.isPending} onAdd={canEdit ? addFeature : undefined} />}
         <UnitsLayer units={units} onMove={canEdit ? (unit, lat, lon) => moveUnit.mutate({ unit, lat, lon }) : undefined} />
         {showVehicle && (
           <Marker position={vPos!} icon={vehicleIcon}>
@@ -293,11 +311,18 @@ export function MapPage() {
       <div className="map-overlay map-tools">
         <MapSearch focus={searchFocus} onSelect={showHit} />
         <ObjectMenu
+          loggedIn={!!user}
           enabled={canEdit}
           reason={!incident ? 'Objekte gehören zu einem Einsatz – erst einen Einsatz auflegen' : 'Zum Bearbeiten anmelden'}
           hasLocation={!!iPos}
           onPlace={(k) => (setPlacingUnit(null), setPlacing(k))}
+          templates={overpassTemplates}
+          overpass={overpassHits && { name: overpassHits.query.name, count: overpassHits.result.features.length }}
+          overpassRunning={overpass.running?.name ?? null}
           onSearchTraffic={() => setSearchingTraffic(true)}
+          onTemplate={overpass.run}
+          onOverpass={() => setOverpassOpen(true)}
+          onClearOverpass={() => setOverpassHits(null)}
         />
         {user && (
           <button className="btn" onClick={() => setPrinting(true)} disabled={!source}>
@@ -305,6 +330,18 @@ export function MapPage() {
           </button>
         )}
       </div>
+
+      <OverpassPanel
+        open={overpassOpen}
+        onClose={closeOverpass}
+        incident={incident}
+        loggedIn={!!user}
+        canEdit={canEdit}
+        templates={overpassTemplates}
+        runner={overpass}
+        hits={overpassHits}
+        onClear={() => setOverpassHits(null)}
+      />
 
       {(placing || placingUnit) && (
         <div className="map-overlay map-placing" role="status">

@@ -170,7 +170,7 @@ function outlineOf(json: unknown): GeoOutline | null {
 }
 
 /** Nacheinander mit Mindestabstand – für öffentliche Dienste mit Nutzungsbedingungen */
-class Throttle {
+export class Throttle {
   private queue: Promise<unknown> = Promise.resolve();
   private last = 0;
 

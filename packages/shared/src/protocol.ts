@@ -19,7 +19,7 @@ export interface VehicleInfo {
 }
 
 /** Topics a client should refetch via REST when invalidated. */
-export type Topic = 'incident' | 'journal' | 'units' | 'forces' | 'documents' | 'audit' | 'dockerHosts' | 'addons' | 'mapSources' | 'users' | 'settings' | 'devices' | 'cameras' | 'cameraPresets' | 'displays' | 'videoSources' | 'mapObjects' | 'wifi' | 'wifiClients' | 'monitoring' | 'bluetooth' | 'templates' | 'office' | 'roles' | 'tasks' | 'taskTemplates' | 'printing' | 'scans' | 'workstations' | 'appLinks' | 'personnel' | 'personnelSheets' | 'messages';
+export type Topic = 'incident' | 'journal' | 'units' | 'forces' | 'documents' | 'audit' | 'dockerHosts' | 'addons' | 'mapSources' | 'users' | 'settings' | 'devices' | 'cameras' | 'cameraPresets' | 'displays' | 'videoSources' | 'mapObjects' | 'wifi' | 'wifiClients' | 'monitoring' | 'bluetooth' | 'templates' | 'office' | 'roles' | 'tasks' | 'taskTemplates' | 'printing' | 'scans' | 'workstations' | 'appLinks' | 'personnel' | 'personnelSheets' | 'messages' | 'overpassQueries';
 
 export type ServerMessage =
   | {

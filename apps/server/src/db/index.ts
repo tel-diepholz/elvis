@@ -696,6 +696,19 @@ const MIGRATIONS: Migration[] = [
   ALTER TABLE messages ADD COLUMN snoozed_by TEXT;
   ALTER TABLE messages ADD COLUMN snooze_minutes INTEGER;
   `,
+  // Im Einsatz gespeicherte Overpass-Abfragen der Karte (query = OverpassQuery als JSON)
+  `
+  CREATE TABLE incident_overpass_queries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    query TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX incident_overpass_queries_incident ON incident_overpass_queries(incident_id);
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

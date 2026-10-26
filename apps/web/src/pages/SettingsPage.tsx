@@ -5,6 +5,7 @@ import {
   Bluetooth,
   Cctv,
   CloudSun,
+  Database,
   FolderTree,
   Laptop,
   ListTodo,
@@ -37,6 +38,7 @@ import { DocumentFoldersCard } from './system/DocumentFoldersCard';
 import { ForcesCard } from './system/ForcesCard';
 import { MapSourcesCard } from './system/MapSourcesCard';
 import { MessageSettingsCard } from './system/MessageSettingsCard';
+import { OverpassQueriesCard } from './system/OverpassQueriesCard';
 import { ModuleSection } from './system/ModuleSection';
 import { MonitoringCard } from './system/MonitoringCard';
 import { PrintSettingsCard } from './system/PrintSettingsCard';
@@ -110,6 +112,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="karten" title="Kartenquellen" icon={<MapIcon {...ICON} />} summary="Kartenstile, Luftbilder (WMS)">
             <MapSourcesCard />
+          </SettingsSection>
+          <SettingsSection id="overpass" title="Overpass-Vorlagen" icon={<Database {...ICON} />} summary="OpenStreetMap-Abfragen im Menü „Objekte“ der Karte">
+            <OverpassQueriesCard />
           </SettingsSection>
           <SettingsSection id="verkehr" title="Luft- und Schiffsverkehr" icon={<Plane {...ICON} />} summary="Flugzeuge (ADS-B/MLAT) und Schiffe (AIS) auf der Karte">
             <TrafficCard />

@@ -7,6 +7,8 @@ import type {
   JournalCategory,
   JournalEntry,
   MapObject,
+  IncidentOverpassQuery,
+  OverpassQuery,
   NewIncident,
   NewJournalEntry,
   Unit,
@@ -108,6 +110,15 @@ const toMapObject = (r: Row): MapObject =>
     createdAt: r.created_at as string,
     createdBy: r.created_by as string,
   }) as MapObject;
+
+const toOverpassQuery = (r: Row): IncidentOverpassQuery => ({
+  ...(JSON.parse(r.query as string) as OverpassQuery),
+  name: r.name as string,
+  id: r.id as number,
+  incidentId: r.incident_id as number,
+  createdAt: r.created_at as string,
+  createdBy: r.created_by as string,
+});
 
 const toDocument = (r: Row): IncidentDocument & { storageName: string } => ({
   id: r.id as number,
@@ -299,14 +310,14 @@ export class Store {
     return r ? toMapObject(r) : null;
   }
 
-  addMapObject(incidentId: number, o: Pick<MapObject, 'kind' | 'name' | 'lat' | 'lon' | 'data'>, author: string): MapObject {
+  addMapObject(incidentId: number, o: Pick<MapObject, 'kind' | 'name' | 'lat' | 'lon' | 'data'> & { color?: string | null }, author: string): MapObject {
     const ts = now();
     const info = this.db
       .prepare(
-        `INSERT INTO map_objects (incident_id, kind, name, lat, lon, visible, data, created_at, created_by, updated_at)
-         VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+        `INSERT INTO map_objects (incident_id, kind, name, lat, lon, visible, color, data, created_at, created_by, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
       )
-      .run(incidentId, o.kind, o.name, o.lat, o.lon, JSON.stringify(o.data), ts, author, ts);
+      .run(incidentId, o.kind, o.name, o.lat, o.lon, o.color ?? null, JSON.stringify(o.data), ts, author, ts);
     return this.mapObject(Number(info.lastInsertRowid))!;
   }
 
@@ -319,6 +330,34 @@ export class Store {
 
   removeMapObject(id: number): void {
     this.db.prepare('DELETE FROM map_objects WHERE id = ?').run(id);
+  }
+
+  // --- Overpass-Abfragen ---
+
+  overpassQueries(incidentId: number): IncidentOverpassQuery[] {
+    return (this.db.prepare('SELECT * FROM incident_overpass_queries WHERE incident_id = ? ORDER BY name COLLATE NOCASE, id').all(incidentId) as Row[]).map(toOverpassQuery);
+  }
+
+  overpassQuery(id: number): IncidentOverpassQuery | null {
+    const r = this.db.prepare('SELECT * FROM incident_overpass_queries WHERE id = ?').get(id) as Row | undefined;
+    return r ? toOverpassQuery(r) : null;
+  }
+
+  addOverpassQuery(incidentId: number, q: OverpassQuery, author: string): IncidentOverpassQuery {
+    const ts = now();
+    const info = this.db
+      .prepare('INSERT INTO incident_overpass_queries (incident_id, name, query, created_at, created_by, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(incidentId, q.name, JSON.stringify(q), ts, author, ts);
+    return this.overpassQuery(Number(info.lastInsertRowid))!;
+  }
+
+  saveOverpassQuery(id: number, q: OverpassQuery): IncidentOverpassQuery {
+    this.db.prepare('UPDATE incident_overpass_queries SET name = ?, query = ?, updated_at = ? WHERE id = ?').run(q.name, JSON.stringify(q), now(), id);
+    return this.overpassQuery(id)!;
+  }
+
+  removeOverpassQuery(id: number): void {
+    this.db.prepare('DELETE FROM incident_overpass_queries WHERE id = ?').run(id);
   }
 
   // --- Dokumente ---

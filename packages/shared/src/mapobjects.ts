@@ -1,5 +1,5 @@
 /**
- * Kartenobjekte eines Einsatzes: übernommene Suchtreffer (Punkt oder Fläche mit Umriss), Ausbreitungen
+ * Kartenobjekte eines Einsatzes: übernommene Such- und Overpass-Treffer (Punkt, Fläche mit Umriss, Linie), Ausbreitungen
  * (Gauß-Fahne, Sektor 60°) und verfolgte Flugzeuge bzw. Schiffe (Position kommt live vom Server). Sie gehören zum Einsatz, alle Arbeitsplätze und Bildschirme sehen sie, und sie
  * bleiben im Einsatzarchiv. Der Einsatzort selbst ist Teil des Einsatzes (lat/lon) und kein Kartenobjekt.
  */
@@ -7,11 +7,15 @@ import { z } from 'zod';
 import type { KlugManierClass, Terrain } from './dispersion';
 import type { GeoOutline } from './geocode';
 
-export type MapObjectKind = 'point' | 'area' | 'gauss' | 'sector' | 'aircraft' | 'ship';
+/** Verlauf einer Linie (Straße, Gewässer, Leitung), GeoJSON mit Koordinaten [Länge, Breite] */
+export type GeoPath = { type: 'LineString'; coordinates: number[][] } | { type: 'MultiLineString'; coordinates: number[][][] };
+
+export type MapObjectKind = 'point' | 'area' | 'line' | 'gauss' | 'sector' | 'aircraft' | 'ship';
 
 export const MAP_OBJECT_LABELS: Record<MapObjectKind, string> = {
   point: 'Punkt',
   area: 'Fläche',
+  line: 'Linie',
   gauss: 'Gauß-Fahne',
   sector: 'Sektor 60°',
   aircraft: 'Flugzeug',
@@ -72,15 +76,18 @@ export const MAP_OBJECT_COLORS = [
 ] as const;
 
 /** Vorgabe je Objektart, solange keine eigene Farbe gewählt ist */
-export const DEFAULT_OBJECT_COLORS: Record<MapObjectKind, string> = { point: '#4ea1ff', area: '#4ea1ff', gauss: '#e53935', sector: '#e3a008', aircraft: '#f57c00', ship: '#00acc1' };
+export const DEFAULT_OBJECT_COLORS: Record<MapObjectKind, string> = { point: '#4ea1ff', area: '#4ea1ff', line: '#4ea1ff', gauss: '#e53935', sector: '#e3a008', aircraft: '#f57c00', ship: '#00acc1' };
 
-export const COLORABLE_KINDS: MapObjectKind[] = ['point', 'area', 'sector', 'aircraft', 'ship'];
+export const COLORABLE_KINDS: MapObjectKind[] = ['point', 'area', 'line', 'sector', 'aircraft', 'ship'];
 
 export const objectColor = (o: { kind: MapObjectKind; color: string | null }) => o.color ?? DEFAULT_OBJECT_COLORS[o.kind];
 
 export interface MapObjectData {
-  point: { detail: string };
+  /** osm: übernommenes OSM-Objekt (Overpass, Ortssuche) */
+  /** icon: Lucide-Name („Flame“), sonst Punkt (siehe mapIcons); badge: Schild am Symbol, z. B. „DN 100“ */
+  point: { detail: string; osm?: string | null; icon?: string | null; badge?: string | null };
   area: { detail: string; osm: string | null; outline: GeoOutline };
+  line: { detail: string; osm: string | null; path: GeoPath };
   gauss: GaussSettings;
   sector: { sectorM: number };
   aircraft: TrackedData;
@@ -108,6 +115,9 @@ export type MapObject = { [K in MapObjectKind]: MapObjectBase<K> }[MapObjectKind
 // --- Prüfung (Server) ---
 
 const name = z.string().trim().min(1, 'Name fehlt').max(120);
+/** Eigene Farbe (#rrggbb), null = Vorgabe der Objektart */
+export const mapColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Farbe im Format #rrggbb');
+const ownColor = mapColorSchema.nullable().optional();
 const lat = z.number().min(-90).max(90);
 const lon = z.number().min(-180).max(180);
 const position = z.tuple([lon, lat]);
@@ -116,6 +126,14 @@ const outline = z.union([
   z.object({ type: z.literal('Polygon'), coordinates: z.array(ring).min(1).max(500) }),
   z.object({ type: z.literal('MultiPolygon'), coordinates: z.array(z.array(ring).min(1).max(500)).min(1).max(2_000) }),
 ]);
+const path = z.array(position).min(2).max(20_000);
+const geoPath = z.union([
+  z.object({ type: z.literal('LineString'), coordinates: path }),
+  z.object({ type: z.literal('MultiLineString'), coordinates: z.array(path).min(1).max(2_000) }),
+]);
+const osmRef = z.string().regex(/^[NWR]\d{1,12}$/).nullable();
+/** Name eines Lucide-Icons; ob es ihn gibt, prüft der Server */
+export const mapIconNameSchema = z.string().regex(/^[A-Z][A-Za-z0-9]{0,60}$/, 'Symbol ungültig');
 const gauss = z.object({
   stability: z.enum(['auto', 'I', 'II', 'III/1', 'III/2', 'IV', 'V']),
   cloudOktas: z.number().int().min(0).max(8),
@@ -131,31 +149,35 @@ const tracked = (id: z.ZodString) =>
     .transform((d): TrackedData => ({ ...d, trail: [], last: null, lostSince: null }));
 
 export const newMapObjectSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('point'), name, lat, lon, data: z.object({ detail }) }),
-  z.object({ kind: z.literal('area'), name, lat, lon, data: z.object({ detail, osm: z.string().regex(/^[NWR]\d{1,12}$/).nullable(), outline }) }),
+  z.object({ kind: z.literal('point'), name, lat, lon, color: ownColor, data: z.object({ detail, osm: osmRef.optional(), icon: mapIconNameSchema.nullable().optional(), badge: z.string().trim().max(40).nullable().optional() }) }),
+  z.object({ kind: z.literal('area'), name, lat, lon, color: ownColor, data: z.object({ detail, osm: osmRef, outline }) }),
+  z.object({ kind: z.literal('line'), name, lat, lon, color: ownColor, data: z.object({ detail, osm: osmRef, path: geoPath }) }),
   z.object({ kind: z.literal('gauss'), name, lat, lon, data: gauss.default(DEFAULT_GAUSS) }),
   z.object({ kind: z.literal('sector'), name, lat, lon, data: sector.default({ sectorM: 1000 }) }),
   z.object({ kind: z.literal('aircraft'), name, lat, lon, data: tracked(z.string().regex(/^~?[0-9a-f]{6}$/, 'ICAO-Adresse ungültig')) }),
   z.object({ kind: z.literal('ship'), name, lat, lon, data: tracked(z.string().regex(/^\d{9}$/, 'MMSI ungültig')) }),
 ]);
-/** Neues Objekt (Ausbreitungen ohne Daten bekommen die Vorgaben; verfolgte Ziele brauchen nur Kennung und Beschreibung) */
+/** Neues Objekt (Ausbreitungen ohne Daten bekommen die Vorgaben; verfolgte Ziele brauchen nur Kennung und Beschreibung; Farbe bei Punkten, Flächen und Linien) */
 export type NewMapObject = {
   [K in MapObjectKind]: {
     kind: K;
     name: string;
     lat: number;
     lon: number;
+    color?: string | null;
     data: K extends 'gauss' | 'sector' ? MapObjectData[K] | undefined : K extends TrackedKind ? { id: string; detail?: string; category?: string | null; aircraftType?: string | null } : MapObjectData[K];
   };
 }[MapObjectKind];
 
-/** Änderungen: Name, Sichtbarkeit, Lage und je nach Art die Einstellungen (Teilmenge der Daten) */
+/** Änderungen: Name, Sichtbarkeit, Lage, Farbe, Symbol (Punkte) und je nach Art die Einstellungen (Teilmenge der Daten) */
 export const mapObjectPatchSchema = z.object({
   name: name.optional(),
   visible: z.boolean().optional(),
   lat: lat.optional(),
   lon: lon.optional(),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Farbe im Format #rrggbb').nullable().optional(),
+  color: mapColorSchema.nullable().optional(),
+  /** Symbol eines Punkts (null = einfacher Punkt) */
+  icon: mapIconNameSchema.nullable().optional(),
   data: z.union([gauss.partial(), sector.partial()]).optional(),
 });
 export type MapObjectPatch = z.input<typeof mapObjectPatchSchema>;
