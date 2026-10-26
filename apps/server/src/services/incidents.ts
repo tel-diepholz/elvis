@@ -2,7 +2,10 @@ import type { z } from 'zod';
 import {
   COLORABLE_KINDS,
   MAP_OBJECT_LABELS,
+  TRACK_LOST_MS,
+  TRAIL_MAX_POINTS,
   UNIT_STATUS,
+  isTracked,
   formatStrength,
   isOnScene,
   sumStrength,
@@ -14,6 +17,7 @@ import {
   type JournalEntry,
   type MapObject,
   type MapObjectPatch,
+  type TrackedData,
   type NewIncident,
   type NewJournalEntry,
   type Topic,
@@ -159,6 +163,7 @@ export class IncidentService {
     this.requireOpen(before.incidentId);
     if (patch.data && before.kind !== 'gauss' && before.kind !== 'sector') throw new HttpError(400, 'Dieses Objekt hat keine Einstellungen');
     if (patch.color && !COLORABLE_KINDS.includes(before.kind)) throw new HttpError(400, 'Die Farben einer Gauß-Fahne stehen für die Konzentrationsstufen');
+    if ((patch.lat !== undefined || patch.lon !== undefined) && isTracked(before.kind)) throw new HttpError(400, 'Die Position kommt live vom Empfang und lässt sich nicht verschieben');
     const next = {
       ...before,
       ...(patch.name !== undefined && { name: patch.name }),
@@ -175,6 +180,43 @@ export class IncidentService {
       return o;
     });
     this.notify(before.name !== saved.name || before.lat !== saved.lat || before.lon !== saved.lon ? ['mapObjects', 'journal'] : ['mapObjects']);
+    return saved;
+  }
+
+  /**
+   * Live-Stand eines verfolgten Flugzeugs bzw. Schiffs übernehmen (ohne Tagebucheintrag je Position). fix = null
+   * heißt: diesmal nichts empfangen. Ins Tagebuch kommen nur der Signalverlust und die Wiederkehr.
+   */
+  trackMapObject(objectId: number, fix: { lat: number; lon: number; at: string; altFt: number | null; onGround: boolean; speedKt: number | null; track: number | null } | null): MapObject | null {
+    const before = this.store.mapObject(objectId);
+    if (!before || !isTracked(before.kind) || this.store.incident(before.incidentId)?.closedAt) return null;
+    const data = before.data as TrackedData;
+    const label = `${MAP_OBJECT_LABELS[before.kind]} „${before.name}“`;
+    let next: TrackedData;
+    let journal: string | null = null;
+    if (fix) {
+      if (data.last && data.last.at >= fix.at) return null;
+      const prev = data.trail.at(-1);
+      const moved = !prev || prev[0] !== fix.lat || prev[1] !== fix.lon;
+      next = {
+        ...data,
+        trail: moved ? [...data.trail, [fix.lat, fix.lon] as [number, number]].slice(-TRAIL_MAX_POINTS) : data.trail,
+        last: { at: fix.at, altFt: fix.altFt, onGround: fix.onGround, speedKt: fix.speedKt, track: fix.track },
+        lostSince: null,
+      };
+      if (data.lostSince) journal = `${label}: Signal wieder da`;
+    } else {
+      const since = data.last?.at ?? before.createdAt;
+      if (data.lostSince || Date.now() - Date.parse(since) < TRACK_LOST_MS) return null;
+      next = { ...data, lostSince: since };
+      journal = `${label}: kein Signal mehr`;
+    }
+    const saved = this.store.transaction(() => {
+      const o = this.store.saveMapObject({ ...before, ...(fix && { lat: fix.lat, lon: fix.lon }), data: next } as MapObject);
+      if (journal) this.system(o.incidentId, journal, 'Empfang');
+      return o;
+    });
+    this.notify(journal ? ['mapObjects', 'journal'] : ['mapObjects']);
     return saved;
   }
 

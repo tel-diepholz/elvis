@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, ChevronDown, Crosshair, Layers, MapPin, Shapes, Wind as WindIcon } from 'lucide-react';
+import { Check, ChevronDown, Crosshair, Layers, MapPin, Plane, Shapes, Ship, Wind as WindIcon } from 'lucide-react';
 import type { MapSource } from '@elvis/shared';
 import { compass, fmtOpt } from '../../lib/format';
 import { WindCompass } from '../../components/WindCompass';
+import type { TrafficLayers } from '../../components/map/traffic';
 
 /** Knopf mit ausklappbarem Menü; Klick daneben oder Esc schließt */
 function Dropdown({
@@ -51,8 +52,20 @@ function Dropdown({
 
 export type PlaceKind = 'incident' | 'gauss' | 'sector';
 
-/** Menü „Objekte“: Einsatzort setzen, Ausbreitung einfügen (danach in die Karte tippen) */
-export function ObjectMenu({ enabled, reason, hasLocation, onPlace }: { enabled: boolean; reason: string; hasLocation: boolean; onPlace: (k: PlaceKind) => void }) {
+/** Menü „Objekte“: Einsatzort setzen, Ausbreitung einfügen (danach in die Karte tippen), Flugzeug/Schiff suchen */
+export function ObjectMenu({
+  enabled,
+  reason,
+  hasLocation,
+  onPlace,
+  onSearchTraffic,
+}: {
+  enabled: boolean;
+  reason: string;
+  hasLocation: boolean;
+  onPlace: (k: PlaceKind) => void;
+  onSearchTraffic: () => void;
+}) {
   return (
     <Dropdown
       label="Objekte"
@@ -75,27 +88,38 @@ export function ObjectMenu({ enabled, reason, hasLocation, onPlace }: { enabled:
           <button type="button" role="menuitem" className="map-dropdown-item" onClick={() => (close(), onPlace('sector'))}>
             <Crosshair size={18} /> Sektor 60° einfügen
           </button>
+          <button type="button" role="menuitem" className="map-dropdown-item" onClick={() => (close(), onSearchTraffic())}>
+            <Plane size={18} /> Flugzeug oder Schiff suchen …
+          </button>
         </>
       )}
     </Dropdown>
   );
 }
 
-/** Kartenstil oben rechts; „Automatisch“ folgt Hell/Dunkel */
+/** Kartenstil und Ebenen oben rechts; „Automatisch“ folgt Hell/Dunkel */
 export function MapStylePicker({
   sources,
   value,
   auto,
   onChange,
+  layers,
+  onLayers,
   onMenuHeight,
 }: {
   sources: MapSource[];
   value: string | null;
   auto: MapSource | undefined;
   onChange: (id: string | null) => void;
+  layers: TrafficLayers;
+  onLayers: (l: TrafficLayers) => void;
   onMenuHeight?: (px: number) => void;
 }) {
-  if (sources.length < 2) return null;
+  const layer = (key: keyof TrafficLayers, icon: ReactNode, label: string) => (
+    <button key={key} type="button" role="menuitemcheckbox" aria-checked={layers[key]} className="map-dropdown-item" onClick={() => onLayers({ ...layers, [key]: !layers[key] })}>
+      <span className="map-dropdown-check">{layers[key] && <Check size={16} />}</span> {icon} {label}
+    </button>
+  );
   const item = (id: string | null, label: string, close: () => void) => (
     <button key={id ?? 'auto'} type="button" role="menuitemradio" aria-checked={value === id} className="map-dropdown-item" onClick={() => (close(), onChange(id))}>
       <span className="map-dropdown-check">{value === id && <Check size={16} />}</span> {label}
@@ -103,11 +127,19 @@ export function MapStylePicker({
   );
   return (
     <div className="map-overlay map-style">
-      <Dropdown label="Kartenstil" align="right" button={<Layers size={18} />} onMenuHeight={onMenuHeight}>
+      <Dropdown label="Kartenstil und Ebenen" align="right" button={<Layers size={18} />} onMenuHeight={onMenuHeight}>
         {(close) => (
           <>
-            {item(null, `Automatisch (${auto?.name ?? '–'})`, close)}
-            {sources.map((s) => item(s.id, s.name, close))}
+            {sources.length > 1 && (
+              <>
+                <div className="map-dropdown-heading">Kartenstil</div>
+                {item(null, `Automatisch (${auto?.name ?? '–'})`, close)}
+                {sources.map((s) => item(s.id, s.name, close))}
+              </>
+            )}
+            <div className="map-dropdown-heading">Ebenen</div>
+            {layer('aircraft', <Plane size={16} />, 'Flugzeuge')}
+            {layer('ships', <Ship size={16} />, 'Schiffe')}
           </>
         )}
       </Dropdown>

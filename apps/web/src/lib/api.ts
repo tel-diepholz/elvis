@@ -77,6 +77,12 @@ import {
   type MapSourceInput,
   type MapSourceSettings,
   type MapSourceTestResult,
+  type Aircraft,
+  type Ship,
+  type TrafficHit,
+  type TrafficResult,
+  type TrafficSettings,
+  type TrafficSettingsInput,
   type NewIncident,
   type NewJournalEntry,
   type NewUnit,
@@ -406,6 +412,13 @@ export const api = {
     request<GeocodeResponse>('GET', `/api/map/search?${new URLSearchParams({ q, ...(focus && { lat: focus.lat.toFixed(4), lon: focus.lon.toFixed(4) }) })}`),
   vehicleWeather: () => request<WeatherReport | null>('GET', '/api/weather/vehicle'),
   vehicleWeatherWarnings: () => request<WeatherWarnings | null>('GET', '/api/weather/warnings'),
+  trafficAircraft: (q: { lat: number; lon: number; radius: number }) =>
+    request<TrafficResult<Aircraft>>('GET', `/api/traffic/aircraft?lat=${q.lat.toFixed(3)}&lon=${q.lon.toFixed(3)}&radius=${Math.round(q.radius)}`),
+  trafficShips: (b: { south: number; west: number; north: number; east: number }) =>
+    request<TrafficResult<Ship>>('GET', `/api/traffic/ships?${new URLSearchParams({ south: b.south.toFixed(4), west: b.west.toFixed(4), north: b.north.toFixed(4), east: b.east.toFixed(4) })}`),
+  trafficSearch: (q: string) => request<TrafficResult<TrafficHit>>('GET', `/api/traffic/search?${new URLSearchParams({ q })}`),
+  trafficSettings: () => request<TrafficSettings>('GET', '/api/system/traffic'),
+  saveTrafficSettings: (input: TrafficSettingsInput) => request<TrafficSettings>('PUT', '/api/system/traffic', input),
   weather: (pos: { lat: number; lon: number }) => request<WeatherReport>('GET', `/api/weather?lat=${pos.lat}&lon=${pos.lon}`),
   /** Liefert das PDF als Blob; Fehler kommen wie bei den übrigen Aufrufen als ApiError. */
   printMap: async (req: MapPrintRequest): Promise<{ pdf: Blob; filename: string; missingTiles: number }> => {

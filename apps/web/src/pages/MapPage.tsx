@@ -3,8 +3,8 @@ import { GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents }
 import L, { type LatLngBoundsExpression, type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ListPlus, MapPin, Printer, X } from 'lucide-react';
-import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type Unit } from '@elvis/shared';
+import { ListPlus, MapPin, Plane, Printer, Ship, X } from 'lucide-react';
+import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type TrackedData, type TrafficHit, type Unit } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useActiveIncident, useNow, useSettings } from '../lib/hooks';
 import { useAuth } from '../lib/auth';
@@ -17,10 +17,12 @@ import { useToast } from '../lib/toast';
 import { Modal } from '../components/ui';
 import { AREA_STYLE, MapObjectsLayer, objectBounds, useMapObjects } from '../components/map/objects';
 import { UnitsLayer, useMapUnits } from '../components/map/units';
+import { AircraftLayer, ShipLayer, readLayers, saveLayers, trafficObject, type TrafficLayers, type TrafficStatus } from '../components/map/traffic';
 import { PrintDialog } from './map/PrintDialog';
 import { MapSearch } from './map/search';
 import { ObjectList } from './map/objectlist';
 import { MapStylePicker, ObjectMenu, WindTile, type PlaceKind } from './map/toolbar';
+import { TrafficSearch } from './map/trafficSearch';
 
 const VIEW_KEY = 'elvis.map.view';
 /** Gewählter Kartenstil (pro Browser); fehlt die Quelle inzwischen, gilt wieder „Automatisch“ */
@@ -109,6 +111,12 @@ export function MapPage() {
   const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null);
   const [searchHit, setSearchHit] = useState<GeocodeResult | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [searchingTraffic, setSearchingTraffic] = useState(false);
+  /** Ebenen Flugzeuge/Schiffe (pro Browser) und was sie gerade zeigen */
+  const [layers, setLayers] = useState<TrafficLayers>(readLayers);
+  const chooseLayers = (l: TrafficLayers) => (setLayers(l), saveLayers(l));
+  const [aircraftStatus, setAircraftStatus] = useState<TrafficStatus | null>(null);
+  const [shipStatus, setShipStatus] = useState<TrafficStatus | null>(null);
   /** Offenes Kartenstil-Menü schiebt die Objektliste nach unten */
   const [styleMenuPx, setStyleMenuPx] = useState(0);
   const view = useRef<{ lat: number; lon: number; zoom: number } | null>(null);
@@ -164,6 +172,10 @@ export function MapPage() {
     const point = r.kind === 'house' || r.kind === 'coordinate' || !r.bounds;
     fly([r.lat, r.lon], point ? { zoom: 17 } : { bounds: r.bounds!, zoom: r.kind === 'street' ? 17 : 14 });
   };
+  /** Bereits verfolgte Flugzeuge (ICAO) und Schiffe (MMSI) */
+  const tracked = useMemo(() => new Set(objects.filter((o) => isTracked(o.kind)).map((o) => (o.data as TrackedData).id)), [objects]);
+  const addTraffic = (h: TrafficHit) => addObject.mutate(trafficObject(h), { onSuccess: () => (setSearchingTraffic(false), fly([h.lat, h.lon], { zoom: 12 })) });
+
   const searchFocus = () => view.current ?? (vPos ? { lat: vPos[0], lon: vPos[1] } : origin);
 
   // Im Einsatz lässt sich das eigene Fahrzeug in der Objektliste ausblenden
@@ -175,7 +187,7 @@ export function MapPage() {
     if ('status' in target) return target.lat !== null && target.lon !== null && fly([target.lat, target.lon], { zoom: 17 });
     const b = objectBounds(target);
     if (target.kind === 'area') fly(b.getCenter(), { bounds: b, zoom: 16 });
-    else fly([target.lat, target.lon], { zoom: target.kind === 'point' ? 17 : 14 });
+    else fly([target.lat, target.lon], { zoom: target.kind === 'point' ? 17 : isTracked(target.kind) ? 12 : 14 });
   };
 
   /** Suchtreffer übernehmen: mit Umriss als Fläche, sonst als Punkt */
@@ -208,6 +220,8 @@ export function MapPage() {
         zoomControl={false}
       >
         {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} attribution={source.attribution} maxZoom={source.maxZoom} />}
+        {layers.aircraft && <AircraftLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setAircraftStatus} />}
+        {layers.ships && <ShipLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setShipStatus} />}
         <MapObjectsLayer objects={objects} wind={wind} now={now} />
         <UnitsLayer units={units} onMove={canEdit ? (unit, lat, lon) => moveUnit.mutate({ unit, lat, lon }) : undefined} />
         {showVehicle && (
@@ -282,6 +296,7 @@ export function MapPage() {
           reason={!incident ? 'Objekte gehören zu einem Einsatz – erst einen Einsatz auflegen' : 'Zum Bearbeiten anmelden'}
           hasLocation={!!iPos}
           onPlace={(k) => (setPlacingUnit(null), setPlacing(k))}
+          onSearchTraffic={() => setSearchingTraffic(true)}
         />
         {user && (
           <button className="btn" onClick={() => setPrinting(true)} disabled={!source}>
@@ -304,7 +319,32 @@ export function MapPage() {
         </div>
       )}
 
-      <MapStylePicker sources={sources} value={sources.some((s) => s.id === sourceId) ? sourceId : null} auto={autoSource(sources, dark)} onChange={chooseSource} onMenuHeight={setStyleMenuPx} />
+      <MapStylePicker
+        sources={sources}
+        value={sources.some((s) => s.id === sourceId) ? sourceId : null}
+        auto={autoSource(sources, dark)}
+        onChange={chooseSource}
+        layers={layers}
+        onLayers={chooseLayers}
+        onMenuHeight={setStyleMenuPx}
+      />
+
+      {(layers.aircraft || layers.ships) && (
+        <div className="map-overlay map-traffic-status" role="status">
+          {layers.aircraft && aircraftStatus && (
+            <span title={aircraftStatus.problem ?? undefined}>
+              <Plane size={15} />
+              {aircraftStatus.tooFar ? 'zum Anzeigen hineinzoomen' : aircraftStatus.problem && !aircraftStatus.count ? aircraftStatus.problem : `${aircraftStatus.count} Flugzeuge`}
+            </span>
+          )}
+          {layers.ships && shipStatus && (
+            <span title={shipStatus.problem ?? undefined}>
+              <Ship size={15} />
+              {shipStatus.tooFar ? 'zum Anzeigen hineinzoomen' : shipStatus.problem && !shipStatus.count ? shipStatus.problem : `${shipStatus.count} Schiffe`}
+            </span>
+          )}
+        </div>
+      )}
 
       {incident && (
         <ObjectList
@@ -323,6 +363,10 @@ export function MapPage() {
       )}
 
       {weather && <WindTile speedMs={weather.state.windSpeedMs} directionDeg={weather.state.windDirectionDeg} gustMs={weather.state.windGustMs} />}
+
+      <Modal open={searchingTraffic} title="Flugzeug oder Schiff suchen" onClose={() => setSearchingTraffic(false)}>
+        {searchingTraffic && <TrafficSearch tracked={tracked} onPick={addTraffic} />}
+      </Modal>
 
       <Modal open={printing} title="Lagekarte drucken" onClose={() => setPrinting(false)} wide>
         {source && (

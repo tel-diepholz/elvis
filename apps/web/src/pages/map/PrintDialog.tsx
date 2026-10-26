@@ -12,6 +12,7 @@ import {
   TILE_SIZE,
   niceScale,
   printFrame,
+  formatAltitude,
   type Incident,
   objectColor,
   type MapObject,
@@ -23,7 +24,7 @@ import {
 } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { PrinterSettings, mediaFor, usePrintForm, usePrintStatus } from '../../components/print/PrinterSettings';
-import { compass, fmtDtg, fmtNum } from '../../lib/format';
+import { compass, fmtDtg, fmtNum, fmtTime } from '../../lib/format';
 import { useToast } from '../../lib/toast';
 import { useSettings } from '../../lib/hooks';
 import { tacticalIcon } from '../../components/tactical/TacticalSign';
@@ -70,6 +71,11 @@ function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: D
   for (const o of objects.filter((x) => x.visible)) {
     const color = objectColor(o);
     if (o.kind === 'point') markers.push({ kind: 'point', lat: o.lat, lon: o.lon, label: o.name, color });
+    if (o.kind === 'aircraft' || o.kind === 'ship') {
+      const { last, lostSince } = o.data;
+      const extra = lostSince ? `kein Signal seit ${fmtTime(lostSince)}` : last ? [o.kind === 'aircraft' ? formatAltitude(last.altFt, last.onGround) : null, `Stand ${fmtTime(last.at)}`].filter(Boolean).join(', ') : null;
+      markers.push({ kind: 'point', lat: o.lat, lon: o.lon, label: extra ? `${o.name} (${extra})` : o.name, color });
+    }
     if (o.kind === 'area') {
       const outers = o.data.outline.type === 'Polygon' ? [o.data.outline.coordinates[0]!] : o.data.outline.coordinates.map((p) => p[0]!);
       for (const ring of outers) polygons.push({ points: thin(ring.map(([lon, lat]) => [lat!, lon!] as [number, number])), stroke: color, fill: color, fillOpacity: 0.08, dashed: true });

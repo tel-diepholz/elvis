@@ -79,6 +79,16 @@ const configSchema = z.object({
       warningsUrl: z.string().url().nullable().default('https://api.brightsky.dev'),
     })
     .default({}),
+  traffic: z
+    .object({
+      /** API für Flugzeuge (ADS-B und MLAT): adsb.fi (1 Anfrage/s, nicht kommerziell); null = aus. */
+      aircraftUrl: z.string().url().nullable().default('https://opendata.adsb.fi/api'),
+      /** Pfadschema: „adsbfi“ oder „readsb“ (v2 wie adsb.lol – dort höchstens 500 Anfragen am Tag). */
+      aircraftApi: z.enum(['adsbfi', 'readsb']).default('adsbfi'),
+      /** aisstream.io-Websocket für Schiffe (Schlüssel in den Einstellungen); null = aus. */
+      aisUrl: z.string().url().nullable().default('wss://stream.aisstream.io/v0/stream'),
+    })
+    .default({}),
   docker: z
     .object({
       /** Docker- und Addon-Verwaltung in ELVIS anbieten. */

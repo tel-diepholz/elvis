@@ -1649,6 +1649,14 @@ input[type='checkbox'] {
 .map-dropdown-item:hover {
   background: var(--bg-hover);
 }
+.map-dropdown-heading {
+  padding: 8px 10px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
 .map-dropdown-check {
   display: inline-grid;
   width: 16px;
@@ -5386,4 +5394,65 @@ html.display-mode body {
 }
 select.auto-width {
   width: auto;
+}
+
+/* Flugzeuge und Schiffe (Ebenen und verfolgte Objekte) */
+.map-marker.traffic {
+  background: none;
+  border: 0;
+}
+.map-marker.traffic svg {
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}
+.leaflet-tooltip.map-tracked-label {
+  padding: 1px 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.map-traffic-status {
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  max-width: calc(100% - 24px);
+  padding: 6px 12px;
+  font-size: 13px;
+}
+.map-traffic-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.traffic-hits {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.traffic-hits li + li {
+  border-top: 1px solid var(--border);
+}
+.traffic-hits button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.traffic-hits button:hover {
+  background: var(--bg-input);
+}
+.traffic-hits button:disabled {
+  cursor: default;
+  opacity: 0.6;
 }

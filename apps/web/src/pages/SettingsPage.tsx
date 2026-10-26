@@ -12,6 +12,7 @@ import {
   MonitorPlay,
   MonitorSmartphone,
   Network,
+  Plane,
   Printer,
   Radio,
   Router,
@@ -41,6 +42,7 @@ import { RolesCard } from './system/RolesCard';
 import { ScanSettingsCard } from './system/ScanSettingsCard';
 import { SettingsCard } from './system/SettingsCard';
 import { TaskTemplatesCard } from './system/TaskTemplatesCard';
+import { TrafficCard } from './system/TrafficCard';
 import { WifiApsCard, WifiCard } from './system/WifiCard';
 import { WorkstationsCard } from './system/WorkstationsCard';
 
@@ -106,6 +108,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="karten" title="Kartenquellen" icon={<MapIcon {...ICON} />} summary="Kartenstile, Luftbilder (WMS)">
             <MapSourcesCard />
+          </SettingsSection>
+          <SettingsSection id="verkehr" title="Luft- und Schiffsverkehr" icon={<Plane {...ICON} />} summary="Flugzeuge (ADS-B/MLAT) und Schiffe (AIS) auf der Karte">
+            <TrafficCard />
           </SettingsSection>
           <SettingsSection id="drucken" title="Druckserver" icon={<Printer {...ICON} />} summary="Ablage im Einsatz, vorausgewählter Drucker">
             <PrintSettingsCard />
