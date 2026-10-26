@@ -120,6 +120,11 @@ import {
   type ScanItem,
   type ScanSettings,
   type ScanSettingsInput,
+  type Message,
+  type MessageContext,
+  type MessageInput,
+  type MessageSettings,
+  type MessageSettingsInput,
 } from '@elvis/shared';
 
 export class ApiError extends Error {
@@ -272,8 +277,21 @@ export const api = {
   snoozeTask: (id: number, input: SnoozeInput) => request<Task>('POST', `/api/tasks/${id}/snooze`, input),
   removeTask: (id: number) => request<void>('DELETE', `/api/tasks/${id}`),
 
+  messages: (incidentId: number) => request<Message[]>('GET', `/api/incidents/${incidentId}/messages`),
+  messageContext: () => request<MessageContext>('GET', '/api/messages/context'),
+  createMessage: (incidentId: number, input: MessageInput) => request<Message>('POST', `/api/incidents/${incidentId}/messages`, input),
+  claimMessage: (id: number, force = false) => request<Message>('POST', `/api/messages/${id}/claim`, { force }),
+  releaseMessage: (id: number) => request<Message>('POST', `/api/messages/${id}/release`),
+  snoozeMessage: (id: number, minutes?: number) => request<Message>('POST', `/api/messages/${id}/snooze`, { minutes }),
+  replyMessage: (id: number, body: string) => request<Message>('POST', `/api/messages/${id}/reply`, { body }),
+  messageDone: (id: number) => request<Message>('POST', `/api/messages/${id}/done`),
+  routeMessage: (id: number, roleId: number) => request<Message>('POST', `/api/messages/${id}/route`, { roleId }),
+  ackMessage: (id: number) => request<Message>('POST', `/api/messages/${id}/ack`),
+  messageSettings: () => request<MessageSettings>('GET', '/api/system/messages'),
+  saveMessageSettings: (input: MessageSettingsInput) => request<MessageSettings>('PUT', '/api/system/messages', input),
+
   roles: () => request<RoleInfo[]>('GET', '/api/roles'),
-  chooseRole: (roleId: number | null) => request<{ role: Role | null }>('PUT', '/api/auth/role', { roleId }),
+  chooseRoles: (roleIds: number[]) => request<{ roles: Role[] }>('PUT', '/api/auth/role', { roleIds }),
   createRole: (input: RoleInput) => request<Role>('POST', '/api/system/roles', input),
   updateRole: (id: number, input: RoleInput) => request<Role>('PUT', `/api/system/roles/${id}`, input),
   removeRole: (id: number) => request<void>('DELETE', `/api/system/roles/${id}`),

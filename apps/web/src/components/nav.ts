@@ -8,6 +8,7 @@ import {
   FileText,
   History,
   LayoutDashboard,
+  Mail,
   ListChecks,
   Map,
   Package,
@@ -38,7 +39,7 @@ export interface NavItem {
   /** Only shown to admins. */
   requiresAdmin?: boolean;
   /** Zähler für Ungelesenes (siehe Layout) */
-  badge?: 'personnelSheets';
+  badge?: 'personnelSheets' | 'messages';
 }
 
 export interface NavGroup {
@@ -59,7 +60,7 @@ export const NAV: NavGroup[] = [
       { to: '/kameras', label: 'Kameras', icon: Cctv },
       { to: '/bildschirme', label: 'Bildschirme', icon: MonitorSmartphone },
       { to: '/drucken', label: 'Drucken', icon: Printer },
-      { to: '/scans', label: 'Dokumenten-Eingang', icon: ScanLine, requiresLogin: true, badge: 'personnelSheets' },
+      { to: '/scans', label: 'Posteingang', icon: ScanLine, requiresLogin: true, badge: 'personnelSheets' },
     ],
   },
   {
@@ -68,6 +69,7 @@ export const NAV: NavGroup[] = [
       { to: '/einsatz', label: 'Einsatz', icon: Siren, requiresLogin: true },
       { to: '/einsatz/tagebuch', label: 'Einsatztagebuch', icon: BookOpenText, requiresLogin: true, requiresIncident: true },
       { to: '/einsatz/aufgaben', label: 'Aufgaben', icon: ListChecks, requiresLogin: true, requiresIncident: true },
+      { to: '/einsatz/meldungen', label: 'Meldungen', icon: Mail, requiresLogin: true, requiresIncident: true, badge: 'messages' },
       { to: '/einsatz/kraefte', label: 'Kräfte', icon: Users, requiresLogin: true, requiresIncident: true },
       { to: '/einsatz/dokumente', label: 'Dokumente', icon: FileText, requiresLogin: true, requiresIncident: true },
     ],

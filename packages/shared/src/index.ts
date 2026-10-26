@@ -26,3 +26,4 @@ export * from './applink';
 export * from './personnel';
 export * from './mapsources';
 export * from './traffic';
+export * from './messages';

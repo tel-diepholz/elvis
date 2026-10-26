@@ -14,7 +14,7 @@ const toRole = (r: RoleRow): Role => ({ id: r.id, name: r.name, description: r.d
 
 /**
  * Rollen im Einsatz (z. B. Einsatzleiter, Führungsassistent, Funker). Admins pflegen die Liste,
- * jede Sitzung übernimmt höchstens eine Rolle (sessions.role_id). Besetzt ist eine Rolle,
+ * jede Sitzung kann mehrere Rollen übernehmen (session_roles). Besetzt ist eine Rolle,
  * solange eine gültige Sitzung sie hält – nach Abmeldung oder Ablauf wird sie wieder frei.
  */
 export class RoleService {
@@ -70,7 +70,7 @@ export class RoleService {
     return this.get(id);
   }
 
-  /** Sitzungen verlieren die Rolle, Aufgaben für sie gehen an alle (ON DELETE SET NULL) */
+  /** Sitzungen verlieren die Rolle (ON DELETE CASCADE), Aufgaben für sie gehen an alle (ON DELETE SET NULL) */
   remove(id: number): Role {
     const role = this.get(id);
     this.db.prepare('DELETE FROM roles WHERE id = ?').run(id);

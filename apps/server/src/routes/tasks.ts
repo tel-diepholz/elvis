@@ -5,7 +5,7 @@ import type { RoleService } from '../services/roles.js';
 import type { TaskService, TaskViewer } from '../services/tasks.js';
 import { actorOf, idParam, operatorOf, parse } from './util.js';
 
-const viewerOf = (req: FastifyRequest): TaskViewer => ({ userId: actorOf(req).id, roleId: req.roleId });
+const viewerOf = (req: FastifyRequest): TaskViewer => ({ userId: actorOf(req).id, roleIds: req.roleIds });
 
 export function taskRoutes(app: FastifyInstance, deps: { tasks: TaskService; roles: RoleService; store: Store; notify: (t: Topic[]) => void }): void {
   const { tasks, roles } = deps;
@@ -34,7 +34,7 @@ export function taskRoutes(app: FastifyInstance, deps: { tasks: TaskService; rol
   app.put('/api/system/roles/:id', async (req) => {
     const role = roles.update(parse(idParam, req.params).id, parse(roleInputSchema, req.body));
     audit(req, 'rollen', 'update', role.name);
-    deps.notify(['roles', 'tasks', 'taskTemplates', 'users']);
+    deps.notify(['roles', 'tasks', 'taskTemplates', 'users', 'messages']);
     return role;
   });
 
@@ -42,7 +42,7 @@ export function taskRoutes(app: FastifyInstance, deps: { tasks: TaskService; rol
     const role = roles.remove(parse(idParam, req.params).id);
     audit(req, 'rollen', 'delete', role.name);
     // Sitzungen verlieren die Rolle (Anmeldestatus), Aufgaben gehen an alle
-    deps.notify(['roles', 'tasks', 'taskTemplates', 'users']);
+    deps.notify(['roles', 'tasks', 'taskTemplates', 'users', 'messages']);
     return reply.code(204).send();
   });
 

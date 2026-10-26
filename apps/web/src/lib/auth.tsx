@@ -5,9 +5,9 @@ import { api } from './api';
 
 interface AuthState {
   user: User | null;
-  /** Rolle der Sitzung im Einsatz */
-  role: Role | null;
-  /** false direkt nach der Anmeldung – dann wird nach der Rolle gefragt */
+  /** Rollen der Sitzung im Einsatz */
+  roles: Role[];
+  /** false direkt nach der Anmeldung – dann wird nach den Rollen gefragt */
   roleChosen: boolean;
   hasUsers: boolean;
   loading: boolean;
@@ -15,7 +15,7 @@ interface AuthState {
   refresh: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthState>({ user: null, role: null, roleChosen: true, hasUsers: true, loading: true, refresh: async () => {} });
+const AuthContext = createContext<AuthState>({ user: null, roles: [], roleChosen: true, hasUsers: true, loading: true, refresh: async () => {} });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [qc]);
 
   return (
-    <AuthContext.Provider value={{ user: data?.user ?? null, role: data?.role ?? null, roleChosen: data?.roleChosen ?? true, hasUsers: data?.hasUsers ?? true, loading: isLoading, refresh }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user: data?.user ?? null, roles: data?.roles ?? [], roleChosen: data?.roleChosen ?? true, hasUsers: data?.hasUsers ?? true, loading: isLoading, refresh }}>{children}</AuthContext.Provider>
   );
 }
 

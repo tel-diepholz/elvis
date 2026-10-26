@@ -141,17 +141,24 @@ function FormShell({ onSubmit, error, pending, submitLabel, children }: { onSubm
   );
 }
 
+/** Vorbelegung einer neuen Aufgabe, z. B. aus einer Meldung */
+export interface TaskPrefill {
+  summary?: string;
+  description?: string;
+  assignee?: TaskAssignee;
+}
+
 /** Aufgabe im Einsatz anlegen oder bearbeiten */
-export function TaskForm({ initial, pending, onSubmit }: { initial?: Task; pending: boolean; onSubmit: (t: TaskInput) => void }) {
+export function TaskForm({ initial, prefill, pending, onSubmit }: { initial?: Task; prefill?: TaskPrefill; pending: boolean; onSubmit: (t: TaskInput) => void }) {
   const { user } = useAuth();
   const { clockOffsetMs } = useLive();
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.roles });
   const schedule = initial ? taskSchedule(initial) : null;
 
-  const [summary, setSummary] = useState(initial?.summary ?? '');
-  const [description, setDescription] = useState(initial?.description ?? '');
+  const [summary, setSummary] = useState(initial?.summary ?? prefill?.summary ?? '');
+  const [description, setDescription] = useState(initial?.description ?? prefill?.description ?? '');
   const [templateId, setTemplateId] = useState<number | null>(initial?.documentTemplateId ?? null);
-  const [assignee, setAssignee] = useState(encodeAssignee(initial?.assignee ?? { kind: 'all' }));
+  const [assignee, setAssignee] = useState(encodeAssignee(initial?.assignee ?? prefill?.assignee ?? { kind: 'all' }));
   const [recurring, setRecurring] = useState(schedule?.kind === 'interval');
   const [interval, setIntervalMinutes] = useState(schedule?.kind === 'interval' ? schedule.intervalMinutes : 90);
   const [dueMode, setDueMode] = useState<DueMode>(schedule?.dueAt ? 'at' : initial ? 'none' : 'in');

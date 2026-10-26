@@ -4927,12 +4927,21 @@ html.display-mode body {
   overflow-wrap: anywhere;
 }
 
-.due-panel {
+/* Hinweise links unten im Inhaltsbereich (Meldungen, fällige Aufgaben) – rechts unten erscheinen die Toasts */
+.panel-stack {
   position: fixed;
-  /* links unten im Inhaltsbereich – rechts unten erscheinen die Toasts */
   left: calc(var(--sidebar-w) + 16px);
   bottom: 16px;
   z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.panel-stack:empty {
+  display: none;
+}
+.due-panel {
   width: min(360px, calc(100vw - 32px));
   background: var(--bg-card);
   border: 1px solid var(--alarm);
@@ -4980,7 +4989,7 @@ html.display-mode body {
   color: var(--accent);
 }
 @media (max-width: 900px) {
-  .due-panel {
+  .panel-stack {
     left: 16px;
     bottom: calc(var(--bottombar-h) + 12px);
   }
@@ -5501,4 +5510,307 @@ select.auto-width {
   height: 8px;
   border: 1px solid rgba(0, 0, 0, 0.5);
   border-radius: 2px;
+}
+
+/* Meldungen */
+.message-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.message-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.message-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev);
+}
+.message-item.message-attention {
+  border-color: var(--alarm);
+  box-shadow: inset 3px 0 0 var(--alarm);
+}
+.message-item.message-done {
+  opacity: 0.75;
+}
+.message-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.message-item-main:hover {
+  background: var(--bg-hover);
+}
+.message-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.message-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.message-preview,
+.message-alert-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.message-item-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.message-parties {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  overflow-wrap: anywhere;
+}
+.message-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.message-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.message-claim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--muted-bg);
+  font-weight: 600;
+}
+.message-claim .btn {
+  margin-left: auto;
+}
+.message-body,
+.message-reply {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+.message-reply {
+  border-color: var(--info);
+}
+.message-reply h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--info);
+}
+.message-actions {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.message-route {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 1 1 100%;
+}
+.message-route .field {
+  flex: 1;
+}
+.message-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.message-alert:hover .due-summary {
+  text-decoration: underline;
+}
+
+/* Markdown-Darstellung */
+.markdown {
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+.markdown p,
+.markdown ul,
+.markdown ol {
+  margin: 0 0 8px;
+}
+.markdown ul,
+.markdown ol {
+  padding-left: 22px;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  margin: 10px 0 6px;
+  font-size: 16px;
+}
+.markdown a {
+  color: var(--accent);
+}
+.markdown code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+/* Markdown-Editor */
+.md-editor {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.md-editor:focus-within {
+  border-color: var(--border-strong);
+}
+.md-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+.md-toolbar-spacer {
+  flex: 1;
+}
+.md-editor textarea {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  resize: vertical;
+}
+.md-editor textarea:focus {
+  outline: none;
+}
+.md-preview {
+  min-height: 120px;
+  padding: 10px 12px;
+}
+
+/* Auswahlfeld mit Vorschlägen (Kräftesuche) */
+.combo {
+  position: relative;
+}
+.combo input {
+  width: 100%;
+  padding-right: 130px;
+}
+.combo-tag {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.combo-list {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+.combo-list li {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.combo-list li.active {
+  background: var(--bg-hover);
+}
+.combo-name {
+  font-weight: 600;
+}
+.combo-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.checkbox-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+fieldset.field {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.message-search {
+  flex: 1 1 240px;
+}
+.message-search input {
+  width: 100%;
+}
+.message-preview-label {
+  font-weight: 600;
+}
+.message-preview mark {
+  background: var(--warn-bg);
+  color: var(--text);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+.message-snooze {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--warn);
+  font-size: 13px;
 }

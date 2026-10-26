@@ -12,9 +12,9 @@ import { ChangePinForm, UserCreateForm } from './UserForms';
 
 type View = 'menu' | 'login' | 'pin' | 'role' | null;
 
-/** Kopfzeile: anmelden, Rolle und Benutzer wechseln, PIN ändern, abmelden – plus erzwungene Ersteinrichtung und Rollenwahl. */
+/** Kopfzeile: anmelden, Rollen wählen, Benutzer wechseln, PIN ändern, abmelden – plus erzwungene Ersteinrichtung und Rollenwahl. */
 export function AccountMenu() {
-  const { user, role, roleChosen, hasUsers, loading, refresh } = useAuth();
+  const { user, roles: myRoles, roleChosen, hasUsers, loading, refresh } = useAuth();
   const { data: roles } = useQuery({ queryKey: ['roles'], queryFn: api.roles, enabled: !!user });
   const toast = useToast();
   const [view, setView] = useState<View>(null);
@@ -36,7 +36,7 @@ export function AccountMenu() {
           {user.isAdmin ? <ShieldCheck size={18} /> : <UserRound size={18} />}
           <span className="desktop-only operator-name">
             {fullName(user)}
-            {role && <span className="operator-role">{role.name}</span>}
+            {myRoles.length > 0 && <span className="operator-role">{myRoles.map((r) => r.name).join(', ')}</span>}
           </span>
         </button>
       ) : (
@@ -55,7 +55,7 @@ export function AccountMenu() {
             <p className="muted">{user.isAdmin ? 'Admin' : 'Benutzer'} · Einträge und Bedienaktionen werden unter diesem Namen protokolliert.</p>
             {!!roles?.length && (
               <button className="btn" onClick={() => setView('role')}>
-                <UserRoundCog size={18} /> Rolle wechseln <span className="muted">({role?.name ?? 'ohne Rolle'})</span>
+                <UserRoundCog size={18} /> Rollen wählen <span className="muted">({myRoles.length ? myRoles.map((r) => r.name).join(', ') : 'ohne Rolle'})</span>
               </button>
             )}
             <button
@@ -81,12 +81,12 @@ export function AccountMenu() {
         <ChangePinForm onDone={close} />
       </Modal>
 
-      <Modal open={view === 'role'} title="Rolle wechseln" onClose={close}>
+      <Modal open={view === 'role'} title="Rollen wählen" onClose={close}>
         <RoleDialog onDone={close} />
       </Modal>
 
-      {/* Direkt nach der Anmeldung: welche Rolle übernimmt der Benutzer im Einsatz? */}
-      <Modal open={!!user && !roleChosen && !!roles?.length && view === null} title="Welche Rolle übernehmen Sie?" onClose={() => undefined} dismissible={false}>
+      {/* Direkt nach der Anmeldung: welche Rollen übernimmt der Benutzer im Einsatz? */}
+      <Modal open={!!user && !roleChosen && !!roles?.length && view === null} title="Welche Rollen übernehmen Sie?" onClose={() => undefined} dismissible={false}>
         <RoleDialog onDone={() => undefined} />
       </Modal>
 

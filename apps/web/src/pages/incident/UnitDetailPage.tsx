@@ -249,7 +249,7 @@ export function UnitDetailPage() {
                 <p>
                   Personalbogen hier ausfüllen – oder der Einheitsführer meldet sein Personal über die Cloud-Personalabfrage; eingereichte Bögen erscheinen im{' '}
                   <Link to="/scans">
-                    <Inbox size={14} /> Dokumenten-Eingang
+                    <Inbox size={14} /> Posteingang
                   </Link>
                   .
                 </p>

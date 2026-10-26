@@ -23,9 +23,9 @@ export interface AuthStatus {
   /** false beim allerersten Start – dann wird der erste Admin angelegt. */
   hasUsers: boolean;
   user: User | null;
-  /** Rolle der aktuellen Sitzung (siehe tasks.ts) */
-  role: Role | null;
-  /** false direkt nach der Anmeldung: die Oberfläche fragt dann nach der Rolle */
+  /** Rollen der aktuellen Sitzung (siehe tasks.ts) */
+  roles: Role[];
+  /** false direkt nach der Anmeldung: die Oberfläche fragt dann nach den Rollen */
   roleChosen: boolean;
 }
 

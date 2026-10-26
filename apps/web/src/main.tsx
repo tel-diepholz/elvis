@@ -15,7 +15,7 @@ import { ArchivedIncidentPage, ArchivePage } from './pages/ArchivePage';
 import { CommsPage } from './pages/CommsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { DockerHostsPage } from './pages/DockerHostsPage';
-import { DocumentsPage, JournalPage, TasksPage, UnitsPage } from './pages/IncidentAreaPages';
+import { DocumentsPage, JournalPage, MessagesPage, TasksPage, UnitsPage } from './pages/IncidentAreaPages';
 import { IncidentPage } from './pages/IncidentPage';
 import { UnitDetailPage } from './pages/incident/UnitDetailPage';
 import { MapPage } from './pages/MapPage';
@@ -73,6 +73,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="einsatz" element={<RequireLogin><IncidentPage /></RequireLogin>} />
                 <Route path="einsatz/tagebuch" element={<RequireLogin><JournalPage /></RequireLogin>} />
                 <Route path="einsatz/aufgaben" element={<RequireLogin><TasksPage /></RequireLogin>} />
+                <Route path="einsatz/meldungen" element={<RequireLogin><MessagesPage /></RequireLogin>} />
                 <Route path="einsatz/kraefte" element={<RequireLogin><UnitsPage /></RequireLogin>} />
                 {/* auch für abgeschlossene Einsätze (aus dem Archiv) */}
                 <Route path="einsatz/kraefte/:id" element={<RequireLogin><UnitDetailPage /></RequireLogin>} />

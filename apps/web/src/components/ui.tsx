@@ -125,7 +125,7 @@ export function Segmented<T extends string | number>({
   disabled,
   label,
 }: {
-  options: { value: T; label: ReactNode }[];
+  options: { value: T; label: ReactNode; disabled?: boolean; title?: string }[];
   value: T;
   onChange: (v: T) => void;
   disabled?: boolean;
@@ -141,7 +141,8 @@ export function Segmented<T extends string | number>({
           aria-checked={o.value === value}
           className={o.value === value ? 'active' : ''}
           onClick={() => onChange(o.value)}
-          disabled={disabled}
+          disabled={disabled || o.disabled}
+          title={o.title}
         >
           {o.label}
         </button>
@@ -197,7 +198,9 @@ export function Modal({
     <dialog
       ref={ref}
       className={`modal ${wide ? 'modal-wide' : ''}`}
-      onClose={onClose}
+      // Das close-Event kommt verzögert: Schließt der Dialog, weil ein anderer aufgeht (open → false),
+      // darf es den neuen Zustand nicht wieder zurücksetzen.
+      onClose={() => open && onClose()}
       onCancel={(e) => (dismissible ? onClose() : e.preventDefault())}
     >
       <header className="modal-header">
