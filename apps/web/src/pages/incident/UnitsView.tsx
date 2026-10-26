@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { BookmarkPlus, LogOut, MapPin, Pencil, Plus, Smartphone } from 'lucide-react';
+import { BookmarkPlus, ClipboardList, LogOut, MapPin, Pencil, Plus, Smartphone } from 'lucide-react';
 import {
   DEFAULT_UNIT_SIGN,
   UNIT_STATUS,
@@ -70,7 +71,7 @@ function SectionInput({ value, onChange, sections }: { value: string; onChange: 
 }
 
 /** Einheit im Einsatz neu erfassen oder bearbeiten (Status wird in der Liste geändert) */
-function UnitForm({
+export function UnitForm({
   initial,
   defaultParentId = null,
   units,
@@ -330,6 +331,8 @@ export function UnitsView({ incident, readOnly }: { incident: Incident; readOnly
   const appEnabled = !!relay?.enabled;
   const { data: appLinks = [] } = useQuery({ queryKey: ['appLinks', incident.id], queryFn: () => api.appLinks(incident.id), enabled: appEnabled });
   const linkOf = (u: Unit) => appLinks.find((l) => l.unitId === u.id);
+  const { data: personnel = [] } = useQuery({ queryKey: ['personnel', 'incident', incident.id], queryFn: () => api.incidentPersonnel(incident.id) });
+  const personnelOf = (u: Unit) => personnel.filter((p) => p.unitId === u.id).length;
 
   const add = useMutation({
     mutationFn: (u: NewUnit) => api.addUnit(incident.id, u),
@@ -390,11 +393,19 @@ export function UnitsView({ incident, readOnly }: { incident: Incident; readOnly
               <TacticalSignImage sign={u.sign} height={depth ? 28 : 34} />
               <div>
                 <div className="cell-title">
-                  {u.name} {u.role && <Badge tone="info">{u.role}</Badge>} {u.section && u.section !== groupSection && <Badge>{u.section}</Badge>}
+                  <Link to={`/einsatz/kraefte/${u.id}`} className="unit-link">
+                    {u.name}
+                  </Link>{' '}
+                  {u.role && <Badge tone="info">{u.role}</Badge>} {u.section && u.section !== groupSection && <Badge>{u.section}</Badge>}
                 </div>
                 <div className="cell-sub">{[u.callsign, u.organization].filter(Boolean).join(' · ') || '–'}</div>
                 {u.notes && <div className="cell-sub">{u.notes}</div>}
                 {linkOf(u) && <AppLinkInfo link={linkOf(u)!} />}
+                {personnelOf(u) > 0 && (
+                  <div className="cell-sub">
+                    <ClipboardList size={13} /> Personal: {personnelOf(u)}
+                  </div>
+                )}
               </div>
             </div>
           </td>

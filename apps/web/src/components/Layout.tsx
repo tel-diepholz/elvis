@@ -1,18 +1,29 @@
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Bell, Lock, Menu, Moon, Sun, Wifi, WifiOff, X } from 'lucide-react';
 import { useActiveIncident, useInfo, useNow, useSettings } from '../lib/hooks';
 import { useAlerts, useLive } from '../lib/live';
 import { fmtDate, fmtDtg, fmtTimeSec, fmtWeekday } from '../lib/format';
 import { useAuth } from '../lib/auth';
+import { api } from '../lib/api';
 import { effectiveTheme, toggleTheme, useTheme } from '../lib/theme';
 import { AlertPanel } from './AlertPanel';
 import { AccountMenu } from './auth/AccountMenu';
 import { DueTasksButton, DueTasksPanel } from './tasks/DueTasks';
 import { MOBILE_PRIMARY, NAV, type NavItem } from './nav';
 
+/** Neue Personalbögen im Dokumenten-Eingang */
+function useUnreadSheets(): number {
+  const { user } = useAuth();
+  const { data } = useQuery({ queryKey: ['personnelSheets', 'unread'], queryFn: api.personnelUnread, enabled: !!user });
+  return user ? (data?.count ?? 0) : 0;
+}
+
 function NavEntry({ item, locked, lockReason, onNavigate }: { item: NavItem; locked: boolean; lockReason?: string; onNavigate?: () => void }) {
   const Icon = item.icon;
+  const unread = useUnreadSheets();
+  const count = item.badge === 'personnelSheets' && !locked ? unread : 0;
   return (
     <NavLink
       to={item.to}
@@ -23,6 +34,11 @@ function NavEntry({ item, locked, lockReason, onNavigate }: { item: NavItem; loc
     >
       <Icon size={20} />
       <span>{item.label}</span>
+      {count > 0 && (
+        <span className="nav-badge" title={`${count} neue Personalbögen`} aria-label={`${count} neu`}>
+          {count}
+        </span>
+      )}
       {locked && <Lock size={14} className="nav-lock" aria-label="gesperrt" />}
     </NavLink>
   );
@@ -41,6 +57,7 @@ export function Layout() {
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const unreadSheets = useUnreadSheets();
 
   useEffect(() => setDrawerOpen(false), [location.pathname]);
 
@@ -89,8 +106,9 @@ export function Layout() {
       </aside>
 
       <header className="topbar">
-        <button className="btn btn-ghost btn-icon mobile-only" onClick={() => setDrawerOpen(true)} aria-label="Menü öffnen">
+        <button className="btn btn-ghost btn-icon mobile-only menu-btn" onClick={() => setDrawerOpen(true)} aria-label={unreadSheets ? `Menü öffnen – ${unreadSheets} neue Personalbögen` : 'Menü öffnen'}>
           <Menu size={22} />
+          {unreadSheets > 0 && <span className="menu-dot" />}
         </button>
 
         <div className="clock" title={fmtWeekday(now)}>
@@ -138,7 +156,7 @@ export function Layout() {
           return (
             <NavLink key={to} to={to} end className={({ isActive }) => `bottom-item ${isActive ? 'active' : ''}`}>
               <Icon size={22} />
-              <span>{item.label === 'Fahrzeugzustand' ? 'Fahrzeug' : item.label}</span>
+              <span>{item.label}</span>
             </NavLink>
           );
         })}

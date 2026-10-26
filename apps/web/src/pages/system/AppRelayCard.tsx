@@ -22,12 +22,12 @@ export function AppRelayCard() {
       {!s.enabled ? (
         <p className="muted">
           Abgeschaltet (<code>app.relayUrl</code> ist <code>null</code>). Damit Einsatzkräfte ihre Position mit der ELVIS-App senden können, in{' '}
-          <code>config/elvis.json</code> die Relay-Adresse eintragen (Vorgabe <code>https://elvis-relay.hhansen06.workers.dev</code>) oder per <code>ELVIS_APP_RELAY_URL</code>.
+          <code>config/elvis.json</code> die Adresse der Cloud-Anbindung eintragen (Vorgabe <code>https://elvis-relay.hhansen06.workers.dev</code>) oder per <code>ELVIS_APP_RELAY_URL</code>.
         </p>
       ) : (
         <>
           <dl className="kv">
-            <dt>Relay</dt>
+            <dt>Cloud-Dienst</dt>
             <dd className="mono">{s.relayUrl}</dd>
             <dt>Angemeldet</dt>
             <dd>{s.registered ? 'ja' : 'noch nicht (beim ersten Koppeln)'}</dd>

@@ -586,6 +586,56 @@ const MIGRATIONS: Migration[] = [
   );
   CREATE INDEX app_links_active ON app_links (device_id) WHERE ended_at IS NULL;
   `,
+  // Personal der Einheiten; Personalbögen aus dem Online-Formular (über das Relay) im Eingang
+  `
+  CREATE TABLE personnel_forms (
+    id TEXT PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    url TEXT NOT NULL,
+    private_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    closed_at TEXT,
+    relay_pending INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE personnel_sheets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    form_id TEXT,
+    incident_id INTEGER REFERENCES incidents(id) ON DELETE SET NULL,
+    unit_label TEXT NOT NULL,
+    persons TEXT NOT NULL,
+    submitted_at TEXT NOT NULL,
+    received_at TEXT NOT NULL,
+    read_at TEXT,
+    unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
+    assigned_at TEXT,
+    assigned_by TEXT
+  );
+  CREATE INDEX personnel_sheets_received ON personnel_sheets(received_at);
+  CREATE TABLE personnel (
+    id INTEGER PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    unit_id INTEGER NOT NULL REFERENCES units(id),
+    sheet_id INTEGER REFERENCES personnel_sheets(id) ON DELETE SET NULL,
+    last_name TEXT NOT NULL,
+    first_name TEXT NOT NULL,
+    birth_date TEXT NOT NULL DEFAULT '',
+    grade TEXT NOT NULL,
+    function TEXT NOT NULL DEFAULT '',
+    qualifications TEXT NOT NULL DEFAULT '[]',
+    organization TEXT NOT NULL DEFAULT '',
+    phone TEXT NOT NULL DEFAULT '',
+    address TEXT NOT NULL DEFAULT '',
+    employer TEXT NOT NULL DEFAULT '',
+    emergency_contact TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX personnel_unit ON personnel(unit_id);
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

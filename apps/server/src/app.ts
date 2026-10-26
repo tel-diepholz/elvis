@@ -41,7 +41,10 @@ import { SettingsService } from './services/settings.js';
 import { GeocoderService, type GeocodeFetch } from './services/geocoder.js';
 import { WeatherAlertWatch, WeatherService, type WeatherFetch } from './services/weather.js';
 import { weatherRoutes } from './routes/weather.js';
-import { AppLinkService, type RelayFetch } from './services/applinks.js';
+import { AppLinkService } from './services/applinks.js';
+import { RelayClient, type RelayFetch } from './services/relay.js';
+import { PersonnelService } from './services/personnel.js';
+import { personnelRoutes } from './routes/personnel.js';
 import { appLinkRoutes } from './routes/applinks.js';
 import { TileService } from './services/tiles.js';
 import type { UbusHttp } from './services/openwrt.js';
@@ -75,6 +78,7 @@ export interface App {
   scanning: ScanService;
   workstations: WorkstationService;
   appLinks: AppLinkService;
+  personnel: PersonnelService;
   start(): Promise<void>;
   close(): Promise<void>;
 }
@@ -140,6 +144,11 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const cleanup = () => {
     void documents.cleanupDrafts().catch((err) => server.log.warn({ err }, 'Entwürfe aufräumen fehlgeschlagen'));
     void scanning.cleanup().catch((err) => server.log.warn({ err }, 'Scan-Eingang aufräumen fehlgeschlagen'));
+    try {
+      personnel.cleanup();
+    } catch (err) {
+      server.log.warn({ err }, 'Personalbögen aufräumen fehlgeschlagen');
+    }
     void printing.cleanupGuest().catch((err) => server.log.warn({ err }, 'Gastaufträge aufräumen fehlgeschlagen'));
   };
   let cleanupTimer: NodeJS.Timeout | null = null;
@@ -160,7 +169,9 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     },
     (alerts) => devices.setExtraAlerts('weather', alerts),
   );
-  const appLinks = new AppLinkService(db, store, incidents, (t) => hub.invalidate(t), config.app.relayUrl, opts.relayFetch);
+  const relay = new RelayClient(db, config.app.relayUrl, opts.relayFetch);
+  const appLinks = new AppLinkService(db, store, incidents, (t) => hub.invalidate(t), relay);
+  const personnel = new PersonnelService(db, store, incidents, (t) => hub.invalidate(t), relay, () => settings.get().vehicle.name);
   const users = new UserService(db);
   const limiter = new LoginLimiter();
   const workstations = new WorkstationService(db, store, () => wifi.opsCredentials());
@@ -246,6 +257,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     mapRoutes(api, tiles, store, settings, () => hub.invalidate(['audit']), geocoder);
     weatherRoutes(api, weather, weatherWatch);
     appLinkRoutes(api, appLinks);
+    personnelRoutes(api, personnel);
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
       const parsed = settingsInputSchema.safeParse(req.body);
@@ -283,12 +295,14 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     scanning,
     workstations,
     appLinks,
+    personnel,
     async start() {
       await devices.start();
       videos.start();
       wifi.start();
       weatherWatch.start();
       appLinks.start();
+      personnel.start();
       cleanup();
       cleanupTimer = setInterval(cleanup, 3600_000);
       if (docker) {
@@ -308,6 +322,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       wifi.stop();
       weatherWatch.stop();
       appLinks.stop();
+      personnel.stop();
       if (cleanupTimer) clearInterval(cleanupTimer);
       docker?.hosts.stop();
       docker?.addons.stop();

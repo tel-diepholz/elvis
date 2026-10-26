@@ -281,6 +281,12 @@ export class IncidentService {
     return root;
   }
 
+  /** Systemeintrag im Tagebuch (z. B. Online-Formular bereitgestellt) */
+  incidentEvent(incidentId: number, text: string, operator: string): void {
+    this.system(incidentId, text, operator);
+    this.notify(['journal']);
+  }
+
   /** Tagebucheintrag zu einer Einheit (z. B. App gekoppelt) */
   unitEvent(unitId: number, text: string, operator: string): void {
     const unit = this.store.unit(unitId);

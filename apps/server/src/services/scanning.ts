@@ -24,7 +24,7 @@ import type { DocumentService } from './documents.js';
 const SETTINGS_KEY = 'scan:settings';
 /** Größte angenommene E-Mail (Base64 macht Anhänge um ein Drittel größer) */
 export const MAX_SCAN_MAIL_BYTES = 70 * 1024 * 1024;
-const ARCHIVE_BY = 'Scan-Eingang';
+const ARCHIVE_BY = 'Eingang';
 
 interface StoredSettings {
   enabled: boolean;
@@ -207,7 +207,7 @@ export class ScanService {
 
   private checkHost(session: SMTPServerSession): Error | null | undefined {
     const s = this.stored();
-    if (!s.enabled) return smtpError(421, 'Scan-Eingang ist abgeschaltet');
+    if (!s.enabled) return smtpError(421, 'Eingang ist abgeschaltet');
     const ip = plainIp(session.remoteAddress);
     if (s.allowedHosts.length && !s.allowedHosts.includes(ip)) return smtpError(554, `Absender ${ip} nicht zugelassen`);
     return null;

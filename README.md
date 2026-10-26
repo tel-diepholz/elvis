@@ -8,7 +8,7 @@ Einsatzführung (Einsatztagebuch, Kräfte, Dokumente) in einer Anwendung zusamme
 
 | Bereich | Verfügbarkeit | Inhalt |
 | --- | --- | --- |
-| **Fahrzeug** | immer | Übersicht, Fahrzeugzustand, Karte, Wetter, Netzwerk, Medien |
+| **Fahrzeug** | immer | Übersicht, Karte, Wetter, Netzwerk |
 | **Einsatz** | Unterseiten erst mit aufgelegtem Einsatz | Einsatztagebuch, Kräfteübersicht, Dokumente |
 | **Verwaltung** | immer | Einsatzarchiv (schreibgeschützt); nur Admins: Bedienprotokoll, Einstellungen |
 
@@ -144,6 +144,24 @@ eintragen:
 oder per Umgebungsvariable `ELVIS_APP_RELAY_URL` (`off` = aus). In der App ist die Adresse unter „Relay-Adresse“
 änderbar. Zum Ausprobieren das Relay lokal starten (siehe elvis-relay, Port 8787) und ELVIS mit
 `ELVIS_APP_RELAY_URL=http://localhost:8787` starten.
+
+## Personal der Einheiten (Personalbögen)
+
+Ein Klick auf eine Einheit in der Kräfteübersicht öffnet ihre **Detailseite** (`/einsatz/kraefte/:id`) mit Stammdaten,
+Untereinheiten und dem **Personal**. Über *Personalbogen ausfüllen* werden eine oder mehrere Personen erfasst: Name,
+Geburtsdatum, Einordnung (Führer / Unterführer / Mannschaft), Funktion, Qualifikationen, Organisation, Telefon,
+Anschrift, Arbeitgeber, Notfallkontakt und Bemerkung. Weicht die daraus gezählte Stärke von der Einheit ab, lässt sie
+sich mit einem Klick übernehmen. *An andere Einheit übergeben* verschiebt ausgewählte Personen zu einer anderen Einheit
+des Einsatzes (z. B. bei falsch zugeordnetem Bogen). Ins Einsatztagebuch kommen nur Anzahlen, keine Namen.
+
+**Cloud-Personalabfrage:** Im *Dokumenten-Eingang* erzeugt ELVIS einen Link (6–72 Stunden gültig, längstens bis zum
+Einsatzende; QR-Code und Kopieren). Einheitsführer tragen dort zuerst *Einheit / Fahrzeug* (Freitext) und dann ihr
+Personal ein. Der Browser verschlüsselt den Bogen mit dem öffentlichen Schlüssel dieses ELW (RSA-OAEP-256 +
+AES-256-GCM); das Relay speichert nur Unlesbares und löscht es mit der Abholung, spätestens nach 7 Tagen. ELVIS holt
+alle 15 s ab, solange ein Link gilt. Neue Bögen markiert ein Zähler am Menüpunkt *Dokumenten-Eingang*; dort werden sie einer
+Einheit zugeordnet oder als neue Einheit angelegt (Stärke aus dem Personal); danach verschwinden sie aus dem Eingang
+und stehen beim Personal der Einheit. Nicht zugeordnete Bögen bleiben 30 Tage im Dokumenten-Eingang. Mit dem Ende des Links verwirft
+ELVIS den privaten Schlüssel.
 
 ## Ausbreitungsberechnung (Karte)
 
@@ -362,7 +380,7 @@ Typ (Axis oder Demo ohne Hardware), Adresse, Benutzer, Passwort und die Auflösu
 zeigt Modell und Funktionen der Kamera.
 
 - **Livebild:** ELVIS holt das MJPEG-Bild von der Kamera (Digest-Anmeldung, MD5 oder SHA-256) und reicht es an den
-  Browser weiter (`/api/cameras/<id>/stream`). Zugangsdaten verlassen den Server nicht. Wie der Fahrzeugzustand ist das
+  Browser weiter (`/api/cameras/<id>/stream`). Zugangsdaten verlassen den Server nicht. Wie der Fahrzeugbereich ist das
   Bild auch für anonyme Arbeitsplätze sichtbar, bedienen können nur angemeldete Benutzer.
 - **Bedienung je nach Kamera:** ELVIS erkennt beim Verbinden, welche Funktionen eine Kamera hat, und zeigt nur die passenden Bedienelemente. „Verbindung testen“ zeigt, welche Schnittstelle was übernimmt.
   - Neuere Kameras mit Motorobjektiv: Optics Control API (`opticscontrol.cgi`, Version wird ausgehandelt) für Zoom,
@@ -521,8 +539,8 @@ VictronConnect lässt sich weiter parallel nutzen.
     auch neue Benutzer anlegen, aber ohne Admin-Rechte.
   - **Nur Admins** dürfen das Admin-Flag vergeben, andere Benutzer bearbeiten oder löschen, deren PIN zurücksetzen
     und Addons sowie Docker-Hosts verwalten. Der letzte Admin kann weder herabgestuft noch gelöscht werden.
-  - **Anonyme Arbeitsplätze** sehen den Fahrzeugbereich (Übersicht, Fahrzeugzustand, Karte, Wetter, Netzwerk,
-    Medien) nur lesend. Einsatzdaten, Archiv, Benutzer und System erfordern eine Anmeldung. Der Server setzt das
+  - **Anonyme Arbeitsplätze** sehen den Fahrzeugbereich (Übersicht, Karte, Wetter, Netzwerk)
+    nur lesend. Einsatzdaten, Archiv, Benutzer und System erfordern eine Anmeldung. Der Server setzt das
     durch (`apps/server/src/auth/access.ts`). Unbekannte Endpunkte verlangen standardmäßig eine Anmeldung.
 - **Sicherheit:**
   - Die PINs werden mit scrypt gehasht gespeichert.
@@ -737,13 +755,13 @@ Voraussetzung: Docker und Node auf dem Entwicklungsrechner.
     den Gastdrucker-Port (TCP 8631) und mDNS (UDP 5353) zum Docker-Host freigeben, nicht ELVIS oder Port 631.
   - Kein TLS (`ipps`) und kein WSD: Windows vor 10 21H2 findet den Drucker unter Umständen nicht.
 
-## Scannen (Scan-Eingang)
+## Scannen (Eingang)
 
 Multifunktionsgeräte wie der HP Color LaserJet Pro MFP 3302sdwg schicken Scans per **Scan an E-Mail** direkt an ELVIS.
 ELVIS betreibt dafür einen eigenen SMTP-Empfänger (Port 2525, `scan.smtpPort` in der Konfiguration bzw.
 `ELVIS_SCAN_PORT`, `off` schaltet ihn ab). Weitere Dienste braucht es nicht.
 
-- **Scan-Eingang** (*Fahrzeug → Scan-Eingang*, angemeldet): Jeder PDF-Anhang wird ein Scan mit Absender, Betreff und
+- **Dokumenten-Eingang** (*Fahrzeug → Dokumenten-Eingang*, angemeldet): Jeder PDF-Anhang wird ein Scan mit Absender, Betreff und
   Zeit. Ansehen, herunterladen, aus dem Eingang löschen oder nachträglich im laufenden Einsatz ablegen. Scans im Eingang
   werden nach der eingestellten Frist (Vorgabe 14 Tage) gelöscht; abgelegte Dokumente bleiben im Einsatz.
 - **Ablage:** Ist ein Einsatz eröffnet, legt ELVIS jeden Scan zusätzlich in dessen Dokumentverwaltung ab (Vorgabe

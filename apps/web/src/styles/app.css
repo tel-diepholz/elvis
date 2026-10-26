@@ -5209,3 +5209,128 @@ html.display-mode body {
   max-height: 100%;
   object-fit: contain;
 }
+
+/* ---------- Personal (Personalbögen) ---------- */
+.nav-badge {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+.menu-btn {
+  position: relative;
+}
+.menu-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.unit-link {
+  color: inherit;
+}
+.unit-link:hover {
+  color: var(--accent);
+}
+.unit-detail {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.unit-detail .kv {
+  flex: 1;
+  min-width: 220px;
+}
+.person-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.person-card > legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;
+  font-weight: 700;
+}
+.qual-picker {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.qual-picker > legend {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.qual-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 4px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.qual-chip input {
+  margin: 0;
+}
+.qual-chip.on {
+  border-color: var(--accent);
+  background: var(--alarm-bg);
+}
+.personnel-table .chip-row {
+  max-width: 260px;
+}
+.sheet-new {
+  border-left: 3px solid var(--accent);
+}
+.form-link {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.form-link .qr {
+  width: 168px;
+  height: 168px;
+  flex: none;
+  border-radius: var(--radius-sm);
+}
+.form-link-url {
+  word-break: break-all;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+select.auto-width {
+  width: auto;
+}
