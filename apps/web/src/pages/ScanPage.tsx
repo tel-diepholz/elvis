@@ -17,7 +17,7 @@ import {
 } from "../components/ui";
 import { PersonnelSheets } from "./inbox/PersonnelSheets";
 
-/** Dokumenten-Eingang: Personalbögen aus dem Online-Formular und per „Scan an E-Mail“ empfangene PDFs (während eines Einsatzes automatisch in dessen Dokumenten) */
+/** Posteingang: Personalbögen aus dem Online-Formular und per „Scan an E-Mail“ empfangene PDFs (während eines Einsatzes automatisch in dessen Dokumenten) */
 export function ScanPage() {
   const toast = useToast();
   const admin = !!useAuth().user?.isAdmin;
@@ -57,7 +57,7 @@ export function ScanPage() {
   return (
     <>
       <PageHeader
-        title="Dokumenten-Eingang"
+        title="Posteingang"
         subtitle="Hier werden Dokumente angezeigt, die ELVIS auf unterschiedlichen Wegen zugespielt worden sind."
       />
       <div className="stack">
@@ -185,11 +185,11 @@ export function ScanPage() {
                             className="btn btn-ghost btn-icon"
                             onClick={() =>
                               window.confirm(
-                                `Scan „${s.filename}“ aus dem Dokumenten-Eingang löschen?${s.archivedPath ? "\n\nDas abgelegte Dokument im Einsatz bleibt erhalten." : ""}`,
+                                `Scan „${s.filename}“ aus dem Posteingang löschen?${s.archivedPath ? "\n\nDas abgelegte Dokument im Einsatz bleibt erhalten." : ""}`,
                               ) && remove.mutate(s.id)
                             }
                             aria-label="Löschen"
-                            title="Aus dem Dokumenten-Eingang löschen"
+                            title="Aus dem Posteingang löschen"
                           >
                             <Trash2 size={16} />
                           </button>

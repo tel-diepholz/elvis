@@ -12,8 +12,8 @@ import { idParam, parse } from './util.js';
 declare module 'fastify' {
   interface FastifyRequest {
     user: User | null;
-    /** Rolle der Sitzung (null = ohne Rolle) */
-    roleId: number | null;
+    /** Rollen der Sitzung (leer = ohne Rolle) */
+    roleIds: number[];
     roleChosen: boolean;
   }
 }
@@ -35,6 +35,19 @@ export function authRoutes(
     store.addAudit({ operator, target, action, params: '', success, message });
     deps.notify(['audit']);
   };
+  /** Rollenwechsel im laufenden Einsatz ins Einsatztagebuch – nur was sich geändert hat */
+  const journalRoles = (user: User, before: number[], after: number[], suffix = '') => {
+    const incident = store.activeIncident();
+    if (!incident) return;
+    const names = (ids: number[]) => deps.roles.list().filter((r) => ids.includes(r.id)).map((r) => r.name);
+    const taken = names(after.filter((id) => !before.includes(id)));
+    const released = names(before.filter((id) => !after.includes(id)));
+    const part = (list: string[], verb: string) => (list.length ? [`${list.length === 1 ? 'Rolle' : 'Rollen'} ${verb}: ${list.join(', ')}`] : []);
+    const text = [...part(taken, 'übernommen'), ...part(released, 'abgegeben')].join('; ');
+    if (!text) return;
+    store.addJournal(incident.id, { category: 'system', text: `${text}${suffix}` }, fullName(user));
+    deps.notify(['journal']);
+  };
   const startSession = (req: FastifyRequest, reply: FastifyReply, user: User) => {
     const token = sessions.create(user.id, req.headers['user-agent'] ?? '');
     reply.setCookie(SESSION_COOKIE, token, { path: '/', httpOnly: true, sameSite: 'strict', maxAge: SESSION_MAX_MS / 1000 });
@@ -43,19 +56,21 @@ export function authRoutes(
   app.get('/api/auth/status', async (req): Promise<AuthStatus> => ({
     hasUsers: users.hasUsers(),
     user: req.user,
-    role: req.user && req.roleId !== null ? deps.roles.find(req.roleId) : null,
+    roles: req.user ? deps.roles.list().filter((r) => req.roleIds.includes(r.id)) : [],
     roleChosen: req.roleChosen,
   }));
 
-  // Rolle der eigenen Sitzung übernehmen oder abgeben (nach der Anmeldung und über das Profilmenü)
+  // Rollen der eigenen Sitzung übernehmen oder abgeben (nach der Anmeldung und über das Profilmenü)
   app.put('/api/auth/role', async (req) => {
     const user = requireUser(req);
-    const { roleId } = parse(roleChoiceSchema, req.body);
-    const role = roleId === null ? null : deps.roles.get(roleId);
-    sessions.setRole(req.cookies[SESSION_COOKIE]!, roleId);
-    audit(fullName(user), 'role', `user:${user.id}`, true, role ? `Rolle: ${role.name}` : 'ohne Rolle');
-    deps.notify(['roles', 'tasks']);
-    return { role };
+    const { roleIds } = parse(roleChoiceSchema, req.body);
+    for (const id of roleIds) if (!deps.roles.find(id)) throw new HttpError(400, 'Rolle nicht gefunden');
+    sessions.setRoles(req.cookies[SESSION_COOKIE]!, roleIds);
+    const roles = deps.roles.list().filter((r) => roleIds.includes(r.id));
+    audit(fullName(user), 'role', `user:${user.id}`, true, roles.length ? `Rollen: ${roles.map((r) => r.name).join(', ')}` : 'ohne Rolle');
+    journalRoles(user, req.roleIds, roleIds);
+    deps.notify(['roles', 'tasks', 'messages']);
+    return { roles };
   });
 
   // Namensauswahl für die Anmeldung – absichtlich ohne Anmeldung abrufbar.
@@ -88,9 +103,12 @@ export function authRoutes(
   app.post('/api/auth/logout', async (req, reply) => {
     const token = req.cookies[SESSION_COOKIE];
     if (token) sessions.revoke(token);
-    if (req.user) audit(fullName(req.user), 'logout', `user:${req.user.id}`);
-    // Eine übernommene Rolle wird frei – Aufgaben dafür gehen an alle
-    if (req.roleId !== null) deps.notify(['roles', 'tasks']);
+    if (req.user) {
+      audit(fullName(req.user), 'logout', `user:${req.user.id}`);
+      journalRoles(req.user, req.roleIds, [], ' (Abmeldung)');
+    }
+    // Übernommene Rollen werden frei – Aufgaben dafür gehen an alle
+    if (req.roleIds.length) deps.notify(['roles', 'tasks', 'messages']);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return reply.code(204).send();
   });
@@ -126,7 +144,7 @@ export function authRoutes(
     const user = await users.update(id, body, actor);
     if (body.pin !== undefined || (body.isAdmin === false && before.isAdmin)) {
       sessions.revokeUser(id);
-      deps.notify(['roles', 'tasks']);
+      deps.notify(['roles', 'tasks', 'messages']);
     }
     const changes = [
       body.pin !== undefined && 'PIN zurückgesetzt',
@@ -144,7 +162,7 @@ export function authRoutes(
     const user = users.remove(id, actor);
     audit(fullName(actor), 'delete', `user:${id}`, true, fullName(user));
     // Sitzungen enden, eigene Aufgaben gehen an alle
-    deps.notify(['users', 'roles', 'tasks']);
+    deps.notify(['users', 'roles', 'tasks', 'messages']);
     return reply.code(204).send();
   });
 }

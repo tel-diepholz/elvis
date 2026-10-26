@@ -338,7 +338,7 @@ const MIGRATIONS: Migration[] = [
     const insert = db.prepare("INSERT INTO document_folders (incident_id, name, system, created_by, created_at) VALUES (?, ?, 1, 'System', ?)");
     for (const name of ['Lagemeldungen', 'Befehle', 'Protokolle', 'Pläne', 'Fotos', 'Sonstiges']) insert.run(active.id, name, new Date().toISOString());
   },
-  // Rollen (Admins pflegen sie, jede Sitzung übernimmt höchstens eine) und Aufgaben je Einsatz samt Vorlagen
+  // Rollen (Admins pflegen sie, Sitzungen übernehmen sie) und Aufgaben je Einsatz samt Vorlagen
   `
   CREATE TABLE roles (
     id INTEGER PRIMARY KEY,
@@ -635,6 +635,66 @@ const MIGRATIONS: Migration[] = [
     updated_at TEXT NOT NULL
   );
   CREATE INDEX personnel_unit ON personnel(unit_id);
+  `,
+  // Mehrere Rollen je Sitzung (sessions.role_id bleibt ungenutzt stehen – Spalten mit Fremdschlüssel lassen sich nicht entfernen)
+  `
+  CREATE TABLE session_roles (
+    token_hash TEXT NOT NULL REFERENCES sessions(token_hash) ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    PRIMARY KEY (token_hash, role_id)
+  );
+  INSERT INTO session_roles (token_hash, role_id) SELECT token_hash, role_id FROM sessions WHERE role_id IS NOT NULL;
+  `,
+  // Meldungen zwischen Stab und Fernmeldern; *_text hält den Anzeigenamen fest, auch wenn Rolle oder Kraft wegfällt
+  `
+  CREATE TABLE messages (
+    id INTEGER PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    direction TEXT NOT NULL CHECK (direction IN ('out', 'in')),
+    body TEXT NOT NULL,
+    sender_role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL,
+    sender_unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
+    sender_text TEXT NOT NULL,
+    recipient_role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL,
+    recipient_unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
+    -- NULL = Eingang wartet auf Verteilung
+    recipient_text TEXT,
+    claimed_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    claimed_by TEXT,
+    claimed_at TEXT,
+    remind_at TEXT,
+    reply TEXT,
+    replied_at TEXT,
+    replied_by TEXT,
+    done_at TEXT,
+    done_by TEXT,
+    ack_at TEXT,
+    ack_by TEXT,
+    reply_to_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX messages_incident ON messages(incident_id);
+  `,
+  // Kopien von Meldungen an Rollen (z. B. S2 bekommt alle Eingangsmeldungen)
+  `
+  CREATE TABLE message_copies (
+    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    role_name TEXT NOT NULL,
+    ack_at TEXT,
+    ack_by TEXT,
+    PRIMARY KEY (message_id, role_id)
+  );
+  `,
+  // Verschieben („in 5 min erinnern“) bleibt an der Meldung vermerkt
+  `
+  ALTER TABLE messages ADD COLUMN snooze_count INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE messages ADD COLUMN snoozed_at TEXT;
+  ALTER TABLE messages ADD COLUMN snoozed_by TEXT;
+  ALTER TABLE messages ADD COLUMN snooze_minutes INTEGER;
   `,
 ];
 

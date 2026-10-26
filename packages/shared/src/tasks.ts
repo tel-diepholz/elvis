@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** Rollen und Aufgaben im Einsatz. Rollen pflegen Admins; jede Sitzung übernimmt höchstens eine Rolle. */
+/** Rollen und Aufgaben im Einsatz. Rollen pflegen Admins; jede Sitzung kann mehrere Rollen übernehmen. */
 
 export interface Role {
   id: number;
@@ -20,8 +20,8 @@ export const roleInputSchema = z.object({
 });
 export type RoleInput = z.infer<typeof roleInputSchema>;
 
-/** Rolle der eigenen Sitzung wählen; null = ohne Rolle */
-export const roleChoiceSchema = z.object({ roleId: z.number().int().positive().nullable() });
+/** Rollen der eigenen Sitzung wählen; leere Liste = ohne Rolle */
+export const roleChoiceSchema = z.object({ roleIds: z.array(z.number().int().positive()).max(100).transform((ids) => [...new Set(ids)]) });
 
 export const TASK_SUMMARY_MAX = 50;
 /** Intervall wiederkehrender Aufgaben: 1 min bis 7 Tage */

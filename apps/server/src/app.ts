@@ -65,6 +65,8 @@ import { TemplateService } from './services/templates.js';
 import { RoleService } from './services/roles.js';
 import { TaskService } from './services/tasks.js';
 import { taskRoutes } from './routes/tasks.js';
+import { MessageService } from './services/messages.js';
+import { messageRoutes } from './routes/messages.js';
 import { printingRoutes, type OfficeDownload } from './routes/printing.js';
 import { PrintService, type IppTransport } from './services/printing.js';
 import { scanningRoutes } from './routes/scanning.js';
@@ -129,6 +131,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const sessions = new SessionStore(db);
   const roles = new RoleService(db, sessions);
   const tasks = new TaskService(db, { store, roles, notify: (t) => hub.invalidate(t) });
+  const messages = new MessageService(db, { store, roles, notify: (t) => hub.invalidate(t) });
   const forces = new ForceService(db, store);
   const incidents = new IncidentService(
     store,
@@ -222,12 +225,13 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
 
   // Anmeldung: Sitzung aus dem Cookie auflösen und Zugriffsregeln durchsetzen (siehe auth/access.ts).
   server.decorateRequest('user', null);
-  server.decorateRequest('roleId', null);
+  // Fastify verbietet Arrays als Vorgabe (geteilte Referenz) – der Hook setzt den Wert bei jeder Anfrage
+  server.decorateRequest('roleIds', null as unknown as number[]);
   server.decorateRequest('roleChosen', false);
   server.addHook('onRequest', async (req) => {
     const session = sessions.resolve(req.cookies[SESSION_COOKIE]);
     req.user = session ? users.find(session.userId) : null;
-    req.roleId = req.user ? session!.roleId : null;
+    req.roleIds = req.user ? session!.roleIds : [];
     req.roleChosen = req.user ? session!.roleChosen : false;
     const level = accessLevel(req.method, req.url);
     if (level === 'public') return;
@@ -260,6 +264,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     });
     authRoutes(api, { users, sessions, limiter, store, roles, notify: (t) => hub.invalidate(t) });
     taskRoutes(api, { tasks, roles, store, notify: (t) => hub.invalidate(t) });
+    messageRoutes(api, { messages, store, notify: (t) => hub.invalidate(t) });
     deviceRoutes(api, devices, store, (t) => hub.invalidate(t));
     incidentRoutes(api, { incidents, forces, store, notify: (t) => hub.invalidate(t) });
     documentRoutes(api, { documents, templates, office, store, notify: (t) => hub.invalidate(t) });

@@ -11,19 +11,23 @@ import { effectiveTheme, toggleTheme, useTheme } from '../lib/theme';
 import { AlertPanel } from './AlertPanel';
 import { AccountMenu } from './auth/AccountMenu';
 import { DueTasksButton, DueTasksPanel } from './tasks/DueTasks';
+import { MessagesButton, MessagesPanel } from './messages/MessageAlerts';
+import { useMessageAttention } from './messages/messageHooks';
 import { MOBILE_PRIMARY, NAV, type NavItem } from './nav';
 
-/** Neue Personalbögen im Dokumenten-Eingang */
+/** Neue Personalbögen im Posteingang */
 function useUnreadSheets(): number {
   const { user } = useAuth();
   const { data } = useQuery({ queryKey: ['personnelSheets', 'unread'], queryFn: api.personnelUnread, enabled: !!user });
   return user ? (data?.count ?? 0) : 0;
 }
 
-function NavEntry({ item, locked, lockReason, onNavigate }: { item: NavItem; locked: boolean; lockReason?: string; onNavigate?: () => void }) {
+type Badges = Record<NonNullable<NavItem['badge']>, number>;
+const BADGE_TITLE: Record<keyof Badges, string> = { personnelSheets: 'neue Personalbögen', messages: 'Meldungen zu bearbeiten' };
+
+function NavEntry({ item, locked, lockReason, onNavigate, badges }: { item: NavItem; locked: boolean; lockReason?: string; onNavigate?: () => void; badges: Badges }) {
   const Icon = item.icon;
-  const unread = useUnreadSheets();
-  const count = item.badge === 'personnelSheets' && !locked ? unread : 0;
+  const count = item.badge && !locked ? badges[item.badge] : 0;
   return (
     <NavLink
       to={item.to}
@@ -35,7 +39,7 @@ function NavEntry({ item, locked, lockReason, onNavigate }: { item: NavItem; loc
       <Icon size={20} />
       <span>{item.label}</span>
       {count > 0 && (
-        <span className="nav-badge" title={`${count} neue Personalbögen`} aria-label={`${count} neu`}>
+        <span className="nav-badge" title={`${count} ${BADGE_TITLE[item.badge!]}`} aria-label={`${count} neu`}>
           {count}
         </span>
       )}
@@ -58,6 +62,8 @@ export function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const unreadSheets = useUnreadSheets();
+  const messageCount = useMessageAttention(now).attention.length;
+  const badges: Badges = { personnelSheets: unreadSheets, messages: messageCount };
 
   useEffect(() => setDrawerOpen(false), [location.pathname]);
 
@@ -84,6 +90,7 @@ export function Layout() {
                   item={item}
                   locked={needsLogin || noIncident}
                   lockReason={needsLogin ? 'Anmeldung erforderlich' : 'Erst verfügbar, wenn ein Einsatz aufgelegt ist'}
+                  badges={badges}
                 />
               );
             })}
@@ -108,7 +115,7 @@ export function Layout() {
       <header className="topbar">
         <button className="btn btn-ghost btn-icon mobile-only menu-btn" onClick={() => setDrawerOpen(true)} aria-label={unreadSheets ? `Menü öffnen – ${unreadSheets} neue Personalbögen` : 'Menü öffnen'}>
           <Menu size={22} />
-          {unreadSheets > 0 && <span className="menu-dot" />}
+          {unreadSheets + messageCount > 0 && <span className="menu-dot" />}
         </button>
 
         <div className="clock" title={fmtWeekday(now)}>
@@ -126,6 +133,7 @@ export function Layout() {
             {connection === 'online' ? <Wifi size={18} /> : <WifiOff size={18} />}
             <span className="desktop-only">{connection === 'online' ? 'Live' : connection === 'connecting' ? 'Verbinde …' : 'Offline'}</span>
           </span>
+          <MessagesButton />
           <DueTasksButton />
           <button className={`btn btn-ghost btn-icon alert-btn tone-${alertTone}`} onClick={() => setAlertsOpen((o) => !o)} aria-label={`${alerts.length} Meldungen`}>
             <Bell size={20} />
@@ -181,7 +189,10 @@ export function Layout() {
       )}
 
       {alertsOpen && <AlertPanel onClose={() => setAlertsOpen(false)} />}
-      <DueTasksPanel />
+      <div className="panel-stack">
+        <MessagesPanel />
+        <DueTasksPanel />
+      </div>
     </div>
   );
 }

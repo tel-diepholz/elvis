@@ -43,7 +43,7 @@ function FormLinkCard() {
           <QrCode data={form.url} label="QR-Code zur Cloud-Personalabfrage" className="qr" />
           <div className="form">
             <p className="muted">
-              Einheitsführer öffnen diesen Link am Handy und tragen Einheit / Fahrzeug und ihr Personal ein. Eingereichte Bögen erscheinen hier im Dokumenten-Eingang. Gültig bis{' '}
+              Einheitsführer öffnen diesen Link am Handy und tragen Einheit / Fahrzeug und ihr Personal ein. Eingereichte Bögen erscheinen hier im Posteingang. Gültig bis{' '}
               {fmtDateTime(form.expiresAt)}, längstens bis zum Einsatzende.
             </p>
             <div className="btn-row">
@@ -147,7 +147,7 @@ function AssignForm({ sheet, units, pending, onSubmit }: { sheet: PersonnelSheet
   );
 }
 
-/** Personalbögen im Dokumenten-Eingang: neue markieren, ansehen, einer Einheit zuordnen (danach sind sie beim Personal der Einheit) */
+/** Personalbögen im Posteingang: neue markieren, ansehen, einer Einheit zuordnen (danach sind sie beim Personal der Einheit) */
 export function PersonnelSheets() {
   const toast = useToast();
   const onError = (e: Error) => toast('error', e.message);
@@ -231,11 +231,11 @@ export function PersonnelSheets() {
                           <button
                             className="btn btn-ghost btn-icon"
                             onClick={() =>
-                              window.confirm(`Personalbogen „${s.unitLabel}“ aus dem Dokumenten-Eingang löschen?`) &&
+                              window.confirm(`Personalbogen „${s.unitLabel}“ aus dem Posteingang löschen?`) &&
                               remove.mutate(s)
                             }
                             aria-label="Löschen"
-                            title="Aus dem Dokumenten-Eingang löschen"
+                            title="Aus dem Posteingang löschen"
                           >
                             <Trash2 size={16} />
                           </button>

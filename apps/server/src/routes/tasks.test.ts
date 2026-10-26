@@ -49,30 +49,56 @@ describe('Rollen', () => {
     expect((await req<RoleInfo[]>('GET', '/api/roles', undefined, cookie)).body).toEqual([{ ...el, holders: [] }]);
   });
 
-  it('fragt nach der Anmeldung nach der Rolle und gibt sie beim Abmelden frei', async () => {
+  it('fragt nach der Anmeldung nach den Rollen und gibt sie beim Abmelden frei', async () => {
     const funk = await role('Funk');
+    const lage = await role('Lage');
     const { cookie } = await userCookie();
-    expect((await req<AuthStatus>('GET', '/api/auth/status', undefined, cookie)).body).toMatchObject({ role: null, roleChosen: false });
+    expect((await req<AuthStatus>('GET', '/api/auth/status', undefined, cookie)).body).toMatchObject({ roles: [], roleChosen: false });
 
-    expect((await req('PUT', '/api/auth/role', { roleId: funk.id }, cookie)).status).toBe(200);
-    expect((await req<AuthStatus>('GET', '/api/auth/status', undefined, cookie)).body).toMatchObject({ role: { name: 'Funk' }, roleChosen: true });
-    expect((await req<RoleInfo[]>('GET', '/api/roles')).body[0]?.holders).toEqual(['Anna Test']);
+    // mehrere Rollen gleichzeitig, doppelte IDs zählen einmal
+    expect((await req('PUT', '/api/auth/role', { roleIds: [funk.id, lage.id, funk.id] }, cookie)).status).toBe(200);
+    expect((await req<AuthStatus>('GET', '/api/auth/status', undefined, cookie)).body).toMatchObject({ roles: [{ name: 'Funk' }, { name: 'Lage' }], roleChosen: true });
+    expect((await req<RoleInfo[]>('GET', '/api/roles')).body.map((r) => r.holders)).toEqual([['Anna Test'], ['Anna Test']]);
+    expect((await req('PUT', '/api/auth/role', { roleIds: [funk.id, 99] }, cookie)).status).toBe(400);
+    expect((await req<AuthStatus>('GET', '/api/auth/status', undefined, cookie)).body.roles).toHaveLength(2);
 
     // Wechsel über das Profilmenü, „ohne Rolle“ zählt als gewählt
-    await req('PUT', '/api/auth/role', { roleId: null }, cookie);
-    expect((await req<AuthStatus>('GET', '/api/auth/status', undefined, cookie)).body).toMatchObject({ role: null, roleChosen: true });
+    await req('PUT', '/api/auth/role', { roleIds: [] }, cookie);
+    expect((await req<AuthStatus>('GET', '/api/auth/status', undefined, cookie)).body).toMatchObject({ roles: [], roleChosen: true });
 
-    await req('PUT', '/api/auth/role', { roleId: funk.id }, cookie);
+    await req('PUT', '/api/auth/role', { roleIds: [funk.id] }, cookie);
     await req('POST', '/api/auth/logout', undefined, cookie);
     expect((await req<RoleInfo[]>('GET', '/api/roles')).body[0]?.holders).toEqual([]);
-    expect((await req('PUT', '/api/auth/role', { roleId: null }, '')).status).toBe(401);
+    expect((await req('PUT', '/api/auth/role', { roleIds: [] }, '')).status).toBe(401);
+  });
+
+  it('trägt Rollenwechsel im laufenden Einsatz ins Einsatztagebuch ein', async () => {
+    const funk = await role('Funk');
+    const lage = await role('Lage');
+    const el = await role('Einsatzleiter');
+    const { cookie } = await userCookie();
+    // ohne Einsatz nur im Audit-Protokoll
+    await req('PUT', '/api/auth/role', { roleIds: [el.id] }, cookie);
+    const { id } = await incident();
+    const journal = async () => (await req<JournalEntry[]>('GET', `/api/incidents/${id}/journal`)).body.filter((e) => e.category === 'system' && e.author === 'Anna Test').map((e) => e.text);
+
+    await req('PUT', '/api/auth/role', { roleIds: [el.id, funk.id, lage.id] }, cookie);
+    await req('PUT', '/api/auth/role', { roleIds: [el.id, funk.id, lage.id] }, cookie); // unverändert: kein Eintrag
+    await req('PUT', '/api/auth/role', { roleIds: [funk.id] }, cookie);
+    await req('POST', '/api/auth/logout', undefined, cookie);
+    expect(await journal()).toEqual([
+      'Rollen übernommen: Funk, Lage',
+      'Rollen abgegeben: Lage, Einsatzleiter', // in der Reihenfolge der Rollenliste
+      'Rolle abgegeben: Funk (Abmeldung)',
+    ]);
   });
 
   it('Löschen nimmt Sitzungen die Rolle', async () => {
     const funk = await role('Funk');
-    await req('PUT', '/api/auth/role', { roleId: funk.id });
+    const lage = await role('Lage');
+    await req('PUT', '/api/auth/role', { roleIds: [funk.id, lage.id] });
     expect((await req('DELETE', `/api/system/roles/${funk.id}`)).status).toBe(204);
-    expect((await req<AuthStatus>('GET', '/api/auth/status')).body).toMatchObject({ role: null, roleChosen: true });
+    expect((await req<AuthStatus>('GET', '/api/auth/status')).body).toMatchObject({ roles: [{ name: 'Lage' }], roleChosen: true });
   });
 });
 
@@ -81,8 +107,8 @@ describe('Aufgaben verteilen', () => {
     const el = await role('Einsatzleiter');
     const funk = await role('Funk');
     const anna = await userCookie();
-    await req('PUT', '/api/auth/role', { roleId: el.id });
-    await req('PUT', '/api/auth/role', { roleId: funk.id }, anna.cookie);
+    await req('PUT', '/api/auth/role', { roleIds: [el.id] });
+    await req('PUT', '/api/auth/role', { roleIds: [funk.id] }, anna.cookie);
     const { id } = await incident();
 
     const post = (summary: string, assignee: object, cookie = admin) => req<Task>('POST', `/api/incidents/${id}/tasks`, { summary, assignee, schedule: once() }, cookie);
@@ -101,6 +127,29 @@ describe('Aufgaben verteilen', () => {
     const tasks = await tasksOf(id);
     expect(tasks.find((t) => t.summary === 'Funkskizze')).toMatchObject({ mine: true, roleVacant: true });
     expect(tasks.find((t) => t.summary === 'Müller anrufen')?.mine).toBe(false);
+  });
+
+  it('mit mehreren Rollen gehören die Aufgaben aller übernommenen Rollen dazu', async () => {
+    const el = await role('Einsatzleiter');
+    const funk = await role('Funk');
+    const lage = await role('Lage');
+    const anna = await userCookie();
+    await req('PUT', '/api/auth/role', { roleIds: [el.id, funk.id] }, anna.cookie);
+    await req('PUT', '/api/auth/role', { roleIds: [lage.id] });
+    const { id } = await incident();
+    for (const [summary, r] of [['Lagebesprechung', el], ['Funkskizze', funk], ['Lagekarte', lage]] as const) {
+      await req('POST', `/api/incidents/${id}/tasks`, { summary, assignee: { kind: 'role', roleId: r.id }, schedule: once() });
+    }
+
+    const mine = async (cookie: string) => (await tasksOf(id, cookie)).filter((t) => t.mine).map((t) => t.summary).sort();
+    expect(await mine(anna.cookie)).toEqual(['Funkskizze', 'Lagebesprechung']);
+    expect(await mine(admin)).toEqual(['Lagekarte']);
+
+    // eine Rolle abgeben: deren Aufgaben sind unbesetzt und gehen an alle, die andere bleibt
+    await req('PUT', '/api/auth/role', { roleIds: [funk.id] }, anna.cookie);
+    expect(await mine(anna.cookie)).toEqual(['Funkskizze', 'Lagebesprechung']);
+    expect(await mine(admin)).toEqual(['Lagebesprechung', 'Lagekarte']);
+    expect((await tasksOf(id, anna.cookie)).find((t) => t.summary === 'Lagebesprechung')?.roleVacant).toBe(true);
   });
 
   it('prüft Kurztext und Vorlage', async () => {

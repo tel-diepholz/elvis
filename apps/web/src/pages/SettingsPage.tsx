@@ -8,6 +8,7 @@ import {
   FolderTree,
   Laptop,
   ListTodo,
+  Mail,
   Map as MapIcon,
   MonitorPlay,
   MonitorSmartphone,
@@ -35,6 +36,7 @@ import { DisplaysCard } from './system/DisplaysCard';
 import { DocumentFoldersCard } from './system/DocumentFoldersCard';
 import { ForcesCard } from './system/ForcesCard';
 import { MapSourcesCard } from './system/MapSourcesCard';
+import { MessageSettingsCard } from './system/MessageSettingsCard';
 import { ModuleSection } from './system/ModuleSection';
 import { MonitoringCard } from './system/MonitoringCard';
 import { PrintSettingsCard } from './system/PrintSettingsCard';
@@ -135,6 +137,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="aufgaben" title="Aufgabenvorlagen" icon={<ListTodo {...ICON} />}>
             <TaskTemplatesCard />
+          </SettingsSection>
+          <SettingsSection id="meldungen" title="Meldungen" icon={<Mail {...ICON} />} summary="Fernmelder und Dispatcher">
+            <MessageSettingsCard />
           </SettingsSection>
         </SettingsGroup>
       </div>

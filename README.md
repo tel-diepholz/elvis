@@ -154,13 +154,13 @@ Anschrift, Arbeitgeber, Notfallkontakt und Bemerkung. Weicht die daraus gezählt
 sich mit einem Klick übernehmen. *An andere Einheit übergeben* verschiebt ausgewählte Personen zu einer anderen Einheit
 des Einsatzes (z. B. bei falsch zugeordnetem Bogen). Ins Einsatztagebuch kommen nur Anzahlen, keine Namen.
 
-**Cloud-Personalabfrage:** Im *Dokumenten-Eingang* erzeugt ELVIS einen Link (6–72 Stunden gültig, längstens bis zum
+**Cloud-Personalabfrage:** Im *Posteingang* erzeugt ELVIS einen Link (6–72 Stunden gültig, längstens bis zum
 Einsatzende; QR-Code und Kopieren). Einheitsführer tragen dort zuerst *Einheit / Fahrzeug* (Freitext) und dann ihr
 Personal ein. Der Browser verschlüsselt den Bogen mit dem öffentlichen Schlüssel dieses ELW (RSA-OAEP-256 +
 AES-256-GCM); das Relay speichert nur Unlesbares und löscht es mit der Abholung, spätestens nach 7 Tagen. ELVIS holt
-alle 15 s ab, solange ein Link gilt. Neue Bögen markiert ein Zähler am Menüpunkt *Dokumenten-Eingang*; dort werden sie einer
+alle 15 s ab, solange ein Link gilt. Neue Bögen markiert ein Zähler am Menüpunkt *Posteingang*; dort werden sie einer
 Einheit zugeordnet oder als neue Einheit angelegt (Stärke aus dem Personal); danach verschwinden sie aus dem Eingang
-und stehen beim Personal der Einheit. Nicht zugeordnete Bögen bleiben 30 Tage im Dokumenten-Eingang. Mit dem Ende des Links verwirft
+und stehen beim Personal der Einheit. Nicht zugeordnete Bögen bleiben 30 Tage im Posteingang. Mit dem Ende des Links verwirft
 ELVIS den privaten Schlüssel.
 
 ## Ausbreitungsberechnung (Karte)
@@ -808,7 +808,7 @@ Multifunktionsgeräte wie der HP Color LaserJet Pro MFP 3302sdwg schicken Scans 
 ELVIS betreibt dafür einen eigenen SMTP-Empfänger (Port 2525, `scan.smtpPort` in der Konfiguration bzw.
 `ELVIS_SCAN_PORT`, `off` schaltet ihn ab). Weitere Dienste braucht es nicht.
 
-- **Dokumenten-Eingang** (*Fahrzeug → Dokumenten-Eingang*, angemeldet): Jeder PDF-Anhang wird ein Scan mit Absender, Betreff und
+- **Posteingang** (*Fahrzeug → Posteingang*, angemeldet): Jeder PDF-Anhang wird ein Scan mit Absender, Betreff und
   Zeit. Ansehen, herunterladen, aus dem Eingang löschen oder nachträglich im laufenden Einsatz ablegen. Scans im Eingang
   werden nach der eingestellten Frist (Vorgabe 14 Tage) gelöscht; abgelegte Dokumente bleiben im Einsatz.
 - **Ablage:** Ist ein Einsatz eröffnet, legt ELVIS jeden Scan zusätzlich in dessen Dokumentverwaltung ab (Vorgabe

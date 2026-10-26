@@ -26,6 +26,8 @@ describe('Migrationen', () => {
       const legacy = new Database(join(dir, 'elvis.sqlite'));
       legacy.exec('ALTER TABLE addons DROP COLUMN manifest');
       // v19: Rollen und Aufgaben (Spalten mit Fremdschlüssel lassen sich nicht einzeln entfernen)
+      legacy.exec('DROP TABLE message_copies; DROP TABLE messages'); // v33–v35
+      legacy.exec('DROP TABLE session_roles'); // v32
       legacy.exec('DROP TABLE tasks; DROP TABLE task_templates; DROP TABLE sessions; DROP TABLE roles');
       legacy.exec(
         "CREATE TABLE sessions (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, user_agent TEXT NOT NULL DEFAULT '')",
@@ -65,8 +67,9 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec('DROP TABLE message_copies; DROP TABLE messages');
       legacy.exec(BEFORE_FORCES);
-      legacy.exec('DROP TABLE monitoring_targets; DROP TABLE guest_print_jobs; DROP TABLE workstations; DROP TABLE bluetooth_devices; DROP TABLE display_images; DROP TABLE personnel; DROP TABLE personnel_sheets; DROP TABLE personnel_forms; DROP TABLE app_links');
+      legacy.exec('DROP TABLE monitoring_targets; DROP TABLE guest_print_jobs; DROP TABLE workstations; DROP TABLE bluetooth_devices; DROP TABLE display_images; DROP TABLE personnel; DROP TABLE personnel_sheets; DROP TABLE personnel_forms; DROP TABLE app_links; DROP TABLE session_roles');
       legacy.exec("INSERT INTO incidents (id, title, started_at) VALUES (1, 'Brand', 't0')");
       legacy.exec(`INSERT INTO units (incident_id, callsign, unit_type, crew, fms_status, arrived_at, released_at, updated_at) VALUES
         (1, 'Florian 1/44-1', 'HLF 20', 8, 4, 't1', NULL, 't1'), (1, 'Florian 1/19-1', 'LF 10 Sonderausführung', 5, 1, 't2', 't3', 't3')`);

@@ -2,6 +2,7 @@ import { PageHeader } from '../components/ui';
 import { RequireIncident } from '../components/RequireIncident';
 import { DocumentsView } from './incident/DocumentsView';
 import { JournalView } from './incident/JournalView';
+import { MessagesView } from './incident/MessagesView';
 import { TasksView } from './incident/TasksView';
 import { UnitsView } from './incident/UnitsView';
 
@@ -27,6 +28,19 @@ export function TasksPage() {
         <>
           <PageHeader title="Aufgaben" subtitle={subtitle(incident)} />
           <TasksView incident={incident} />
+        </>
+      )}
+    </RequireIncident>
+  );
+}
+
+export function MessagesPage() {
+  return (
+    <RequireIncident>
+      {(incident) => (
+        <>
+          <PageHeader title="Meldungen" subtitle={subtitle(incident)} />
+          <MessagesView incident={incident} />
         </>
       )}
     </RequireIncident>

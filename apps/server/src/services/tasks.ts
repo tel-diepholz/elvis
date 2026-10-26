@@ -65,10 +65,10 @@ const TEMPLATE_SELECT = `
   LEFT JOIN templates tpl ON tpl.id = tt.document_template_id
   LEFT JOIN roles r ON r.id = tt.role_id`;
 
-/** Wer fragt: Benutzer und Rolle seiner Sitzung */
+/** Wer fragt: Benutzer und Rollen seiner Sitzung */
 export interface TaskViewer {
   userId: number;
-  roleId: number | null;
+  roleIds: number[];
 }
 
 export interface TaskActor {
@@ -80,7 +80,7 @@ const iso = (ms: number) => new Date(ms).toISOString();
 
 /**
  * Aufgaben im Einsatz. Verteilung: ohne Verantwortlichen an alle; an einen Benutzer (nur sich selbst);
- * an eine Rolle – ist sie im Moment von niemandem besetzt, sehen sie alle.
+ * an eine Rolle – an alle, die sie (auch neben weiteren Rollen) übernommen haben; ist sie von niemandem besetzt, sehen sie alle.
  * Einmalige Aufgaben werden erledigt, wiederkehrende rücken im festen Takt weiter, bis die Serie beendet wird.
  * Schieben setzt snoozed_until, die planmäßige Fälligkeit (und damit der Takt) bleibt unberührt.
  */
@@ -105,7 +105,7 @@ export class TaskService {
       !viewer ||
       (r.assignee_user_id === null && r.assignee_role_id === null) ||
       r.assignee_user_id === viewer.userId ||
-      (r.assignee_role_id !== null && (roleVacant || r.assignee_role_id === viewer.roleId));
+      (r.assignee_role_id !== null && (roleVacant || viewer.roleIds.includes(r.assignee_role_id)));
     return {
       id: r.id,
       incidentId: r.incident_id,
