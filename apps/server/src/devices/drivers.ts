@@ -168,8 +168,16 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
             max: 3600,
             help: 'So lange darf ein Gerät schweigen, bevor ELVIS „kein Empfang“ meldet. Victron sendet etwa jede Sekunde.',
           },
+          passive: {
+            type: 'bool',
+            label: 'Passiv mitlesen',
+            required: false,
+            default: true,
+            help: 'Durchgehend mitlesen statt alle 10 s neu zu suchen (BlueZ Advertisement Monitor). Schont den Dongle – manche Realtek-Dongles hängen sich bei der aktiven Suche nach einer Weile auf. Kann BlueZ das nicht, sucht ELVIS automatisch aktiv.',
+          },
         },
-        create: (o, deps) => new BluetoothAdapter('bluez', deps.bluetooth, new BluezScanner(String(o.adapter || 'hci0')), { staleMs: Number(o.staleSeconds || 60) * 1000 }),
+        create: (o, deps) =>
+          new BluetoothAdapter('bluez', deps.bluetooth, new BluezScanner(String(o.adapter || 'hci0'), undefined, { passive: o.passive !== false }), { staleMs: Number(o.staleSeconds || 60) * 1000 }),
       },
     },
   },
