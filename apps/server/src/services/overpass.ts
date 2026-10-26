@@ -61,7 +61,10 @@ const defaultFetch: OverpassFetch = async (url, ql, { timeoutMs, userAgent }) =>
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new OverpassError(overpassErrorText(await res.text().catch(() => '')) ?? `HTTP ${res.status}`, res.status);
-  return res.json();
+  // Laufzeitfehler vor der Abfrage (z. B. Dispatcher nicht erreichbar) kommen trotz [out:json] als HTML mit 200
+  const text = await res.text();
+  if (!text.trimStart().startsWith('{')) throw new OverpassError(overpassErrorText(text) ?? 'Antwort ist kein JSON', null);
+  return JSON.parse(text);
 };
 
 const SETTINGS_KEY = 'map:overpassQueries';
