@@ -1,18 +1,23 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
+  FORCE_IMPORT_MAX_BYTES,
   JOURNAL_CATEGORY_LABELS,
   deployUnitSchema,
+  forceImportSchema,
   forceUnitInputSchema,
   mapObjectPatchSchema,
   newMapObjectSchema,
   newUnitSchema,
   unitPatchSchema,
+  type ForceImportPreview,
+  type ForceImportResult,
   type JournalCategory,
   type Topic,
 } from '@elvis/shared';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
+import { importTemplate, parseImport } from '../services/forceImport.js';
 import type { ForceService } from '../services/forces.js';
 import type { IncidentService } from '../services/incidents.js';
 import { idParam, operatorOf, parse } from './util.js';
@@ -162,6 +167,31 @@ export function incidentRoutes(
     audit(operatorOf(req), 'delete', removed.name);
     notify(['units']);
     return reply.code(204).send();
+  });
+
+  // Import aus CSV/Excel: erst Vorschau (Datei), dann die geprüften Zeilen übernehmen
+  app.get('/api/system/forces/import/template', async (_req, reply) =>
+    reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', 'attachment; filename="kraefte-vorlage.csv"').send(importTemplate()),
+  );
+
+  app.post('/api/system/forces/import/preview', async (req): Promise<ForceImportPreview> => {
+    const file = await req.file({ limits: { fileSize: FORCE_IMPORT_MAX_BYTES } });
+    if (!file) throw new HttpError(400, 'Keine Datei übermittelt');
+    let content: Buffer;
+    try {
+      content = await file.toBuffer();
+    } catch {
+      throw new HttpError(413, `Datei größer als ${FORCE_IMPORT_MAX_BYTES / 1024 / 1024} MB`);
+    }
+    const parsed = parseImport(file.filename, content);
+    return { columns: parsed.columns, ignored: parsed.ignored, rows: forces.planImport(parsed.rows, true) };
+  });
+
+  app.post('/api/system/forces/import', async (req): Promise<ForceImportResult> => {
+    const { rows, updateExisting } = parse(forceImportSchema, req.body);
+    const result = forces.importRows(rows, updateExisting);
+    audit(operatorOf(req), 'import', `${result.created} neu, ${result.updated} aktualisiert, ${result.skipped} übersprungen, ${result.linked} zugeordnet`);
+    return result;
   });
 
   /** Im Einsatz erfasste Einheit als Systemeinheit übernehmen */

@@ -5814,3 +5814,25 @@ fieldset.field {
   color: var(--warn);
   font-size: 13px;
 }
+
+/* Kräfte-Import */
+.force-import label.btn {
+  cursor: pointer;
+}
+.force-import-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.force-import-table {
+  max-height: 50vh;
+  overflow: auto;
+}
+.force-import-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+}
+.force-import-error td {
+  background: var(--alarm-bg);
+}
