@@ -2806,6 +2806,59 @@ select.unit-status.has-children {
   min-width: 0;
 }
 
+/* Kartenquellen (Einstellungen) */
+.map-source {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.map-source-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.map-source-head .btn-row {
+  margin-left: auto;
+}
+.map-source-toggle {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.map-source-toggle:disabled {
+  cursor: default;
+}
+.map-source-toggle:disabled .map-source-chevron {
+  display: none;
+}
+.map-source-chevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+.map-source.open .map-source-chevron {
+  transform: rotate(90deg);
+}
+.map-source-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Office-Editor (Collabora) */
 .office-page {
   display: flex;

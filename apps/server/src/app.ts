@@ -152,7 +152,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     void printing.cleanupGuest().catch((err) => server.log.warn({ err }, 'Gastaufträge aufräumen fehlgeschlagen'));
   };
   let cleanupTimer: NodeJS.Timeout | null = null;
-  const tiles = new TileService(config.map, config.dataDir);
+  const tiles = new TileService(config.map, config.dataDir, db);
   const geocoder = new GeocoderService(
     { onlineUrl: config.map.geocoderUrl, outlineUrl: config.map.outlineUrl, dataDir: config.dataDir, userAgent: config.map.userAgent },
     opts.geocodeFetch,
@@ -254,7 +254,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     wifiRoutes(api, { wifi, store, notify: (t) => hub.invalidate(t) });
     monitoringRoutes(api, { monitoring, store, notify: (t) => hub.invalidate(t) });
     bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
-    mapRoutes(api, tiles, store, settings, () => hub.invalidate(['audit']), geocoder);
+    mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder);
     weatherRoutes(api, weather, weatherWatch);
     appLinkRoutes(api, appLinks);
     personnelRoutes(api, personnel);

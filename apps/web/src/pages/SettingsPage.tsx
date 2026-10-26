@@ -8,6 +8,7 @@ import {
   FolderTree,
   Laptop,
   ListTodo,
+  Map as MapIcon,
   MonitorPlay,
   MonitorSmartphone,
   Network,
@@ -32,6 +33,7 @@ import { CamerasCard } from './system/CamerasCard';
 import { DisplaysCard } from './system/DisplaysCard';
 import { DocumentFoldersCard } from './system/DocumentFoldersCard';
 import { ForcesCard } from './system/ForcesCard';
+import { MapSourcesCard } from './system/MapSourcesCard';
 import { ModuleSection } from './system/ModuleSection';
 import { MonitoringCard } from './system/MonitoringCard';
 import { PrintSettingsCard } from './system/PrintSettingsCard';
@@ -101,6 +103,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="arbeitsplaetze" title="Arbeitsplätze" icon={<Laptop {...ICON} />} summary="Notebooks per PXE, Updates">
             <WorkstationsCard />
+          </SettingsSection>
+          <SettingsSection id="karten" title="Kartenquellen" icon={<MapIcon {...ICON} />} summary="Kartenstile, Luftbilder (WMS)">
+            <MapSourcesCard />
           </SettingsSection>
           <SettingsSection id="drucken" title="Druckserver" icon={<Printer {...ICON} />} summary="Ablage im Einsatz, vorausgewählter Drucker">
             <PrintSettingsCard />

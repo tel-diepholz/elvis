@@ -24,3 +24,4 @@ export * from './workstations';
 export * from './weather';
 export * from './applink';
 export * from './personnel';
+export * from './mapsources';

@@ -175,7 +175,7 @@ const videoSourceProvision = z.object({
 const mapSourceProvision = z.object({
   id: slug,
   name: z.string().min(1),
-  /** XYZ-Vorlage; {{…}} wird beim Installieren ersetzt, {z}/{x}/{y}/{r} bleiben für den Kachel-Proxy. */
+  /** XYZ-Vorlage; {{…}} wird beim Installieren ersetzt, {z}/{x}/{y}/{r} bzw. (WMS) {bbox}/{width}/{height} bleiben für den Kachel-Proxy. */
   url: templated,
   attribution: z.string().default(''),
   maxZoom: z.number().int().min(1).max(22).default(18),

@@ -199,7 +199,27 @@ festgelegt:
 ```
 
 Platzhalter: `{z}`, `{x}`, `{y}`, optional `{s}` (Subdomain aus `subdomains`) und `{r}` (`@2x` bei
-`"pixelRatio": 2`). Sind mehrere Quellen konfiguriert, erscheint auf der Karte und im Druckdialog eine Auswahl.
+`"pixelRatio": 2`). WMS-Dienste werden mit `{bbox}` (Ausschnitt der Kachel in EPSG:3857), `{width}` und `{height}`
+(256 bzw. 512 px) eingebunden. Sind mehrere Quellen konfiguriert, erscheint auf der Karte und im Druckdialog eine Auswahl.
+
+**Kartenquellen in den Einstellungen:** Admins können unter **Einstellungen → Kartenquellen** weitere Quellen
+anlegen, ohne `elvis.json` zu ändern (`/api/system/map-sources`). Quellen aus `elvis.json` und von Addons erscheinen dort
+nur zur Ansicht. „Testen“ lädt eine Kachel am Einsatzort (sonst in Niedersachsen) und zeigt die Fehlermeldung des Dienstes.
+Ändert sich die URL einer Quelle, verwirft ELVIS ihre zwischengespeicherten Kacheln. Die Vorlage **Luftbild Niedersachsen**
+bindet das Digitale Orthophoto (DOP20, 20 cm) des LGLN als WMS ein:
+
+```
+https://opendata.lgln.niedersachsen.de/doorman/noauth/dop_wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=ni_dop20&STYLES=&CRS=EPSG:3857&BBOX={bbox}&WIDTH={width}&HEIGHT={height}&FORMAT=image/jpeg
+```
+
+Die Daten stehen unter CC BY 4.0, die Quellenangabe lautet „© GeoBasis-DE/LGLN <Jahr>“
+([OpenGeoData Niedersachsen](https://ni-lgln-opengeodata.hub.arcgis.com/pages/geodatendienste)).
+
+Über „Vorlage einfügen …“ stehen außerdem die freien DOP20-Dienste von Baden-Württemberg, Bayern, Berlin/Brandenburg,
+Bremen, Hamburg, Hessen, Mecklenburg-Vorpommern, Nordrhein-Westfalen, Rheinland-Pfalz, dem Saarland, Sachsen,
+Schleswig-Holstein und Thüringen bereit (Sachsen-Anhalt hat derzeit keinen erreichbaren Open-Data-WMS). Die
+Quellenangaben folgen den Dienstbeschreibungen. Vor dem Einsatz die Lizenz des Landes prüfen. Weitere WMS-Dienste lassen
+sich genauso eintragen, sofern sie EPSG:3857 unterstützen.
 
 **Bedienung:** Oben links stehen Suche, das Menü „Objekte“ (Einsatzort setzen, Gauß-Fahne oder Sektor 60°
 einfügen) und „Drucken“, oben rechts die Wahl des Kartenstils, unten links der Wind. Rechts liegt die einklappbare

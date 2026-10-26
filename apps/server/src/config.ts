@@ -13,7 +13,7 @@ const driverSchema = z.object({
 const mapSourceSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string(),
-  /** XYZ-Vorlage mit {z}, {x}, {y} und optional {s} (Subdomain) bzw. {r} (Retina-Suffix). */
+  /** XYZ-Vorlage mit {z}, {x}, {y} und optional {s} (Subdomain) bzw. {r} (Retina-Suffix); WMS mit {bbox} (EPSG:3857), {width}, {height}. */
   url: z.string(),
   attribution: z.string(),
   maxZoom: z.number().int().default(19),

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { MAX_PRINT_ZOOM, MIN_PRINT_ZOOM, formatDtg, tacticalSignSchema, type MapPrintRequest } from '@elvis/shared';
+import { MAX_PRINT_ZOOM, MIN_PRINT_ZOOM, formatDtg, mapSourceInputSchema, mapSourceListSchema, tacticalSignSchema, type MapPrintRequest, type Topic } from '@elvis/shared';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
 import { renderMapPdf } from '../services/print.js';
@@ -45,13 +45,16 @@ const tileParams = z.object({
   y: z.coerce.number().int(),
 });
 
+/** Ohne Einsatzort prüft „Testen“ eine Kachel in der Mitte Niedersachsens. */
+const TEST_FALLBACK = { lat: 52.64, lon: 9.35 };
+
 const searchQuery = z.object({
   q: z.string().max(200).default(''),
   lat: z.coerce.number().min(-90).max(90).optional(),
   lon: z.coerce.number().min(-180).max(180).optional(),
 });
 
-export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notifyAudit: () => void, geocoder: GeocoderService): void {
+export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notify: (topics: Topic[]) => void, geocoder: GeocoderService): void {
   app.get('/api/map/sources', async () => tiles.list());
 
   /** Ortssuche: Straßen, Orte, Adressen sowie Koordinaten und UTMREF; lat/lon bevorzugen Treffer in der Nähe */
@@ -90,12 +93,43 @@ export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store
       success: true,
       message: missingTiles ? `${missingTiles} Kacheln fehlten` : '',
     });
-    notifyAudit();
+    notify(['audit']);
     const name = `Lagekarte_${body.paper}_${formatDtg(new Date())}.pdf`;
     return reply
       .header('content-type', 'application/pdf')
       .header('content-disposition', `attachment; filename="${name.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`)
       .header('x-missing-tiles', String(missingTiles))
       .send(pdf);
+  });
+
+  // --- Kartenquellen in den Einstellungen (nur Admins über /api/system/) ---
+
+  app.get('/api/system/map-sources', async () => tiles.settings());
+
+  app.put('/api/system/map-sources', async (req) => {
+    const { sources } = parse(z.object({ sources: mapSourceListSchema }), req.body);
+    const before = new Set(tiles.settings().sources.filter((s) => s.origin === 'settings').map((s) => s.name));
+    const next = await tiles.setSettingsSources(sources, operatorOf(req));
+    const after = next.sources.filter((s) => s.origin === 'settings').map((s) => s.name);
+    store.addAudit({
+      operator: operatorOf(req),
+      target: 'karte',
+      action: 'kartenquellen',
+      params: '',
+      success: true,
+      message: [
+        ...after.filter((n) => !before.has(n)).map((n) => `„${n}“ hinzugefügt`),
+        ...[...before].filter((n) => !after.includes(n)).map((n) => `„${n}“ entfernt`),
+      ].join(', ') || 'geändert',
+    });
+    notify(['mapSources', 'audit']);
+    return next;
+  });
+
+  app.post('/api/system/map-sources/test', async (req) => {
+    const source = parse(mapSourceInputSchema, req.body);
+    const incident = store.activeIncident();
+    const at = incident?.lat != null && incident.lon != null ? { lat: incident.lat, lon: incident.lon } : TEST_FALLBACK;
+    return tiles.test(source, at);
   });
 }
