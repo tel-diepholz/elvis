@@ -91,6 +91,9 @@ import {
   type DeployUnitInput,
   type ForceUnit,
   type ForceUnitInput,
+  type ForceImportInput,
+  type ForceImportPreview,
+  type ForceImportResult,
   type Unit,
   type UnitPatch,
   type WifiAp,
@@ -203,6 +206,13 @@ export const api = {
   updateForce: (id: number, input: ForceUnitInput) => request<ForceUnit>('PUT', `/api/system/forces/${id}`, input),
   removeForce: (id: number) => request<void>('DELETE', `/api/system/forces/${id}`),
   adoptUnit: (unitId: number) => request<ForceUnit>('POST', `/api/system/forces/adopt/${unitId}`),
+  forceImportTemplateUrl: '/api/system/forces/import/template',
+  previewForceImport: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<ForceImportPreview>('POST', '/api/system/forces/import/preview', form);
+  },
+  importForces: (input: ForceImportInput) => request<ForceImportResult>('POST', '/api/system/forces/import', input),
 
   documents: (id: number) => request<DocumentListing>('GET', `/api/incidents/${id}/documents`),
   uploadDocument: (id: number, file: File, description: string, folderId: number | null) => {

@@ -1,7 +1,19 @@
-import { forceDescendants, forceUnitInputSchema, tacticalSignSchema, type ForceUnit, type ForceUnitInput, type Unit } from '@elvis/shared';
+import {
+  DEFAULT_UNIT_SIGN,
+  forceDescendants,
+  forceUnitInputSchema,
+  tacticalSignSchema,
+  type ForceImportPlanRow,
+  type ForceImportResult,
+  type ForceImportRow,
+  type ForceUnit,
+  type ForceUnitInput,
+  type Unit,
+} from '@elvis/shared';
 import type { Db } from '../db/index.js';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
+import type { ParsedImportRow } from './forceImport.js';
 
 interface ForceRow {
   id: number;
@@ -153,5 +165,124 @@ export class ForceService {
       return id;
     };
     return this.get(this.db.transaction(() => ensure(root))());
+  }
+
+  // --- Import (CSV/Excel) ---
+
+  /**
+   * Was der Import mit jeder Zeile tut. Vorhanden ist eine Einheit mit gleichem Funkrufnamen, sonst mit gleichem Namen
+   * (und gleicher Organisation, wenn angegeben). „Gehört zu“ verweist auf eine Einheit aus der Datei oder dem Katalog.
+   */
+  planImport(parsed: ParsedImportRow[], updateExisting: boolean, all = this.list()): ForceImportPlanRow[] {
+    const ci = (v: string | null | undefined) => (v ?? '').trim().toLowerCase();
+    const find = (row: ForceImportRow): ForceUnit[] => {
+      if (row.callsign) {
+        const byCallsign = all.filter((u) => u.callsign && ci(u.callsign) === ci(row.callsign));
+        if (byCallsign.length) return byCallsign;
+      }
+      return all.filter((u) => ci(u.name) === ci(row.name) && (row.organization === null || ci(u.organization) === ci(row.organization)));
+    };
+    const fileNames = new Map<string, number[]>();
+    for (const p of parsed) if (p.row) fileNames.set(ci(p.row.name), [...(fileNames.get(ci(p.row.name)) ?? []), p.line]);
+    const seen = new Map<string, number>();
+
+    return parsed.map((p): ForceImportPlanRow => {
+      if (!p.row) return { row: null, line: p.line, name: p.name, action: 'error', matchId: null, messages: p.messages };
+      const row = p.row;
+      const messages = [...p.messages];
+      const key = row.callsign ? `c:${ci(row.callsign)}` : `n:${ci(row.name)}|${ci(row.organization)}`;
+      if (seen.has(key)) return { row, line: p.line, name: row.name, action: 'error', matchId: null, messages: [`Doppelt – schon in Zeile ${seen.get(key)}`] };
+      seen.set(key, p.line);
+
+      const matches = find(row);
+      if (matches.length > 1) {
+        return { row, line: p.line, name: row.name, action: 'error', matchId: null, messages: [`Mehrdeutig: ${matches.length} vorhandene Einheiten „${row.name}“ – Funkrufname oder Organisation angeben`] };
+      }
+      if (row.parent) {
+        const inFile = fileNames.get(ci(row.parent)) ?? [];
+        const inCatalog = all.filter((u) => ci(u.name) === ci(row.parent));
+        if (ci(row.parent) === ci(row.name)) messages.push('Gehört zu: eine Einheit kann nicht zu sich selbst gehören');
+        else if (inFile.length > 1) messages.push(`Gehört zu: „${row.parent}“ steht mehrfach in der Datei`);
+        else if (!inFile.length && inCatalog.length > 1) messages.push(`Gehört zu: „${row.parent}“ gibt es mehrfach im Katalog`);
+        else if (!inFile.length && !inCatalog.length) messages.push(`Gehört zu: „${row.parent}“ nicht gefunden`);
+        if (messages.length) return { row, line: p.line, name: row.name, action: 'error', matchId: null, messages };
+      }
+      const match = matches[0];
+      if (!match) return { row, line: p.line, name: row.name, action: 'create', matchId: null, messages };
+      return { row, line: p.line, name: row.name, action: updateExisting ? 'update' : 'skip', matchId: match.id, messages: updateExisting ? messages : [...messages, 'Bereits vorhanden'] };
+    });
+  }
+
+  /** Geplante Zeilen schreiben – alles oder nichts. Fehlerhafte Zeilen bleiben außen vor. */
+  importRows(rows: ForceImportRow[], updateExisting: boolean): ForceImportResult {
+    const all = this.list();
+    const plan = this.planImport(rows.map((row) => ({ line: row.line, name: row.name, row, messages: [] })), updateExisting, all);
+    const ci = (v: string) => v.trim().toLowerCase();
+    let created = 0;
+    let updated = 0;
+    let linked = 0;
+
+    this.db.transaction(() => {
+      const ids = new Map<number, number>(); // Zeile → Systemeinheit
+      for (const p of plan) {
+        const row = p.row;
+        if (!row || (p.action !== 'create' && p.action !== 'update')) continue;
+        const base: ForceUnit | undefined = p.matchId !== null ? all.find((u) => u.id === p.matchId) : undefined;
+        const sign = { ...(base?.sign ?? DEFAULT_UNIT_SIGN) };
+        if (row.signText !== null) sign.text = row.signText;
+        if (row.signOrg !== null) sign.org = row.signOrg;
+        const input = forceUnitInputSchema.parse({
+          name: row.name,
+          callsign: row.callsign ?? base?.callsign ?? '',
+          organization: row.organization ?? base?.organization ?? '',
+          notes: row.notes ?? base?.notes ?? '',
+          sign,
+          strength: {
+            leaders: row.leaders ?? base?.strength.leaders ?? 0,
+            subLeaders: row.subLeaders ?? base?.strength.subLeaders ?? 0,
+            crew: row.crew ?? base?.strength.crew ?? 0,
+          },
+          members: base?.members ?? [],
+        });
+        ids.set(p.line, this.write(base ? base.id : null, input));
+        if (base) updated++;
+        else created++;
+      }
+
+      // „Gehört zu“: Mitglieder je übergeordneter Einheit ergänzen, Zyklen ablehnen
+      const graph = this.list();
+      const byId = new Map(graph.map((u) => [u.id, u]));
+      const changed = new Set<number>();
+      for (const p of plan) {
+        const row = p.row;
+        const childId = ids.get(p.line);
+        if (!row?.parent || childId === undefined) continue;
+        const fromFile = plan.find((x) => x.row && ids.has(x.line) && ci(x.row.name) === ci(row.parent!));
+        const parentId = fromFile ? ids.get(fromFile.line)! : graph.find((u) => ci(u.name) === ci(row.parent!))?.id;
+        const parent = parentId !== undefined ? byId.get(parentId) : undefined;
+        if (!parent) {
+          p.messages.push(`Gehört zu: „${row.parent}“ nicht angelegt`);
+          continue;
+        }
+        if (forceDescendants(graph, childId).has(parent.id)) {
+          p.messages.push(`Gehört zu: ${parent.name} steckt bereits in ${row.name} – nicht verknüpft`);
+          continue;
+        }
+        const existing = parent.members.find((m) => m.unitId === childId);
+        if (existing) {
+          if (row.role !== null && existing.role !== row.role) (existing.role = row.role), changed.add(parent.id);
+          continue;
+        }
+        parent.members.push({ unitId: childId, role: row.role ?? '' });
+        changed.add(parent.id);
+        linked++;
+      }
+      for (const id of changed) {
+        const parent = byId.get(id)!;
+        this.write(id, forceUnitInputSchema.parse({ ...parent }));
+      }
+    })();
+
+    return { created, updated, skipped: plan.filter((p) => p.action === 'skip').length, linked, rows: plan };
   }
 }

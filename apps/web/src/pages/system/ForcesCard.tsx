@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, FileUp, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
 import {
   DEFAULT_UNIT_SIGN,
   ZERO_STRENGTH,
@@ -19,6 +19,7 @@ import { Badge, Card, EmptyState, Field, Loading, Modal } from '../../components
 import { TacticalSignEditor } from '../../components/tactical/TacticalSignEditor';
 import { TacticalSignImage } from '../../components/tactical/TacticalSign';
 import { RoleInput, StrengthFields } from '../../components/forces/fields';
+import { ForceImportDialog } from './ForceImportDialog';
 
 function ForceUnitForm({ initial, all, pending, onSubmit }: { initial?: ForceUnit; all: ForceUnit[]; pending: boolean; onSubmit: (input: ForceUnitInput) => void }) {
   const [f, setF] = useState({
@@ -131,6 +132,7 @@ export function ForcesCard() {
   const toast = useToast();
   const { data: units } = useQuery({ queryKey: ['forces'], queryFn: api.forces });
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [editing, setEditing] = useState<ForceUnit | null>(null);
   const [filter, setFilter] = useState('');
   const onError = (e: Error) => toast('error', e.message);
@@ -160,9 +162,14 @@ export function ForcesCard() {
       icon={<Users size={18} />}
       className="span-3"
       actions={
-        <button className="btn btn-sm" onClick={() => setCreating(true)}>
-          <Plus size={16} /> Einheit
-        </button>
+        <div className="btn-row">
+          <button className="btn btn-sm btn-ghost" onClick={() => setImporting(true)}>
+            <FileUp size={16} /> Importieren
+          </button>
+          <button className="btn btn-sm" onClick={() => setCreating(true)}>
+            <Plus size={16} /> Einheit
+          </button>
+        </div>
       }
     >
       <p className="muted">
@@ -210,6 +217,9 @@ export function ForcesCard() {
         </ul>
       )}
 
+      <Modal open={importing} title="Kräfte importieren (CSV oder Excel)" onClose={() => setImporting(false)} wide>
+        <ForceImportDialog onDone={() => setImporting(false)} />
+      </Modal>
       <Modal open={creating} title="Systemeinheit anlegen" onClose={() => setCreating(false)} wide>
         <ForceUnitForm all={units} pending={create.isPending} onSubmit={(input) => create.mutate(input)} />
       </Modal>
