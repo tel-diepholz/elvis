@@ -49,7 +49,7 @@ EOF
 ```
 
 - **Screenshots** liegen in `/tmp/elvis-run/shots/<name>.png`. Bei einem Fehler entsteht `fehler.png`, und der Treiber endet mit Exit-Code 1.
-- **Befehle** sind im Kopf von `driver.mjs` beschrieben: `view`, `layers` und `size` gelten vor dem ersten `nav`. Dazu kommen `nav`, `wait`, `waittext`, `gone`, `click`, `clickcenter`, `fill <sel> | <text>`, `press`, `sleep`, `text`, `count`, `ss` und `errors`.
+- **Befehle** sind im Kopf von `driver.mjs` beschrieben: `view`, `layers` und `size` gelten vor dem ersten `nav`. Dazu kommen `nav`, `wait`, `waittext`, `gone`, `click`, `clickcenter`, `clickat <x> <y>`, `move <x> <y>`, `drag <x1> <y1> <x2> <y2>`, `wheel <x> <y> <dy>`, `fill <sel> | <text>`, `select <sel> | <wert>`, `press`, `sleep`, `text`, `count`, `ss` und `errors`.
 - **Mit der API arbeiten:** Das Sitzungs-Cookie steht in `/tmp/elvis-run/cookie`, z. B. `curl -H "cookie: elvis_session=$(cat /tmp/elvis-run/cookie)" http://localhost:8091/api/traffic/aircraft?lat=52.6\&lon=8.37\&radius=40`.
 - **Logs** stehen in `/tmp/elvis-run/server.log` und `/tmp/elvis-run/web.log`.
 
