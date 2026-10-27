@@ -725,6 +725,38 @@ const MIGRATIONS: Migration[] = [
   CREATE INDEX map_history_time ON map_history(incident_id, at);
   CREATE INDEX map_history_subject ON map_history(subject, subject_id, id);
   `,
+  // Materialanforderungen; Beschaffung je Einsatz selbst oder über den Stab. Wiedervorlage-Aufgabe, Ausgangsmeldungen
+  // und Tagebucheinträge verweisen per request_id auf die Anforderung
+  `
+  CREATE TABLE requests (
+    id INTEGER PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    number INTEGER NOT NULL,
+    unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
+    unit_text TEXT NOT NULL,
+    material TEXT NOT NULL,
+    -- NULL = sofort
+    needed_by TEXT,
+    status TEXT NOT NULL CHECK (status IN ('planned', 'approved', 'ordered', 'delivered', 'rejected', 'cancelled')),
+    status_at TEXT NOT NULL,
+    status_by TEXT NOT NULL,
+    follow_up_at TEXT NOT NULL,
+    source_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+    forwarded_at TEXT,
+    forwarded_by TEXT,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (incident_id, number)
+  );
+  ALTER TABLE tasks ADD COLUMN request_id INTEGER REFERENCES requests(id) ON DELETE SET NULL;
+  ALTER TABLE messages ADD COLUMN request_id INTEGER REFERENCES requests(id) ON DELETE SET NULL;
+  ALTER TABLE journal ADD COLUMN request_id INTEGER REFERENCES requests(id) ON DELETE SET NULL;
+  CREATE INDEX journal_request ON journal(request_id) WHERE request_id IS NOT NULL;
+  ALTER TABLE incidents ADD COLUMN procurement_mode TEXT NOT NULL DEFAULT 'self' CHECK (procurement_mode IN ('self', 'staff'));
+  ALTER TABLE incidents ADD COLUMN procurement_staff TEXT NOT NULL DEFAULT '';
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

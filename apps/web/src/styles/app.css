@@ -6517,3 +6517,29 @@ fieldset.field {
     top: 242px;
   }
 }
+
+/* Anforderungen */
+.request-subform {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.request-subform h3,
+.request-history h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.request-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.request-history-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

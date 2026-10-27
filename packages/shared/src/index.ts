@@ -27,6 +27,7 @@ export * from './personnel';
 export * from './mapsources';
 export * from './traffic';
 export * from './messages';
+export * from './requests';
 export * from './forceImport';
 export * from './overpass';
 export * from './radar';

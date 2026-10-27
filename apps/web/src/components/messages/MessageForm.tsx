@@ -13,6 +13,9 @@ export interface MessagePrefill {
   senderRoleId?: number | null;
   recipient?: MessagePartyInput;
   replyToId?: number;
+  body?: string;
+  /** Ausgangsmeldung zu einer Anforderung */
+  requestId?: number;
 }
 
 /**
@@ -32,7 +35,7 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
   });
   const [party, setParty] = useState<MessagePartyInput>(prefill?.recipient ?? { text: '', unitId: null });
   const [recipientRoleId, setRecipientRoleId] = useState<number | null>(null);
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState(prefill?.body ?? '');
   const [error, setError] = useState<string | null>(null);
 
   const incoming = direction === 'in';
@@ -41,7 +44,7 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
   const input = (): MessageInput =>
     incoming
       ? { direction: 'in', sender: party, recipientRoleId: dispatcherRoutes ? null : recipientRoleId, body }
-      : { direction: 'out', senderRoleId: senderRoleId ?? 0, recipient: party, body, replyToId: prefill?.replyToId ?? null };
+      : { direction: 'out', senderRoleId: senderRoleId ?? 0, recipient: party, body, replyToId: prefill?.replyToId ?? null, requestId: prefill?.requestId ?? null };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();

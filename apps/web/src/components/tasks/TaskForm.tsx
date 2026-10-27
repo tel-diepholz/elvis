@@ -19,11 +19,11 @@ import { Field, Segmented } from '../ui';
 
 const p2 = (n: number) => String(n).padStart(2, '0');
 /** ISO → Wert für <input type="datetime-local"> (Ortszeit) */
-const toLocalInput = (iso: string) => {
+export const toLocalInput = (iso: string) => {
   const d = new Date(iso);
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
 };
-const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : null);
+export const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : null);
 
 /** Gemeinsame Felder: Kurztext, Beschreibung, Dokumentvorlage */
 function BaseFields({ summary, setSummary, description, setDescription, templateId, setTemplateId }: {
@@ -76,9 +76,9 @@ function IntervalField({ minutes, onChange }: { minutes: number; onChange: (m: n
   );
 }
 
-type DueMode = 'none' | 'in' | 'at';
+export type DueMode = 'none' | 'in' | 'at';
 
-function DueFields({ label, mode, setMode, inMinutes, setInMinutes, at, setAt, allowNone }: {
+export function DueFields({ label, mode, setMode, inMinutes, setInMinutes, at, setAt, allowNone }: {
   label: string;
   mode: DueMode;
   setMode: (m: DueMode) => void;

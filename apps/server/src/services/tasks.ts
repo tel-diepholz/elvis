@@ -37,6 +37,7 @@ interface TaskRow {
   last_done_by: string | null;
   created_at: string;
   created_by: string;
+  request_id: number | null;
 }
 
 interface TemplateRow {
@@ -131,6 +132,7 @@ export class TaskService {
       createdBy: r.created_by,
       mine,
       roleVacant,
+      requestId: r.request_id,
     };
   }
 
@@ -368,6 +370,39 @@ export class TaskService {
     this.db.transaction(() => ids.forEach((id, i) => update.run(i, id)))();
     this.deps.notify(['taskTemplates']);
     return this.templates();
+  }
+
+  /**
+   * Wiedervorlage einer Anforderung (innerhalb der Transaktion des Aufrufers): genau eine Aufgabe je Anforderung,
+   * an die Beschaffungsrolle (ohne Rolle an alle). Neue Wiedervorlage öffnet sie wieder und hebt ein Schieben auf,
+   * eine abgeschlossene Anforderung erledigt sie. Tagebuch und notify übernimmt der Aufrufer.
+   */
+  syncRequestTask(r: { requestId: number; incidentId: number; summary: string; description: string; roleId: number | null; dueAt: string; closed: boolean }, actor: string): number | null {
+    const ts = iso(this.now());
+    const current = this.db.prepare('SELECT id, done_at FROM tasks WHERE request_id = ?').get(r.requestId) as { id: number; done_at: string | null } | undefined;
+    if (!current) {
+      if (r.closed) return null;
+      const info = this.db
+        .prepare(
+          `INSERT INTO tasks (incident_id, summary, description, assignee_role_id, due_at, request_id, created_at, created_by, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(r.incidentId, r.summary, r.description, r.roleId, r.dueAt, r.requestId, ts, actor, ts);
+      return Number(info.lastInsertRowid);
+    }
+    if (r.closed) {
+      this.db
+        .prepare('UPDATE tasks SET description = ?, snoozed_until = NULL, done_at = COALESCE(done_at, ?), done_by = COALESCE(done_by, ?), updated_at = ? WHERE id = ?')
+        .run(r.description, ts, actor, ts, current.id);
+    } else {
+      this.db
+        .prepare(
+          `UPDATE tasks SET summary = ?, description = ?, assignee_user_id = NULL, assignee_role_id = ?, interval_minutes = NULL, due_at = ?,
+             snoozed_until = NULL, done_at = NULL, done_by = NULL, updated_at = ? WHERE id = ?`,
+        )
+        .run(r.summary, r.description, r.roleId, r.dueAt, ts, current.id);
+    }
+    return current.id;
   }
 
   /** Beim Eröffnen (innerhalb der Transaktion): Vorlagen als Aufgaben anlegen, Zeiten ab Einsatzbeginn */

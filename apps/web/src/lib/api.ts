@@ -137,6 +137,14 @@ import {
   type MessageInput,
   type MessageSettings,
   type MessageSettingsInput,
+  type MaterialRequest,
+  type RequestForwardInput,
+  type RequestInput,
+  type RequestNoteInput,
+  type RequestPatch,
+  type RequestSettings,
+  type RequestSettingsInput,
+  type RequestStatusInput,
 } from '@elvis/shared';
 
 export class ApiError extends Error {
@@ -308,6 +316,18 @@ export const api = {
   ackMessage: (id: number) => request<Message>('POST', `/api/messages/${id}/ack`),
   messageSettings: () => request<MessageSettings>('GET', '/api/system/messages'),
   saveMessageSettings: (input: MessageSettingsInput) => request<MessageSettings>('PUT', '/api/system/messages', input),
+  // Anforderungen
+  requests: (incidentId: number) => request<MaterialRequest[]>('GET', `/api/incidents/${incidentId}/requests`),
+  requestSettings: () => request<RequestSettings>('GET', '/api/requests/settings'),
+  createRequest: (incidentId: number, input: RequestInput) => request<MaterialRequest>('POST', `/api/incidents/${incidentId}/requests`, input),
+  updateRequest: (id: number, input: RequestPatch) => request<MaterialRequest>('PUT', `/api/requests/${id}`, input),
+  requestJournal: (id: number) => request<JournalEntry[]>('GET', `/api/requests/${id}/journal`),
+  setRequestStatus: (id: number, input: RequestStatusInput) => request<MaterialRequest>('POST', `/api/requests/${id}/status`, input),
+  setRequestFollowUp: (id: number, followUpAt: string) => request<MaterialRequest>('POST', `/api/requests/${id}/follow-up`, { followUpAt }),
+  forwardRequest: (id: number, input: RequestForwardInput) => request<MaterialRequest>('POST', `/api/requests/${id}/forward`, input),
+  attachRequestMessage: (id: number, messageId: number) => request<MaterialRequest>('POST', `/api/requests/${id}/messages`, { messageId }),
+  addRequestNote: (id: number, input: RequestNoteInput) => request<JournalEntry>('POST', `/api/requests/${id}/notes`, input),
+  saveRequestSettings: (input: RequestSettingsInput) => request<RequestSettings>('PUT', '/api/system/requests', input),
 
   roles: () => request<RoleInfo[]>('GET', '/api/roles'),
   chooseRoles: (roleIds: number[]) => request<{ roles: Role[] }>('PUT', '/api/auth/role', { roleIds }),

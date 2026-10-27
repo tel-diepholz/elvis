@@ -34,7 +34,7 @@ export function taskRoutes(app: FastifyInstance, deps: { tasks: TaskService; rol
   app.put('/api/system/roles/:id', async (req) => {
     const role = roles.update(parse(idParam, req.params).id, parse(roleInputSchema, req.body));
     audit(req, 'rollen', 'update', role.name);
-    deps.notify(['roles', 'tasks', 'taskTemplates', 'users', 'messages']);
+    deps.notify(['roles', 'tasks', 'taskTemplates', 'users', 'messages', 'requests']);
     return role;
   });
 
@@ -42,7 +42,7 @@ export function taskRoutes(app: FastifyInstance, deps: { tasks: TaskService; rol
     const role = roles.remove(parse(idParam, req.params).id);
     audit(req, 'rollen', 'delete', role.name);
     // Sitzungen verlieren die Rolle (Anmeldestatus), Aufgaben gehen an alle
-    deps.notify(['roles', 'tasks', 'taskTemplates', 'users', 'messages']);
+    deps.notify(['roles', 'tasks', 'taskTemplates', 'users', 'messages', 'requests']);
     return reply.code(204).send();
   });
 

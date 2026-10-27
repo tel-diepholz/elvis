@@ -32,6 +32,8 @@ export const messageInputSchema = z.discriminatedUnion('direction', [
     body,
     /** Antwort auf eine Eingangsmeldung – diese gilt damit als zur Kenntnis genommen */
     replyToId: id.nullable().default(null),
+    /** Ausgangsmeldung zu einer Anforderung */
+    requestId: id.nullable().default(null),
   }),
   z.object({
     direction: z.literal('in'),
@@ -94,6 +96,7 @@ export interface Message {
   ackAt: string | null;
   ackBy: string | null;
   replyToId: number | null;
+  requestId: number | null;
   copies: MessageCopy[];
   createdAt: string;
   createdBy: string;

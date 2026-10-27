@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Check, ChevronDown, ListChecks } from 'lucide-react';
+import { Check, ChevronDown, ListChecks, PackagePlus } from 'lucide-react';
 import { fmtInterval, taskDueAt } from '@elvis/shared';
 import { useNow } from '../../lib/hooks';
 import { fmtRelative, useDueTasks, useTaskActions } from './taskActions';
+import { REQUESTS_PATH } from '../requests/requestParts';
 
 const TASKS_PATH = '/einsatz/aufgaben';
 
@@ -52,9 +53,16 @@ export function DueTasksPanel() {
             <div className="due-summary">{task.summary}</div>
             <div className="cell-sub">fällig {fmtRelative(taskDueAt(task)!, now)}</div>
             <div className="btn-row">
-              <button className="btn btn-sm btn-primary" disabled={done.isPending} onClick={() => done.mutate({ task })}>
-                <Check size={16} /> Erledigt
-              </button>
+              {/* Wiedervorlage einer Anforderung: dort Status oder neue Wiedervorlage eintragen */}
+              {task.requestId !== null ? (
+                <Link className="btn btn-sm btn-primary" to={`${REQUESTS_PATH}?id=${task.requestId}`}>
+                  <PackagePlus size={16} /> Anforderung
+                </Link>
+              ) : (
+                <button className="btn btn-sm btn-primary" disabled={done.isPending} onClick={() => done.mutate({ task })}>
+                  <Check size={16} /> Erledigt
+                </button>
+              )}
               {[5, 15].map((m) => (
                 <button key={m} className="btn btn-sm" disabled={snooze.isPending} onClick={() => snooze.mutate({ task, minutes: m })}>
                   +{fmtInterval(m)}

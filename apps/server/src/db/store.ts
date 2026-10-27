@@ -29,6 +29,8 @@ const toIncident = (r: Row): Incident => ({
   lat: (r.lat as number | null) ?? null,
   lon: (r.lon as number | null) ?? null,
   vehicleVisible: r.vehicle_visible !== 0,
+  procurementMode: r.procurement_mode === 'staff' ? 'staff' : 'self',
+  procurementStaff: (r.procurement_staff as string | null) ?? '',
   startedAt: r.started_at as string,
   closedAt: (r.closed_at as string | null) ?? null,
 });
@@ -45,6 +47,7 @@ const toJournal = (r: Row): JournalEntry => ({
   author: r.author as string,
   important: r.important === 1,
   correctsId: (r.corrects_id as number | null) ?? null,
+  requestId: (r.request_id as number | null) ?? null,
 });
 
 const toUnit = (r: Row): Unit => ({
@@ -277,8 +280,8 @@ export class Store {
   createIncident(input: NewIncident): Incident {
     const info = this.db
       .prepare(
-        `INSERT INTO incidents (keyword, title, location, leader, lat, lon, started_at)
-         VALUES (@keyword, @title, @location, @leader, @lat, @lon, @startedAt)`,
+        `INSERT INTO incidents (keyword, title, location, leader, lat, lon, procurement_mode, procurement_staff, started_at)
+         VALUES (@keyword, @title, @location, @leader, @lat, @lon, @procurementMode, @procurementStaff, @startedAt)`,
       )
       .run({
         keyword: input.keyword ?? '',
@@ -287,6 +290,8 @@ export class Store {
         leader: input.leader ?? '',
         lat: input.lat ?? null,
         lon: input.lon ?? null,
+        procurementMode: input.procurementMode ?? 'self',
+        procurementStaff: input.procurementStaff ?? '',
         startedAt: now(),
       });
     const created = this.incident(Number(info.lastInsertRowid))!;
@@ -299,7 +304,7 @@ export class Store {
     const next = { ...current, ...patch };
     this.db
       .prepare(
-        'UPDATE incidents SET keyword=@keyword, title=@title, location=@location, leader=@leader, lat=@lat, lon=@lon, vehicle_visible=@vehicleVisible WHERE id=@id',
+        'UPDATE incidents SET keyword=@keyword, title=@title, location=@location, leader=@leader, lat=@lat, lon=@lon, vehicle_visible=@vehicleVisible, procurement_mode=@procurementMode, procurement_staff=@procurementStaff WHERE id=@id',
       )
       .run({
         id,
@@ -310,6 +315,8 @@ export class Store {
         lat: next.lat ?? null,
         lon: next.lon ?? null,
         vehicleVisible: next.vehicleVisible ? 1 : 0,
+        procurementMode: next.procurementMode,
+        procurementStaff: next.procurementStaff,
       });
     const updated = this.incident(id)!;
     this.recordHistory(id, 'incident', id, incidentMapState(updated));
@@ -338,8 +345,8 @@ export class Store {
     const recordedAt = now();
     const info = this.db
       .prepare(
-        `INSERT INTO journal (incident_id, timestamp, recorded_at, category, text, sender, recipient, author, important, corrects_id)
-         VALUES (@incidentId, @timestamp, @recordedAt, @category, @text, @sender, @recipient, @author, @important, @correctsId)`,
+        `INSERT INTO journal (incident_id, timestamp, recorded_at, category, text, sender, recipient, author, important, corrects_id, request_id)
+         VALUES (@incidentId, @timestamp, @recordedAt, @category, @text, @sender, @recipient, @author, @important, @correctsId, @requestId)`,
       )
       .run({
         incidentId,
@@ -352,6 +359,7 @@ export class Store {
         author,
         important: entry.important ? 1 : 0,
         correctsId: entry.correctsId ?? null,
+        requestId: entry.requestId ?? null,
       });
     return this.journalEntry(Number(info.lastInsertRowid))!;
   }

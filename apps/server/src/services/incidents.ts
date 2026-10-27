@@ -47,6 +47,8 @@ const INCIDENT_FIELD_LABELS: Record<keyof IncidentPatch, string | null> = {
   lat: 'Position',
   lon: 'Position',
   vehicleVisible: null,
+  procurementMode: 'Beschaffung',
+  procurementStaff: 'Stab für Anforderungen',
 };
 
 /**

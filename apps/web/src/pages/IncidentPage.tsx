@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { BookOpenText, FileText, MapPin, Pencil, Siren, Users } from 'lucide-react';
-import { formatStrength, sumStrength, type Incident } from '@elvis/shared';
+import { PROCUREMENT_MODE_LABELS, formatStrength, sumStrength, type Incident } from '@elvis/shared';
 import { api } from '../lib/api';
 import { fmtDateTime, fmtDuration } from '../lib/format';
 import { useActiveIncident, useNow } from '../lib/hooks';
@@ -112,6 +112,11 @@ function ActiveIncident({ incident }: { incident: Incident }) {
             </dd>
             <dt>Einsatzleiter</dt>
             <dd>{incident.leader || '–'}</dd>
+            <dt>Beschaffung</dt>
+            <dd>
+              {PROCUREMENT_MODE_LABELS[incident.procurementMode]}
+              {incident.procurementMode === 'staff' && incident.procurementStaff && ` (${incident.procurementStaff})`}
+            </dd>
           </dl>
         </Card>
         <Link to="/einsatz/kraefte" className="card card-link">

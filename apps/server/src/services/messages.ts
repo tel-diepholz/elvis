@@ -48,6 +48,7 @@ interface MessageRow {
   ack_at: string | null;
   ack_by: string | null;
   reply_to_id: number | null;
+  request_id: number | null;
   created_at: string;
   created_by: string;
   created_by_user_id: number | null;
@@ -226,6 +227,7 @@ export class MessageService {
       ackAt: r.ack_at,
       ackBy: r.ack_by,
       replyToId: r.reply_to_id,
+      requestId: r.request_id,
       copies: copies.map((k): MessageCopy => ({ roleId: k.role_id, role: k.role_name, ackAt: k.ack_at, ackBy: k.ack_by })),
       createdAt: r.created_at,
       createdBy: r.created_by,
@@ -276,7 +278,7 @@ export class MessageService {
     const input = messageInputSchema.parse(raw);
     const c = this.ctx();
     const ts = iso(this.now());
-    let cols: { senderRoleId: number | null; senderUnitId: number | null; senderText: string; recipientRoleId: number | null; recipientUnitId: number | null; recipientText: string | null; replyToId: number | null };
+    let cols: { senderRoleId: number | null; senderUnitId: number | null; senderText: string; recipientRoleId: number | null; recipientUnitId: number | null; recipientText: string | null; replyToId: number | null; requestId: number | null };
 
     if (input.direction === 'out') {
       if (!viewer.roleIds.includes(input.senderRoleId)) throw new HttpError(403, 'Meldungen nur im Namen einer eigenen Rolle');
@@ -288,24 +290,28 @@ export class MessageService {
         if (original.incident_id !== incidentId || original.direction !== 'in') throw new HttpError(400, 'Bezugsmeldung nicht gefunden');
         replyToId = original.id;
       }
-      cols = { senderRoleId: input.senderRoleId, senderUnitId: null, senderText: this.roleName(input.senderRoleId), recipientRoleId: null, recipientUnitId: unitId, recipientText: text, replyToId };
+      if (input.requestId !== null) {
+        const request = this.db.prepare('SELECT incident_id FROM requests WHERE id = ?').get(input.requestId) as { incident_id: number } | undefined;
+        if (request?.incident_id !== incidentId) throw new HttpError(400, 'Anforderung nicht gefunden');
+      }
+      cols = { senderRoleId: input.senderRoleId, senderUnitId: null, senderText: this.roleName(input.senderRoleId), recipientRoleId: null, recipientUnitId: unitId, recipientText: text, replyToId, requestId: input.requestId };
     } else {
       if (!some(c.settings.radioRoleIds, viewer.roleIds)) throw new HttpError(403, 'Eingangsmeldungen erfassen nur Fernmelder');
       const [unitId, text] = this.party(incidentId, input.sender);
       // Mit angemeldetem Dispatcher verteilt er – eine Auswahl des Fernmelders zählt dann nicht
       const roleId = c.dispatcherUsers.size ? null : input.recipientRoleId;
       if (!c.dispatcherUsers.size && roleId === null) throw new HttpError(400, 'Empfänger fehlt');
-      cols = { senderRoleId: null, senderUnitId: unitId, senderText: text, recipientRoleId: roleId, recipientUnitId: null, recipientText: roleId === null ? null : this.roleName(roleId), replyToId: null };
+      cols = { senderRoleId: null, senderUnitId: unitId, senderText: text, recipientRoleId: roleId, recipientUnitId: null, recipientText: roleId === null ? null : this.roleName(roleId), replyToId: null, requestId: null };
     }
 
     const info = this.deps.store.transaction(() => {
       const res = this.db
         .prepare(
           `INSERT INTO messages (incident_id, direction, body, sender_role_id, sender_unit_id, sender_text, recipient_role_id, recipient_unit_id, recipient_text,
-             reply_to_id, created_at, created_by, created_by_user_id, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             reply_to_id, request_id, created_at, created_by, created_by_user_id, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(incidentId, input.direction, input.body, cols.senderRoleId, cols.senderUnitId, cols.senderText, cols.recipientRoleId, cols.recipientUnitId, cols.recipientText, cols.replyToId, ts, actor.name, actor.id, ts);
+        .run(incidentId, input.direction, input.body, cols.senderRoleId, cols.senderUnitId, cols.senderText, cols.recipientRoleId, cols.recipientUnitId, cols.recipientText, cols.replyToId, cols.requestId, ts, actor.name, actor.id, ts);
       // Kopien an die eingestellten Rollen – nicht an Absender- oder Zielrolle selbst
       const messageId = Number(res.lastInsertRowid);
       const copyTo = input.direction === 'out' ? c.settings.copyOutRoleIds : c.settings.copyInRoleIds;
@@ -423,6 +429,14 @@ export class MessageService {
     const marks = viewer.roleIds.map(() => '?').join(', ');
     const res = this.db.prepare(`UPDATE message_copies SET ack_at = ?, ack_by = ? WHERE message_id = ? AND ack_at IS NULL AND role_id IN (${marks})`).run(ts, actor.name, id, ...viewer.roleIds);
     return res.changes > 0;
+  }
+
+  /** Zur Kenntnis nehmen, soweit es für den Betrachter ansteht (innerhalb der Transaktion des Aufrufers, ohne notify) */
+  acknowledgeIfPending(id: number, actor: TaskActor, viewer: TaskViewer): boolean {
+    const ts = iso(this.now());
+    const own = this.acknowledge(this.row(id), actor, viewer, ts);
+    const copies = this.acknowledgeCopies(id, actor, viewer, ts);
+    return own || copies;
   }
 
   /** Zur Kenntnis genommen: Eingang durch die Zielrolle, Antwort durch die Absenderrolle, Kopien durch ihre Rollen */

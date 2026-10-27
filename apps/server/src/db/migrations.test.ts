@@ -17,6 +17,13 @@ const BEFORE_FORCES = `
   CREATE INDEX units_incident ON units(incident_id);
 `;
 
+/** v37 zurückdrehen: Anforderungen samt Verweisen */
+const UNDO_REQUESTS = `
+  DROP TABLE requests; DROP INDEX journal_request;
+  ALTER TABLE tasks DROP COLUMN request_id; ALTER TABLE messages DROP COLUMN request_id; ALTER TABLE journal DROP COLUMN request_id;
+  ALTER TABLE incidents DROP COLUMN procurement_mode; ALTER TABLE incidents DROP COLUMN procurement_staff;
+`;
+
 describe('Migrationen', () => {
   it('ergänzt addons.manifest bei Datenbanken mit der frühen Fassung von v2', () => {
     const dir = mkdtempSync(join(tmpdir(), 'elvis-mig-'));
@@ -26,6 +33,7 @@ describe('Migrationen', () => {
       const legacy = new Database(join(dir, 'elvis.sqlite'));
       legacy.exec('ALTER TABLE addons DROP COLUMN manifest');
       // v19: Rollen und Aufgaben (Spalten mit Fremdschlüssel lassen sich nicht einzeln entfernen)
+      legacy.exec(UNDO_REQUESTS); // v37
       legacy.exec('DROP TABLE map_history; DROP TABLE incident_overpass_queries; DROP TABLE message_copies; DROP TABLE messages'); // v33–v36, Verlauf
       legacy.exec('DROP TABLE session_roles'); // v32
       legacy.exec('DROP TABLE tasks; DROP TABLE task_templates; DROP TABLE sessions; DROP TABLE roles');
@@ -67,6 +75,7 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec(UNDO_REQUESTS);
       legacy.exec('DROP TABLE map_history; DROP TABLE incident_overpass_queries; DROP TABLE message_copies; DROP TABLE messages; ALTER TABLE map_objects DROP COLUMN label');
       legacy.exec(BEFORE_FORCES);
       legacy.exec('DROP TABLE monitoring_targets; DROP TABLE guest_print_jobs; DROP TABLE workstations; DROP TABLE bluetooth_devices; DROP TABLE display_images; DROP TABLE personnel; DROP TABLE personnel_sheets; DROP TABLE personnel_forms; DROP TABLE app_links; DROP TABLE session_roles');
