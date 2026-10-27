@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { AlarmClock, ArrowRight, Check, CheckCheck, ListPlus, Reply, Send, Undo2, UserCheck } from 'lucide-react';
-import { MESSAGE_BODY_MAX, MESSAGE_REMIND_MINUTES, TASK_SUMMARY_MAX, type Incident, type Message, type MessageInput, type TaskInput } from '@elvis/shared';
+import { AlarmClock, ArrowRight, Check, CheckCheck, ListPlus, PackagePlus, Paperclip, Reply, Send, Undo2, UserCheck } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { MESSAGE_BODY_MAX, MESSAGE_REMIND_MINUTES, TASK_SUMMARY_MAX, REQUEST_STATUS_LABELS, requestLabel, requestOpen, type Incident, type Message, type MessageInput, type RequestInput, type TaskInput } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtTime } from '../../lib/format';
 import { useToast } from '../../lib/toast';
 import { Badge, Field, Modal } from '../ui';
 import { TaskForm } from '../tasks/TaskForm';
+import { RequestForm } from '../requests/RequestForm';
+import { REQUESTS_PATH, useRequests } from '../requests/requestParts';
 import { Markdown, markdownPreview } from './Markdown';
 import { MarkdownEditor } from './MarkdownEditor';
 import { MessageForm } from './MessageForm';
@@ -34,7 +37,8 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
   const toast = useToast();
   const { data: ctx } = useMessageContext();
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.roles });
-  const [mode, setMode] = useState<'view' | 'reply' | 'answer' | 'task'>('view');
+  const [mode, setMode] = useState<'view' | 'reply' | 'answer' | 'task' | 'request' | 'attach'>('view');
+  const navigate = useNavigate();
   const [reply, setReply] = useState('');
   const [routeTo, setRouteTo] = useState<number | null>(null);
 
@@ -55,6 +59,11 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
   const createTask = useMutation({
     mutationFn: (input: TaskInput) => api.createTask(incident.id, input),
     onSuccess: (t) => (toast('success', `Aufgabe „${t.summary}“ angelegt`), setMode('view')),
+    onError,
+  });
+  const createRequest = useMutation({
+    mutationFn: (input: RequestInput) => api.createRequest(incident.id, input),
+    onSuccess: (r) => (toast('success', `Anforderung ${requestLabel(r)} angelegt`), onClose(), navigate(`${REQUESTS_PATH}?id=${r.id}`)),
     onError,
   });
   const respond = useMutation({ mutationFn: (input: MessageInput) => api.createMessage(incident.id, input), ...closing('Antwort als Ausgangsmeldung erstellt') });
@@ -90,6 +99,21 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
           pending={createTask.isPending}
           onSubmit={(input) => createTask.mutate(input)}
         />
+        <button className="btn btn-ghost" onClick={() => setMode('view')}>
+          Zurück zur Meldung
+        </button>
+      </>
+    );
+  }
+
+  // Anforderung aus der Meldung: Kraft = Absender (Eingang) bzw. Empfänger (Ausgang), Material = Meldungstext
+  if (mode === 'attach') return <AttachToRequest incident={incident} message={m} onBack={() => setMode('view')} onClose={onClose} />;
+
+  if (mode === 'request') {
+    const unit = m.direction === 'in' ? { text: m.sender, unitId: m.senderUnitId } : { text: m.recipient ?? '', unitId: m.recipientUnitId };
+    return (
+      <>
+        <RequestForm incidentId={incident.id} prefill={{ unit, material: m.body, sourceMessageId: m.id }} pending={createRequest.isPending} onSubmit={(input) => createRequest.mutate(input)} />
         <button className="btn btn-ghost" onClick={() => setMode('view')}>
           Zurück zur Meldung
         </button>
@@ -209,6 +233,14 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
             <button className="btn" disabled={busy} onClick={() => setMode('task')}>
               <ListPlus size={16} /> Aufgabe erstellen
             </button>
+            <button className="btn" disabled={busy} onClick={() => setMode('request')}>
+              <PackagePlus size={16} /> Anforderung erstellen
+            </button>
+            {m.requestId === null && (
+              <button className="btn" disabled={busy} onClick={() => setMode('attach')}>
+                <Paperclip size={16} /> An Anforderung anhängen
+              </button>
+            )}
             {/* Fernmelder schreiben keine Ausgangsmeldungen */}
             {!ctx?.radio && (
               <button className="btn" disabled={busy} onClick={() => setMode('answer')}>
@@ -237,6 +269,66 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
         </p>
       )}
       {m.replyToId !== null && <p className="cell-sub">Antwort auf Eingangsmeldung #{m.replyToId}</p>}
+      {m.requestId !== null && (
+        <p className="cell-sub">
+          <Link to={`${REQUESTS_PATH}?id=${m.requestId}`}>Zur Anforderung</Link>
+        </p>
+      )}
+      {mode === 'view' && m.pending !== 'recipient' && !incident.closedAt && (
+        <div className="btn-row">
+          <button className="btn btn-sm btn-ghost" onClick={() => setMode('request')}>
+            <PackagePlus size={16} /> Anforderung aus Meldung
+          </button>
+          {m.direction === 'in' && m.requestId === null && (
+            <button className="btn btn-sm btn-ghost" onClick={() => setMode('attach')}>
+              <Paperclip size={16} /> An Anforderung anhängen
+            </button>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+/** Eingangsmeldung an eine bestehende Anforderung hängen, z. B. die Rückmeldung des Stabs – offene zuerst */
+function AttachToRequest({ incident, message: m, onBack, onClose }: { incident: Incident; message: Message; onBack: () => void; onClose: () => void }) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const { data: requests = [] } = useRequests(incident);
+  const sorted = [...requests].sort((a, b) => Number(requestOpen(b.status)) - Number(requestOpen(a.status)) || b.number - a.number);
+  const [requestId, setRequestId] = useState<number | null>(null);
+  const attach = useMutation({
+    mutationFn: (id: number) => api.attachRequestMessage(id, m.id),
+    // Angehängt gilt als zur Kenntnis genommen; weiter in der Anforderung
+    onSuccess: (r) => (toast('success', `Meldung an Anforderung ${requestLabel(r)} angehängt`), onClose(), navigate(`${REQUESTS_PATH}?id=${r.id}`)),
+    onError: (e) => toast('error', e.message),
+  });
+  return (
+    <form
+      className="form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (requestId !== null) attach.mutate(requestId);
+      }}
+    >
+      <Field label="Anforderung *" hint="Die Meldung erscheint im Verlauf der Anforderung und im Einsatztagebuch">
+        <select value={requestId ?? ''} onChange={(e) => setRequestId(e.target.value ? Number(e.target.value) : null)} autoFocus>
+          <option value="">{sorted.length ? 'Anforderung wählen …' : 'Keine Anforderungen im Einsatz'}</option>
+          {sorted.map((r) => (
+            <option key={r.id} value={r.id}>
+              {requestLabel(r)} · {r.unit} · {r.material.split('\n')[0]!.slice(0, 60)} ({REQUEST_STATUS_LABELS[r.status]})
+            </option>
+          ))}
+        </select>
+      </Field>
+      <div className="btn-row">
+        <button type="submit" className="btn btn-primary" disabled={requestId === null || attach.isPending}>
+          <Paperclip size={16} /> Anhängen
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={onBack}>
+          Zurück zur Meldung
+        </button>
+      </div>
+    </form>
   );
 }

@@ -1,4 +1,6 @@
 import { WARNING_LEVEL, type WarningSeverity, type WeatherForecast, type WeatherReport, type WeatherWarning, type WeatherWarnings } from '@elvis/shared';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import type { AlertDraft } from '../alerts.js';
 
 export interface WeatherOptions {
@@ -7,6 +9,8 @@ export interface WeatherOptions {
   /** Bright Sky (https://brightsky.dev) mit den Warnungen des DWD, null = keine Warnungen */
   warningsUrl: string | null;
   userAgent: string;
+  /** Hier überdauert der letzte Stand einen Neustart, null = nur im Speicher */
+  cacheFile?: string | null;
 }
 
 export type WeatherFetch = (url: string, opts: { timeoutMs: number; userAgent: string }) => Promise<unknown>;
@@ -22,8 +26,6 @@ const FORECAST_MS = 15 * 60_000;
 const WARNINGS_MS = 5 * 60_000;
 /** Nach einem Fehler so lange nicht erneut fragen */
 const RETRY_MS = 60_000;
-/** Veraltete Werte höchstens so lange zeigen, wenn der Dienst nicht erreichbar ist */
-const STALE_MS = 12 * 3600_000;
 const CACHE_MAX = 50;
 
 const CURRENT = 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_gusts_10m,wind_direction_10m,is_day';
@@ -166,7 +168,15 @@ interface Entry<T> {
   pending: Promise<void> | null;
 }
 
-/** Ruft Prognose und Warnungen ab und hält sie je Standort (auf ca. 1 km gerundet) kurz vor. */
+interface CacheFile {
+  forecasts: [string, { value: WeatherForecast; okAt: number }][];
+  warnings: [string, { value: WeatherWarnings; okAt: number }][];
+}
+
+/**
+ * Ruft Prognose und Warnungen ab und hält sie je Standort (auf ca. 1 km gerundet) vor. Der letzte erfolgreich
+ * geladene Stand bleibt stehen, bis ein neuer Abruf gelingt, und wird in `cacheFile` gesichert.
+ */
 export class WeatherService {
   private forecasts = new Map<string, Entry<WeatherForecast>>();
   private warnings = new Map<string, Entry<WeatherWarnings>>();
@@ -175,7 +185,35 @@ export class WeatherService {
     private opts: WeatherOptions,
     private fetchJson: WeatherFetch = defaultFetch,
     private now: () => number = Date.now,
-  ) {}
+  ) {
+    this.load();
+  }
+
+  private load(): void {
+    if (!this.opts.cacheFile) return;
+    try {
+      const c = JSON.parse(readFileSync(this.opts.cacheFile, 'utf8')) as CacheFile;
+      const entry = <T>(e: { value: T; okAt: number }): Entry<T> => ({ value: e.value, okAt: e.okAt, triedAt: 0, error: null, pending: null });
+      for (const [k, e] of c.forecasts) this.forecasts.set(k, entry(e));
+      for (const [k, e] of c.warnings) this.warnings.set(k, entry(e));
+    } catch {
+      /* noch kein Stand gesichert oder Datei unlesbar */
+    }
+  }
+
+  private save(): void {
+    if (!this.opts.cacheFile) return;
+    const ok = <T>(m: Map<string, Entry<T>>) =>
+      [...m].flatMap(([k, e]) => (e.value === null ? [] : [[k, { value: e.value, okAt: e.okAt }] as [string, { value: T; okAt: number }]]));
+    const c: CacheFile = { forecasts: ok(this.forecasts), warnings: ok(this.warnings) };
+    try {
+      mkdirSync(dirname(this.opts.cacheFile), { recursive: true });
+      writeFileSync(`${this.opts.cacheFile}.tmp`, JSON.stringify(c));
+      renameSync(`${this.opts.cacheFile}.tmp`, this.opts.cacheFile);
+    } catch {
+      /* Sichern ist nur ein Zusatz; im Speicher bleibt der Stand erhalten */
+    }
+  }
 
   async report(lat: number, lon: number): Promise<WeatherReport> {
     const la = Math.round(lat * 100) / 100;
@@ -207,7 +245,10 @@ export class WeatherService {
           )
         : { value: null, error: 'Wetterwarnungen sind abgeschaltet' },
     ]);
-    return { forecast: forecast.value, forecastError: forecast.error, warnings: warnings.value, warningsError: warnings.error };
+    // aus einem älteren Stand nur noch gültige Warnungen
+    const now = this.now();
+    const valid = warnings.value && { ...warnings.value, items: warnings.value.items.filter((w) => !w.expires || new Date(w.expires).getTime() > now) };
+    return { forecast: forecast.value, forecastError: forecast.error, warnings: valid, warningsError: warnings.error };
   }
 
   private async cached<T>(cache: Map<string, Entry<T>>, key: string, maxAge: number, load: () => Promise<T>): Promise<{ value: T | null; error: string | null }> {
@@ -227,6 +268,7 @@ export class WeatherService {
           entry.value = v;
           entry.okAt = this.now();
           entry.error = null;
+          this.save();
         })
         .catch((err: unknown) => {
           entry.error = `Dienst nicht erreichbar (${err instanceof Error ? err.message : String(err)})`;
@@ -235,9 +277,9 @@ export class WeatherService {
           entry.pending = null;
         });
     }
-    if (entry.pending) await entry.pending;
-    const usable = entry.value !== null && this.now() - entry.okAt < STALE_MS;
-    return { value: usable ? entry.value : null, error: entry.error };
+    // mit vorhandenem Stand nicht auf den Abruf warten, der neue Stand gilt ab der nächsten Abfrage
+    if (entry.pending && entry.value === null) await entry.pending;
+    return { value: entry.value, error: entry.error };
   }
 }
 

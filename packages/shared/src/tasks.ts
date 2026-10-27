@@ -83,6 +83,8 @@ export interface Task {
   mine: boolean;
   /** Rolle ist im Einsatz von niemandem besetzt – deshalb für alle sichtbar */
   roleVacant: boolean;
+  /** Wiedervorlage einer Anforderung */
+  requestId: number | null;
 }
 
 export const taskSchedule = (t: Pick<Task, 'intervalMinutes' | 'dueAt'>): TaskSchedule =>

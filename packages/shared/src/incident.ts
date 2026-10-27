@@ -11,6 +11,10 @@ export interface Incident {
   lon: number | null;
   /** Eigenes Fahrzeug auf der Karte zeigen (in der Objektliste ausblendbar) */
   vehicleVisible: boolean;
+  /** Anforderungen: selbst beschaffen oder über den Stab (Ausgangsmeldung) */
+  procurementMode: 'self' | 'staff';
+  /** Empfänger „Stab“ für Anforderungen im Modus „Stab“ */
+  procurementStaff: string;
   startedAt: string;
   closedAt: string | null;
 }
@@ -22,6 +26,8 @@ export interface NewIncident {
   leader?: string;
   lat?: number | null;
   lon?: number | null;
+  procurementMode?: 'self' | 'staff';
+  procurementStaff?: string;
 }
 
 export type IncidentPatch = Partial<NewIncident> & { vehicleVisible?: boolean };
@@ -62,6 +68,8 @@ export interface JournalEntry {
   author: string;
   important: boolean;
   correctsId: number | null;
+  /** Bezug auf eine Anforderung */
+  requestId: number | null;
 }
 
 export interface NewJournalEntry {
@@ -71,6 +79,8 @@ export interface NewJournalEntry {
   recipient?: string;
   important?: boolean;
   correctsId?: number | null;
+  /** Nur serverseitig: Bezug auf eine Anforderung */
+  requestId?: number | null;
   /** Optional time of the event if it is recorded after the fact. */
   timestamp?: string;
 }

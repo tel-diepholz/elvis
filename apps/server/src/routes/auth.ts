@@ -69,7 +69,7 @@ export function authRoutes(
     const roles = deps.roles.list().filter((r) => roleIds.includes(r.id));
     audit(fullName(user), 'role', `user:${user.id}`, true, roles.length ? `Rollen: ${roles.map((r) => r.name).join(', ')}` : 'ohne Rolle');
     journalRoles(user, req.roleIds, roleIds);
-    deps.notify(['roles', 'tasks', 'messages']);
+    deps.notify(['roles', 'tasks', 'messages', 'requests']);
     return { roles };
   });
 
@@ -108,7 +108,7 @@ export function authRoutes(
       journalRoles(req.user, req.roleIds, [], ' (Abmeldung)');
     }
     // Übernommene Rollen werden frei – Aufgaben dafür gehen an alle
-    if (req.roleIds.length) deps.notify(['roles', 'tasks', 'messages']);
+    if (req.roleIds.length) deps.notify(['roles', 'tasks', 'messages', 'requests']);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return reply.code(204).send();
   });
@@ -144,7 +144,7 @@ export function authRoutes(
     const user = await users.update(id, body, actor);
     if (body.pin !== undefined || (body.isAdmin === false && before.isAdmin)) {
       sessions.revokeUser(id);
-      deps.notify(['roles', 'tasks', 'messages']);
+      deps.notify(['roles', 'tasks', 'messages', 'requests']);
     }
     const changes = [
       body.pin !== undefined && 'PIN zurückgesetzt',
@@ -162,7 +162,7 @@ export function authRoutes(
     const user = users.remove(id, actor);
     audit(fullName(actor), 'delete', `user:${id}`, true, fullName(user));
     // Sitzungen enden, eigene Aufgaben gehen an alle
-    deps.notify(['users', 'roles', 'tasks', 'messages']);
+    deps.notify(['users', 'roles', 'tasks', 'messages', 'requests']);
     return reply.code(204).send();
   });
 }

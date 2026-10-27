@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { AlarmClock, Check, CircleCheckBig, Clock, FileText, ListChecks, Pencil, Plus, Repeat, Square, Trash2, Undo2 } from 'lucide-react';
+import { AlarmClock, Check, CircleCheckBig, Clock, FileText, ListChecks, PackagePlus, Pencil, Plus, Repeat, Square, Trash2, Undo2 } from 'lucide-react';
 import { fmtInterval, taskIsDue, type Incident, type Task, type TaskInput } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { fmtDateTime } from '../../lib/format';
@@ -9,6 +10,7 @@ import { useToast } from '../../lib/toast';
 import { Badge, Card, EmptyState, Loading, Modal, Segmented } from '../../components/ui';
 import { TaskForm } from '../../components/tasks/TaskForm';
 import { fmtDue, SNOOZE_MINUTES, useTaskActions, useTasks } from '../../components/tasks/taskActions';
+import { REQUESTS_PATH } from '../../components/requests/requestParts';
 
 type Filter = 'mine' | 'all' | 'done';
 
@@ -89,6 +91,11 @@ function TaskItem({ task, now, onEdit }: { task: Task; now: Date; onEdit: () => 
             {task.lastDoneAt && recurring && ` · zuletzt erledigt ${fmtDateTime(task.lastDoneAt)} von ${task.lastDoneBy}`}
           </p>
           <div className="btn-row">
+            {task.requestId !== null && (
+              <Link className="btn btn-sm btn-primary" to={`${REQUESTS_PATH}?id=${task.requestId}`}>
+                <PackagePlus size={16} /> Anforderung öffnen
+              </Link>
+            )}
             {task.documentTemplateId !== null && !task.doneAt && (
               <button className="btn btn-sm" disabled={openTemplate.isPending} onClick={() => openTemplate.mutate(task)}>
                 <FileText size={16} /> {task.documentTemplateName ?? 'Vorlage'} ausfüllen

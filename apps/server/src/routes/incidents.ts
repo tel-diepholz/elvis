@@ -33,6 +33,8 @@ const newIncident = z.object({
   leader: text(100).optional(),
   lat: coord(-90, 90).optional(),
   lon: coord(-180, 180).optional(),
+  procurementMode: z.enum(['self', 'staff']).optional(),
+  procurementStaff: text(120).optional(),
 });
 
 const categories = Object.keys(JOURNAL_CATEGORY_LABELS) as [JournalCategory, ...JournalCategory[]];

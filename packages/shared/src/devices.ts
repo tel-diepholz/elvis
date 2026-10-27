@@ -352,6 +352,30 @@ export interface WeatherState {
   humidityPercent: number | null;
   pressureHpa: number | null;
   precipitationMmH: number | null;
+  /** Weitere Angaben des GPS-Empfängers, null ohne GPS. */
+  gnss: GnssInfo | null;
+}
+
+/** Art der Positionsbestimmung nach NMEA 2000 (PGN 129029). */
+export type GnssMethod = 'none' | 'gnss' | 'dgnss' | 'precise' | 'rtk-fixed' | 'rtk-float' | 'estimated' | 'manual' | 'simulated';
+
+export interface GnssInfo {
+  method: GnssMethod | null;
+  satellites: number | null;
+  /** Horizontale Genauigkeitsminderung (HDOP): unter 1 sehr gut, über 5 ungenau. */
+  hdop: number | null;
+  /** Höhe über NN (Ellipsoidhöhe abzüglich Geoidundulation, sonst wie gemeldet). */
+  altitudeM: number | null;
+  /** Geschwindigkeit über Grund. */
+  speedMs: number | null;
+  /** Kurs über Grund, rechtweisend; nur in Fahrt aussagekräftig. */
+  courseDeg: number | null;
+  /** Neigung des Sensors: Nicken (vorn hoch positiv) und Rollen (rechts runter positiv). */
+  pitchDeg: number | null;
+  rollDeg: number | null;
+  /** Uhrzeit laut GPS (ISO) und deren Abweichung von der Server-Uhr in Sekunden (GPS minus Server). */
+  time: string | null;
+  clockOffsetS: number | null;
 }
 
 export interface DeviceStateMap {

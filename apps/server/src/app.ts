@@ -68,7 +68,9 @@ import { RoleService } from './services/roles.js';
 import { TaskService } from './services/tasks.js';
 import { taskRoutes } from './routes/tasks.js';
 import { MessageService } from './services/messages.js';
+import { RequestService } from './services/requests.js';
 import { messageRoutes } from './routes/messages.js';
+import { requestRoutes } from './routes/requests.js';
 import { printingRoutes, type OfficeDownload } from './routes/printing.js';
 import { PrintService, type IppTransport } from './services/printing.js';
 import { scanningRoutes } from './routes/scanning.js';
@@ -134,6 +136,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const roles = new RoleService(db, sessions);
   const tasks = new TaskService(db, { store, roles, notify: (t) => hub.invalidate(t) });
   const messages = new MessageService(db, { store, roles, notify: (t) => hub.invalidate(t) });
+  const requests = new RequestService(db, { store, roles, tasks, messages, notify: (t) => hub.invalidate(t) });
   const forces = new ForceService(db, store);
   const incidents = new IncidentService(
     store,
@@ -167,7 +170,10 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   );
   const overpass = new OverpassService({ onlineUrl: config.map.overpassUrl, userAgent: config.map.userAgent, retryDelaysMs: opts.overpassRetryDelaysMs }, db, opts.overpassFetch);
   const radar = new RadarService({ ...config.map.radar, userAgent: config.map.userAgent }, opts.radarFetch);
-  const weather = new WeatherService({ ...config.weather, userAgent: config.map.userAgent }, opts.weatherFetch);
+  const weather = new WeatherService(
+    { ...config.weather, userAgent: config.map.userAgent, cacheFile: config.dataDir === ':memory:' ? null : join(config.dataDir, 'weather-cache.json') },
+    opts.weatherFetch,
+  );
   // Unwetter am Fahrzeugstandort (GPS der Wetterstation, sonst Einsatzort) erscheinen als Meldung
   const weatherWatch = new WeatherAlertWatch(
     weather,
@@ -270,6 +276,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     authRoutes(api, { users, sessions, limiter, store, roles, notify: (t) => hub.invalidate(t) });
     taskRoutes(api, { tasks, roles, store, notify: (t) => hub.invalidate(t) });
     messageRoutes(api, { messages, store, notify: (t) => hub.invalidate(t) });
+    requestRoutes(api, { requests, store, notify: (t) => hub.invalidate(t) });
     deviceRoutes(api, devices, store, (t) => hub.invalidate(t));
     incidentRoutes(api, { incidents, forces, store, notify: (t) => hub.invalidate(t) });
     documentRoutes(api, { documents, templates, office, store, notify: (t) => hub.invalidate(t) });
@@ -284,7 +291,13 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     monitoringRoutes(api, { monitoring, store, notify: (t) => hub.invalidate(t) });
     bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
     mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder, overpass, radar);
-    weatherRoutes(api, weather, weatherWatch);
+    weatherRoutes(api, weather, weatherWatch, {
+      settings,
+      store,
+      notify: (t) => hub.invalidate(t),
+      station: () => (devices.adapter('weather') ? devices.snapshot('weather') : null),
+      stormLimitMs: config.alerts.stormWarnMs,
+    });
     trafficRoutes(api, { traffic, store, notify: (t) => hub.invalidate(t) });
     appLinkRoutes(api, appLinks);
     personnelRoutes(api, personnel);

@@ -26,7 +26,7 @@ import {
   type Unit,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
-import { PrinterSettings, mediaFor, usePrintForm, usePrintStatus } from '../../components/print/PrinterSettings';
+import { PrinterSettings, downloadBlob, mediaFor, usePrintForm, usePrintStatus } from '../../components/print/PrinterSettings';
 import { compass, fmtDtg, fmtNum, fmtTime } from '../../lib/format';
 import { useToast } from '../../lib/toast';
 import { useSettings } from '../../lib/hooks';
@@ -182,17 +182,6 @@ function FitFrame({ bounds, deps }: { bounds: L.LatLngBoundsExpression; deps: un
   return null;
 }
 
-function download(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
-
 export function PrintDialog(props: PrintDialogProps) {
   const { sources, vehicle, incident, objects, wind: weather, weatherGustMs } = props;
   const mapSign = useSettings().data?.mapSign ?? DEFAULT_VEHICLE_SIGN;
@@ -286,7 +275,7 @@ export function PrintDialog(props: PrintDialogProps) {
       return { ...map, job };
     },
     onSuccess: ({ pdf, filename, missingTiles, job }) => {
-      if (!job) download(pdf, filename);
+      if (!job) downloadBlob(pdf, filename);
       const what = job ? `Lagekarte an ${job.printerName} gesendet${job.archivedPath ? ` und unter „${job.archivedPath}“ abgelegt` : ''}` : 'Lagekarte als PDF erstellt';
       if (missingTiles) toast('error', `${what}, aber ${missingTiles} Kartenkachel(n) fehlen (offline?)`);
       else toast('success', what);

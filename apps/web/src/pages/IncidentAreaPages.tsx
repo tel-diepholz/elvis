@@ -3,6 +3,7 @@ import { RequireIncident } from '../components/RequireIncident';
 import { DocumentsView } from './incident/DocumentsView';
 import { JournalView } from './incident/JournalView';
 import { MessagesView } from './incident/MessagesView';
+import { RequestsView } from './incident/RequestsView';
 import { TasksView } from './incident/TasksView';
 import { UnitsView } from './incident/UnitsView';
 
@@ -41,6 +42,19 @@ export function MessagesPage() {
         <>
           <PageHeader title="Meldungen" subtitle={subtitle(incident)} />
           <MessagesView incident={incident} />
+        </>
+      )}
+    </RequireIncident>
+  );
+}
+
+export function RequestsPage() {
+  return (
+    <RequireIncident>
+      {(incident) => (
+        <>
+          <PageHeader title="Anforderungen" subtitle={subtitle(incident)} />
+          <RequestsView incident={incident} />
         </>
       )}
     </RequireIncident>

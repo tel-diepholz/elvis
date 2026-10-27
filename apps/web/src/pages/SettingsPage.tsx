@@ -23,6 +23,7 @@ import {
   Truck,
   UserRoundCog,
   Users,
+  PackagePlus,
   Wifi,
 } from 'lucide-react';
 import type { DeviceId } from '@elvis/shared';
@@ -38,6 +39,7 @@ import { DocumentFoldersCard } from './system/DocumentFoldersCard';
 import { ForcesCard } from './system/ForcesCard';
 import { MapSourcesCard } from './system/MapSourcesCard';
 import { MessageSettingsCard } from './system/MessageSettingsCard';
+import { RequestSettingsCard } from './system/RequestSettingsCard';
 import { OverpassQueriesCard } from './system/OverpassQueriesCard';
 import { ModuleSection } from './system/ModuleSection';
 import { MonitoringCard } from './system/MonitoringCard';
@@ -145,6 +147,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="meldungen" title="Meldungen" icon={<Mail {...ICON} />} summary="Fernmelder und Dispatcher">
             <MessageSettingsCard />
+          </SettingsSection>
+          <SettingsSection id="anforderungen" title="Anforderungen" icon={<PackagePlus {...ICON} />} summary="Beschaffungsrolle">
+            <RequestSettingsCard />
           </SettingsSection>
         </SettingsGroup>
       </div>

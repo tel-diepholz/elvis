@@ -27,6 +27,18 @@ export function usePrintStatus(enabled = true) {
   return useQuery({ queryKey: ['printing'], queryFn: api.printing, refetchInterval: 10_000, enabled });
 }
 
+/** Erzeugte Datei im Browser herunterladen */
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 /** Papierformat des Druckers zu A4/A3/…, falls er es kennt */
 export function mediaFor(printer: PrinterInfo | null, paper: string): string {
   return printer?.media.find((m) => m.startsWith(`iso_${paper.toLowerCase()}_`)) ?? '';
