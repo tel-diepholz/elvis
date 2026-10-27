@@ -135,6 +135,23 @@ export function utmToLatLon(zone: number, northern: boolean, easting: number, no
   return { lat: deg(lat), lon: centralMeridian(zone) + deg(lon) };
 }
 
+/** Fläche eines Rings [Länge, Breite] in m² auf der Kugel (Chamberlain & Duquette, wie turf.js) */
+function ringArea(ring: number[][]): number {
+  let sum = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const prev = ring[(i + ring.length - 1) % ring.length]!;
+    const next = ring[(i + 1) % ring.length]!;
+    sum += (rad(next[0]!) - rad(prev[0]!)) * Math.sin(rad(ring[i]![1]!));
+  }
+  return Math.abs((sum * A * A) / 2);
+}
+
+/** Fläche eines Umrisses in m²: äußere Ringe abzüglich der Löcher */
+export function outlineArea(outline: GeoOutline): number {
+  const polygons = outline.type === 'Polygon' ? [outline.coordinates] : outline.coordinates;
+  return polygons.reduce((total, [outer, ...holes]) => total + (outer ? ringArea(outer) : 0) - holes.reduce((h, r) => h + ringArea(r), 0), 0);
+}
+
 /** UTMREF/MGRS mit 1 m Auflösung, z. B. „32U MD 66507 40110“ */
 export function toMgrs(lat: number, lon: number): string {
   const u = latLonToUtm(lat, lon);

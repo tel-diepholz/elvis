@@ -23,8 +23,18 @@ function Select<K extends string>({ label, value, options, onChange, disabled }:
   );
 }
 
-/** Zusammenstellen eines taktischen Zeichens mit Live-Vorschau. */
-export function TacticalSignEditor({ value, onChange, disabled }: { value: TacticalSign; onChange: (s: TacticalSign) => void; disabled?: boolean }) {
+/** Zusammenstellen eines taktischen Zeichens mit Live-Vorschau; bases schränkt die Grundzeichen ein (eines = keine Auswahl). */
+export function TacticalSignEditor({
+  value,
+  onChange,
+  disabled,
+  bases,
+}: {
+  value: TacticalSign;
+  onChange: (s: TacticalSign) => void;
+  disabled?: boolean;
+  bases?: TacticalSign['base'][];
+}) {
   const set = <K extends keyof TacticalSign>(k: K, v: TacticalSign[K]) => onChange({ ...value, [k]: v });
   return (
     <div className="sign-editor">
@@ -32,7 +42,15 @@ export function TacticalSignEditor({ value, onChange, disabled }: { value: Tacti
         <TacticalSignImage sign={value} height={150} />
       </div>
       <div className="sign-controls">
-        <Select label="Grundzeichen" value={value.base} options={TACTICAL_BASES} onChange={(v) => set('base', v)} disabled={disabled} />
+        {(!bases || bases.length > 1) && (
+          <Select
+            label="Grundzeichen"
+            value={value.base}
+            options={bases ? (Object.fromEntries(bases.map((b) => [b, TACTICAL_BASES[b]])) as Record<TacticalSign['base'], string>) : TACTICAL_BASES}
+            onChange={(v) => set('base', v)}
+            disabled={disabled}
+          />
+        )}
         {value.base === 'vehicle' && <Select label="Fahrzeugart" value={value.mobility} options={TACTICAL_MOBILITY} onChange={(v) => set('mobility', v)} disabled={disabled} />}
         <Select label="Organisation (Farbe)" value={value.org} options={TACTICAL_ORGS} onChange={(v) => set('org', v)} disabled={disabled} />
         <Select label="Fachaufgabe" value={value.function} options={TACTICAL_FUNCTIONS} onChange={(v) => set('function', v)} disabled={disabled} />

@@ -26,7 +26,7 @@ describe('Migrationen', () => {
       const legacy = new Database(join(dir, 'elvis.sqlite'));
       legacy.exec('ALTER TABLE addons DROP COLUMN manifest');
       // v19: Rollen und Aufgaben (Spalten mit Fremdschlüssel lassen sich nicht einzeln entfernen)
-      legacy.exec('DROP TABLE incident_overpass_queries; DROP TABLE message_copies; DROP TABLE messages'); // v33–v36
+      legacy.exec('DROP TABLE map_history; DROP TABLE incident_overpass_queries; DROP TABLE message_copies; DROP TABLE messages'); // v33–v36, Verlauf
       legacy.exec('DROP TABLE session_roles'); // v32
       legacy.exec('DROP TABLE tasks; DROP TABLE task_templates; DROP TABLE sessions; DROP TABLE roles');
       legacy.exec(
@@ -67,7 +67,7 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
-      legacy.exec('DROP TABLE incident_overpass_queries; DROP TABLE message_copies; DROP TABLE messages');
+      legacy.exec('DROP TABLE map_history; DROP TABLE incident_overpass_queries; DROP TABLE message_copies; DROP TABLE messages; ALTER TABLE map_objects DROP COLUMN label');
       legacy.exec(BEFORE_FORCES);
       legacy.exec('DROP TABLE monitoring_targets; DROP TABLE guest_print_jobs; DROP TABLE workstations; DROP TABLE bluetooth_devices; DROP TABLE display_images; DROP TABLE personnel; DROP TABLE personnel_sheets; DROP TABLE personnel_forms; DROP TABLE app_links; DROP TABLE session_roles');
       legacy.exec("INSERT INTO incidents (id, title, started_at) VALUES (1, 'Brand', 't0')");

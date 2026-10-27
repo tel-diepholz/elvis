@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L, { type LatLngBoundsExpression, type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ListPlus, MapPin, Plane, Printer, Ship, X } from 'lucide-react';
-import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type OverpassFeature, type TrackedData, type TrafficHit, type Unit } from '@elvis/shared';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Check, History, ListPlus, MapPin, Plane, Printer, Ship, Trash2, Undo2, X } from 'lucide-react';
+import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type OverpassFeature, type TacticalSign, type TrackedData, type TrafficHit, type Unit } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useActiveIncident, useNow, useSettings } from '../lib/hooks';
 import { useAuth } from '../lib/auth';
@@ -17,14 +17,33 @@ import { useToast } from '../lib/toast';
 import { Modal } from '../components/ui';
 import { AREA_STYLE, MapObjectsLayer, objectBounds, useMapObjects } from '../components/map/objects';
 import { UnitsLayer, useMapUnits } from '../components/map/units';
+import { Dv102Picker, GeneratorSignDialog, generatorName, generatorSign } from '../components/map/dv102';
 import { ALTITUDE_LEGEND } from '../components/map/aircraftIcons';
 import { RadarControl, RadarLayer, useRadar } from '../components/map/radar';
 import { AircraftLayer, ShipLayer, readLayers, saveLayers, trafficObject, type TrafficLayers, type TrafficStatus } from '../components/map/traffic';
 import { PrintDialog } from './map/PrintDialog';
 import { MapSearch } from './map/search';
 import { ObjectList } from './map/objectlist';
-import { MapStylePicker, ObjectMenu, WindTile, type PlaceKind } from './map/toolbar';
+import { MapStylePicker, ObjectMenu, WindTile, ZoomControl, CursorPosition, type PlaceKind } from './map/toolbar';
 import { TrafficSearch } from './map/trafficSearch';
+import { TimelineBar, useSettled } from './map/timeline';
+import {
+  DrawLayer,
+  EditLayer,
+  SHAPE_LABELS,
+  canFinish,
+  canRemovePoint,
+  drawHint,
+  editHint,
+  editPatch,
+  isComplete,
+  removePoint,
+  shapeObject,
+  startEdit,
+  type Drawing,
+  type ShapeEdit,
+  type ShapeKind,
+} from './map/draw';
 import { OverpassLayer, OverpassPanel, featureObject, overpassResultText, useOverpassRun, type OverpassHits } from './map/overpass';
 
 const VIEW_KEY = 'elvis.map.view';
@@ -49,7 +68,7 @@ const saveSource = (id: string | null) => {
 const incidentIcon = L.divIcon({ className: 'map-marker incident', html: '<span>!</span>', iconSize: [30, 30], iconAnchor: [15, 15] });
 const searchIcon = L.divIcon({ className: 'map-marker search', html: '<span></span>', iconSize: [20, 20], iconAnchor: [10, 10] });
 
-const PLACE_LABELS: Record<PlaceKind, string> = { incident: 'den Einsatzort', gauss: 'die Quelle der Gauß-Fahne', sector: 'den Ursprung des Sektors' };
+const PLACE_LABELS: Record<PlaceKind, string> = { incident: 'den Einsatzort', point: 'den Punkt', sign: 'das Zeichen', gauss: 'die Quelle der Gauß-Fahne', sector: 'den Ursprung des Sektors' };
 
 type FlyTarget = { pos: LatLngExpression; bounds?: LatLngBoundsExpression; zoom?: number; n: number };
 
@@ -103,14 +122,34 @@ export function MapPage() {
   const { user } = useAuth();
   const weather = useDevice('weather');
   const { data: incident } = useActiveIncident();
-  const { data: objects = [] } = useMapObjects(incident?.id);
-  const { data: units = [] } = useMapUnits(incident?.id);
+  const { data: liveObjects = [] } = useMapObjects(incident?.id);
+  const { data: liveUnits = [] } = useMapUnits(incident?.id);
   const queryClient = useQueryClient();
   const toast = useToast();
   const now = useNow();
+  // Zeitstrahl: historyAt = gezeigter Zeitpunkt, null = live; geladen wird erst, wenn der Regler zur Ruhe kommt
+  const [timeline, setTimeline] = useState(false);
+  const [historyAt, setHistoryAt] = useState<string | null>(null);
+  const settledAt = useSettled(historyAt);
+  const historyQuery = useQuery({
+    queryKey: ['mapHistory', incident?.id, settledAt],
+    queryFn: () => api.mapHistory(incident!.id, settledAt!),
+    enabled: !!incident && !!settledAt,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+  const history = historyAt && historyQuery.data ? historyQuery.data : null;
+  /** Gezeigte Lage: live oder aus dem Verlauf */
+  const objects = history ? history.objects : liveObjects;
+  const units = history ? history.units : liveUnits;
+  const shownIncident = incident && history ? { ...incident, ...history.incident } : incident;
   const [placing, setPlacing] = useState<PlaceKind | null>(null);
   /** Einheit der Kräfteübersicht, deren Position gerade gesetzt wird */
   const [placingUnit, setPlacingUnit] = useState<Unit | null>(null);
+  /** Form, die gerade gezeichnet wird (Menü „Objekte“ → Zeichnen) */
+  const [drawing, setDrawing] = useState<Drawing | null>(null);
+  /** Form, die gerade bearbeitet wird (Objektliste → Form bearbeiten); das Objekt selbst ist so lange ausgeblendet */
+  const [shapeEdit, setShapeEdit] = useState<ShapeEdit | null>(null);
   const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null);
   const [searchHit, setSearchHit] = useState<GeocodeResult | null>(null);
   /** Treffer der letzten Overpass-Abfrage (bleiben, bis sie entfernt werden) */
@@ -119,6 +158,12 @@ export function MapPage() {
   const mapRef = useRef<L.Map | null>(null);
   const [printing, setPrinting] = useState(false);
   const [searchingTraffic, setSearchingTraffic] = useState(false);
+  /** Auswahl eines Lagezeichens offen; das gewählte Zeichen wird danach in die Karte getippt */
+  const [choosingSign, setChoosingSign] = useState(false);
+  /** Gewähltes Zeichen: fertiges Lagezeichen oder Zeichen aus dem Generator (dessen Dialog: Grundzeichen der Kachel) */
+  const [sign, setSign] = useState<{ sign: string } | { tactical: TacticalSign } | null>(null);
+  const [generating, setGenerating] = useState<TacticalSign | null>(null);
+  const placeSign = (s: { sign: string } | { tactical: TacticalSign }) => (setSign(s), setChoosingSign(false), setGenerating(null), setPlacingUnit(null), setDrawing(null), setShapeEdit(null), setPlacing('sign'));
   /** Ebenen Flugzeuge/Schiffe (pro Browser) und was sie gerade zeigen */
   const [layers, setLayers] = useState<TrafficLayers>(readLayers);
   const chooseLayers = (l: TrafficLayers) => (setLayers(l), saveLayers(l));
@@ -138,14 +183,23 @@ export function MapPage() {
   const source = sources.find((s) => s.id === sourceId) ?? autoSource(sources, dark);
 
   const origin = useMemo(
-    () => (incident?.lat != null && incident.lon != null ? { lat: incident.lat, lon: incident.lon } : null),
-    [incident?.lat, incident?.lon],
+    () => (shownIncident?.lat != null && shownIncident.lon != null ? { lat: shownIncident.lat, lon: shownIncident.lon } : null),
+    [shownIncident?.lat, shownIncident?.lon],
   );
   // Für Ausbreitung nötig: Windgeschwindigkeit und -richtung
   const ws = weather?.state;
   const wind = ws && ws.windSpeedMs !== null && ws.windDirectionDeg !== null ? { windSpeedMs: ws.windSpeedMs, windDirectionDeg: ws.windDirectionDeg } : undefined;
-  /** Objekte ändern: angemeldet und laufender Einsatz */
-  const canEdit = !!user && !!incident && !incident.closedAt;
+  /** Objekte ändern: angemeldet, laufender Einsatz und die aktuelle Lage (nicht im Verlauf) */
+  const canEdit = !!user && !!incident && !incident.closedAt && !historyAt;
+  /** Zeitpunkt wählen; in der Vergangenheit enden Setzen, Zeichnen und Bearbeiten */
+  const travel = (at: string | null) => {
+    setHistoryAt(at);
+    if (!at) return;
+    setPlacing(null);
+    setPlacingUnit(null);
+    setDrawing(null);
+    setShapeEdit(null);
+  };
 
   const setLocation = useMutation({
     mutationFn: (pos: { lat: number; lon: number }) => api.updateIncident(incident!.id, pos),
@@ -198,7 +252,8 @@ export function MapPage() {
   const searchFocus = () => view.current ?? (vPos ? { lat: vPos[0], lon: vPos[1] } : origin);
 
   // Im Einsatz lässt sich das eigene Fahrzeug in der Objektliste ausblenden
-  const showVehicle = !!vPos && (incident?.vehicleVisible ?? true);
+  // Im Verlauf fehlt seine Position (das GPS wird nicht mitgeschrieben)
+  const showVehicle = !!vPos && !historyAt && (incident?.vehicleVisible ?? true);
 
   const flyToObject = (target: MapObject | Unit | 'incident' | 'vehicle') => {
     if (target === 'incident') return iPos && fly(iPos, { zoom: 16 });
@@ -221,31 +276,81 @@ export function MapPage() {
     );
   };
 
+  const startDrawing = (kind: ShapeKind) => (setPlacing(null), setPlacingUnit(null), setShapeEdit(null), setDrawing({ kind, points: [] }));
+  const saveShape = useMutation({
+    mutationFn: (e: ShapeEdit) => api.patchMapObject(e.id, editPatch(e)),
+    onSuccess: () => (setShapeEdit(null), void queryClient.invalidateQueries({ queryKey: ['mapObjects', incident!.id] })),
+    onError: (e) => toast('error', e.message),
+  });
+  const editShape = (o: MapObject) => {
+    setPlacing(null);
+    setPlacingUnit(null);
+    setDrawing(null);
+    setShapeEdit(startEdit(o));
+    flyToObject(o);
+  };
+  // Beim Bearbeiten: Enter speichert, Esc bricht ab, Entf entfernt den gewählten Punkt
+  useEffect(() => {
+    if (!shapeEdit) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'Escape') setShapeEdit(null);
+      else if (e.key === 'Enter' && !saveShape.isPending) saveShape.mutate(shapeEdit);
+      else if (e.key === 'Delete' || e.key === 'Backspace') setShapeEdit(removePoint(shapeEdit));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+  const finishDrawing = (d: Drawing) => (setDrawing(null), addObject.mutate(shapeObject(d)));
+  const addDrawPoint = (p: [number, number]) => {
+    if (!drawing) return;
+    const next = { ...drawing, points: [...drawing.points, p] };
+    if (isComplete(next)) finishDrawing(next);
+    else setDrawing(next);
+  };
+  const undoDrawPoint = () => setDrawing((d) => d && { ...d, points: d.points.slice(0, -1) });
+  // Beim Zeichnen: Enter schließt ab, Esc bricht ab, Strg+Z nimmt den letzten Punkt zurück
+  useEffect(() => {
+    if (!drawing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'Escape') setDrawing(null);
+      else if (e.key === 'Enter' && canFinish(drawing)) finishDrawing(drawing);
+      else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) (e.preventDefault(), undoDrawPoint());
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   const place = (kind: PlaceKind | Unit, lat: number, lon: number) => {
     setPlacing(null);
     setPlacingUnit(null);
     if (typeof kind === 'object') return moveUnit.mutate({ unit: kind, lat, lon });
     if (kind === 'incident') setLocation.mutate({ lat, lon });
+    else if (kind === 'point') addObject.mutate({ kind: 'point', name: 'Punkt', lat, lon, data: { detail: '' } });
+    // Name wie in der Auswahl (Dateiname des Zeichens ohne Unterstriche) bzw. Grundzeichen mit Text
+    else if (kind === 'sign' && sign)
+      addObject.mutate({ kind: 'sign', name: 'sign' in sign ? sign.sign.split('/')[1]!.replace(/_/g, ' ') : generatorName(sign.tactical), lat, lon, data: { detail: '', ...sign } });
     else if (kind === 'gauss') addObject.mutate({ kind: 'gauss', name: 'Gauß-Fahne', lat, lon, data: DEFAULT_GAUSS });
     else addObject.mutate({ kind: 'sector', name: 'Sektor 60°', lat, lon, data: { sectorM: 1000 } });
   };
 
   return (
-    <div className="map-page">
+    <div className={`map-page ${timeline ? 'with-timeline' : ''} ${historyAt ? 'in-past' : ''}`}>
       <MapContainer
         center={saved ? [saved.lat, saved.lon] : iPos ?? vPos ?? fallback}
         zoom={saved?.zoom ?? (iPos ? 14 : vPos ? 16 : 6)}
-        className={`map ${placing || placingUnit ? 'placing' : ''}`}
+        className={`map ${placing || placingUnit || drawing ? 'placing' : ''}`}
         zoomControl={false}
         ref={mapRef}
       >
         {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} attribution={source.attribution} maxZoom={source.maxZoom} />}
         {layers.radar && <RadarLayer radar={radar} />}
-        {layers.aircraft && <AircraftLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setAircraftStatus} />}
-        {layers.ships && <ShipLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setShipStatus} />}
-        <MapObjectsLayer objects={objects} wind={wind} now={now} links />
+        {layers.aircraft && !historyAt && <AircraftLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setAircraftStatus} />}
+        {layers.ships && !historyAt && <ShipLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setShipStatus} />}
+        <MapObjectsLayer objects={shapeEdit ? objects.filter((o) => o.id !== shapeEdit.id) : objects} wind={wind} now={now} links />
         {overpassHits && <OverpassLayer hits={overpassHits} taken={takenOsm} adding={addObject.isPending} onAdd={canEdit ? addFeature : undefined} />}
-        <UnitsLayer units={units} onMove={canEdit ? (unit, lat, lon) => moveUnit.mutate({ unit, lat, lon }) : undefined} />
+        <UnitsLayer units={units} movable={placingUnit?.id} onMove={canEdit ? (unit, lat, lon) => place(unit, lat, lon) : undefined} />
         {showVehicle && (
           <Marker position={vPos!} icon={vehicleIcon}>
             <Popup>
@@ -307,8 +412,12 @@ export function MapPage() {
             </Popup>
           </Marker>
         )}
+        {shapeEdit && <EditLayer edit={shapeEdit} onChange={setShapeEdit} />}
+        {drawing && <DrawLayer drawing={drawing} onPoint={addDrawPoint} onFinish={() => canFinish(drawing) && finishDrawing(drawing)} />}
         <FlyTo target={flyTarget} />
         <ViewTracker view={view} />
+        <ZoomControl aboveWind={!!weather} />
+        <CursorPosition />
       </MapContainer>
 
       <div className="map-overlay map-tools">
@@ -318,7 +427,9 @@ export function MapPage() {
           enabled={canEdit}
           reason={!incident ? 'Objekte gehören zu einem Einsatz – erst einen Einsatz auflegen' : 'Zum Bearbeiten anmelden'}
           hasLocation={!!iPos}
-          onPlace={(k) => (setPlacingUnit(null), setPlacing(k))}
+          onPlace={(k) => (setPlacingUnit(null), setDrawing(null), setShapeEdit(null), setPlacing(k))}
+          onDraw={startDrawing}
+          onSign={() => setChoosingSign(true)}
           templates={overpassTemplates}
           overpass={overpassHits && { name: overpassHits.query.name, count: overpassHits.result.features.length }}
           overpassRunning={overpass.running?.name ?? null}
@@ -327,6 +438,16 @@ export function MapPage() {
           onOverpass={() => setOverpassOpen(true)}
           onClearOverpass={() => setOverpassHits(null)}
         />
+        {incident && (
+          <button
+            className={`btn ${timeline ? 'active' : ''}`}
+            onClick={() => (timeline ? (setTimeline(false), travel(null)) : setTimeline(true))}
+            aria-pressed={timeline}
+            title="Lage zu einem früheren Zeitpunkt zeigen"
+          >
+            <History size={18} /> Verlauf
+          </button>
+        )}
         {user && (
           <button className="btn" onClick={() => setPrinting(true)} disabled={!source}>
             <Printer size={18} /> Drucken
@@ -345,6 +466,46 @@ export function MapPage() {
         hits={overpassHits}
         onClear={() => setOverpassHits(null)}
       />
+
+      {shapeEdit && (
+        <div className="map-overlay map-placing" role="status">
+          <span>
+            {objects.find((o) => o.id === shapeEdit.id)?.name}: {editHint(shapeEdit)}
+          </span>
+          {canRemovePoint(shapeEdit) && (
+            <button type="button" className="btn btn-sm" onClick={() => setShapeEdit(removePoint(shapeEdit))} title="Gewählten Punkt entfernen (Entf)">
+              <Trash2 size={14} /> Punkt entfernen
+            </button>
+          )}
+          <button type="button" className="btn btn-sm btn-primary" disabled={saveShape.isPending} onClick={() => saveShape.mutate(shapeEdit)} title="Form speichern (Enter)">
+            <Check size={14} /> Speichern
+          </button>
+          <button type="button" className="btn btn-sm" onClick={() => setShapeEdit(null)} title="Abbrechen (Esc)">
+            Abbrechen
+          </button>
+        </div>
+      )}
+
+      {drawing && (
+        <div className="map-overlay map-placing" role="status">
+          <span>
+            {SHAPE_LABELS[drawing.kind]}: {drawHint(drawing)}
+          </span>
+          {drawing.points.length > 0 && (
+            <button type="button" className="btn btn-sm" onClick={undoDrawPoint} title="Letzten Punkt entfernen (Strg+Z)">
+              <Undo2 size={14} /> Rückgängig
+            </button>
+          )}
+          {(drawing.kind === 'polygon' || drawing.kind === 'line') && (
+            <button type="button" className="btn btn-sm btn-primary" disabled={!canFinish(drawing)} onClick={() => finishDrawing(drawing)} title="Form speichern (Enter)">
+              <Check size={14} /> Fertig
+            </button>
+          )}
+          <button type="button" className="btn btn-sm" onClick={() => setDrawing(null)} title="Abbrechen (Esc)">
+            Abbrechen
+          </button>
+        </div>
+      )}
 
       {(placing || placingUnit) && (
         <div className="map-overlay map-placing" role="status">
@@ -372,7 +533,11 @@ export function MapPage() {
 
       {layers.radar && <RadarControl radar={radar} />}
 
-      {(layers.aircraft || layers.ships) && (
+      {timeline && incident && (
+        <TimelineBar startedAt={incident.startedAt} now={now} at={historyAt} loading={!!historyAt && historyQuery.isFetching} onChange={travel} onClose={() => (setTimeline(false), travel(null))} />
+      )}
+
+      {(layers.aircraft || layers.ships) && !historyAt && (
         <div className={`map-overlay map-traffic-status ${layers.radar ? 'above-radar' : ''}`} role="status">
           {layers.aircraft && aircraftStatus && (
             <span title={aircraftStatus.problem ?? undefined}>
@@ -398,21 +563,35 @@ export function MapPage() {
 
       {incident && (
         <ObjectList
-          incident={incident}
+          incident={shownIncident!}
           vehicle={{ name: vehicleName, pos: vPos }}
           objects={objects}
           units={units}
           wind={wind}
           now={now}
           canEdit={canEdit}
-          onPlaceUnit={(u) => (setPlacing(null), setPlacingUnit(u))}
+          onPlaceUnit={(u) => (setPlacing(null), setDrawing(null), setShapeEdit(null), setPlacingUnit(u))}
+          onEditShape={editShape}
           shiftPx={styleMenuPx}
           onFly={flyToObject}
-          onMoveIncident={() => setPlacing('incident')}
+          onMoveIncident={() => (setDrawing(null), setPlacing('incident'))}
         />
       )}
 
       {weather && <WindTile speedMs={weather.state.windSpeedMs} directionDeg={weather.state.windDirectionDeg} gustMs={weather.state.windGustMs} />}
+
+      <Modal open={choosingSign} title="Zeichen einfügen" onClose={() => setChoosingSign(false)}>
+        {choosingSign && (
+          <Dv102Picker value={sign && 'sign' in sign ? sign.sign : null} onPick={(id) => placeSign({ sign: id })} onGenerator={(base) => (setChoosingSign(false), setGenerating(generatorSign(base)))} />
+        )}
+      </Modal>
+      <GeneratorSignDialog
+        open={!!generating}
+        initial={generating ?? generatorSign()}
+        action="In die Karte setzen"
+        onClose={() => setGenerating(null)}
+        onDone={(tactical) => placeSign({ tactical })}
+      />
 
       <Modal open={searchingTraffic} title="Flugzeug oder Schiff suchen" onClose={() => setSearchingTraffic(false)}>
         {searchingTraffic && <TrafficSearch tracked={tracked} onPick={addTraffic} />}
@@ -426,7 +605,7 @@ export function MapPage() {
             initialCenter={view.current ?? (() => { const c = iPos ?? vPos ?? fallback; return { lat: c[0], lon: c[1] }; })()}
             initialZoom={view.current?.zoom ?? (iPos ? 14 : 16)}
             vehicle={vPos ? { lat: vPos[0], lon: vPos[1], name: vehicleName } : null}
-            incident={incident ?? null}
+            incident={shownIncident ?? null}
             objects={objects}
             units={units}
             wind={wind}

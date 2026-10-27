@@ -3,12 +3,16 @@ import { GeoJSON, Marker, Polygon, Polyline, Popup, Tooltip } from 'react-leafle
 import { Link } from 'react-router-dom';
 import L from 'leaflet';
 import { useQuery } from '@tanstack/react-query';
-import { DEFAULT_OBJECT_COLORS, formatAltitude, objectColor, type MapObject } from '@elvis/shared';
+import { Tag } from 'lucide-react';
+import { DEFAULT_OBJECT_COLORS, MAP_LABELS, formatAltitude, objectColor, outlineArea, toMgrs, type MapLabel, type MapObject, type TacticalSign } from '@elvis/shared';
 import { api } from '../../lib/api';
-import { dispersionSector, usePlume, type Wind } from './dispersion';
+import { fmtArea } from '../../lib/format';
+import { dispersionSector, fmtDistance, usePlume, type Wind } from './dispersion';
 import { aircraftMarker } from './aircraftIcons';
 import { shipIcon, trafficPath } from './traffic';
 import { useMapIcons } from './mapIcons';
+import { dv102Icon, useDv102 } from './dv102';
+import { tacticalIcon } from '../tactical/TacticalSign';
 
 /** Darstellung je Farbe (Karte, Vorschau und – über dieselben Werte – Druck) */
 export const areaStyle = (color: string) => ({ color, weight: 3, dashArray: '8 6', fillColor: color, fillOpacity: 0.08 });
@@ -54,6 +58,97 @@ export function useMapObjects(incidentId: number | null | undefined) {
     enabled: !!incidentId,
     staleTime: 60_000,
   });
+}
+
+/** Kurzer Fingerabdruck einer Form für den React-Schlüssel (ändert sich, sobald ein Punkt sich bewegt) */
+function shapeKey(geo: { coordinates: unknown }): string {
+  let h = 0;
+  const walk = (v: unknown): void => {
+    if (Array.isArray(v)) v.forEach(walk);
+    else if (typeof v === 'number') h = (h * 31 + Math.round(v * 1e6)) | 0;
+  };
+  walk(geo.coordinates);
+  return h.toString(36);
+}
+
+/** Beschriftung am eigenen Anker; Punkte und Zeichen nutzen ihren Tooltip, verfolgte Ziele sind ohnehin beschriftet */
+const ANCHORED_LABELS: MapObject['kind'][] = ['area', 'line', 'gauss', 'sector'];
+/** Person aus dem Zeichengenerator als Marker (zwischengespeichert, sonst legt Leaflet ihn bei jedem Rendern neu an) */
+const personIcons = new Map<string, L.DivIcon>();
+function personIcon(sign: TacticalSign): L.DivIcon {
+  const key = JSON.stringify(sign);
+  let icon = personIcons.get(key);
+  if (!icon) personIcons.set(key, (icon = tacticalIcon(sign, 48)));
+  return icon;
+}
+
+const labelAnchor = L.divIcon({ className: 'map-label-anchor', html: '', iconSize: [0, 0] });
+
+/** Wo die Beschriftung steht: Flächen mittig, Linien am mittleren Stützpunkt, Ausbreitungen unter der Quelle */
+export function labelPlace(o: MapObject): { pos: [number, number]; direction: 'center' | 'top' | 'bottom' } {
+  if (o.kind === 'area') {
+    const c = L.geoJSON(o.data.outline).getBounds().getCenter();
+    return { pos: [c.lat, c.lng], direction: 'center' };
+  }
+  if (o.kind === 'line') {
+    const coords = o.data.path.type === 'LineString' ? o.data.path.coordinates : o.data.path.coordinates[0]!;
+    const [lon, lat] = coords[Math.floor(coords.length / 2)]!;
+    return { pos: [lat!, lon!], direction: 'top' };
+  }
+  return { pos: [o.lat, o.lon], direction: 'bottom' };
+}
+
+function pathLength(o: Extract<MapObject, { kind: 'line' }>): number {
+  const parts = o.data.path.type === 'LineString' ? [o.data.path.coordinates] : o.data.path.coordinates;
+  return parts.reduce((sum, part) => sum + part.slice(1).reduce((s, [lon, lat], i) => s + L.latLng(lat!, lon!).distanceTo(L.latLng(part[i]![1]!, part[i]![0]!)), 0), 0);
+}
+
+/**
+ * Zweite Zeile der Beschriftung „mit Angaben“: Flächen mit Größe (gezeichnete Kreise zusätzlich mit dem Radius aus dem
+ * Detail), Linien mit Länge, Punkte und Ausbreitungen mit UTMREF ihrer Lage bzw. Quelle
+ */
+export function labelSub(o: MapObject): string {
+  switch (o.kind) {
+    case 'area': {
+      const radius = o.data.detail.startsWith('Radius ') ? o.data.detail : null;
+      return [radius, fmtArea(outlineArea(o.data.outline))].filter(Boolean).join(' · ');
+    }
+    case 'line':
+      return `Länge ${fmtDistance(pathLength(o))}`;
+    default:
+      return toMgrs(o.lat, o.lon);
+  }
+}
+
+const LABEL_TITLES: Record<MapLabel, string> = { off: 'keine', name: 'Name', details: 'Name mit Angaben' };
+
+/** Knopf für die Beschriftung: jeder Klick schaltet weiter – grau = keine, blau = Name, rot = Name mit Angaben */
+export function LabelToggle({ object, value, onChange }: { object: MapObject; value: MapLabel; onChange: (label: MapLabel) => void }) {
+  return (
+    <button
+      type="button"
+      className={`icon-btn label-${value}`}
+      onClick={() => onChange(MAP_LABELS[(MAP_LABELS.indexOf(value) + 1) % MAP_LABELS.length]!)}
+      aria-label={`Beschriftung von ${object.name}: ${LABEL_TITLES[value]}`}
+      title={`Beschriftung: ${LABEL_TITLES[value]} – klicken wechselt`}
+    >
+      <Tag size={16} />
+    </button>
+  );
+}
+
+/** Name als dauerhafte Beschriftung an einem unsichtbaren Anker (Punkte beschriften ihre eigene Markierung) */
+function ObjectLabel({ object }: { object: MapObject }) {
+  const { pos, direction } = labelPlace(object);
+  const sub = object.label === 'details' && labelSub(object);
+  return (
+    <Marker position={pos} icon={labelAnchor} interactive={false} keyboard={false}>
+      <Tooltip permanent direction={direction} offset={direction === 'bottom' ? [0, 10] : [0, 0]} className="map-object-label">
+        {object.name}
+        {sub && <div className={`map-object-label-sub ${object.kind === 'gauss' || object.kind === 'sector' ? 'mono' : ''}`}>{sub}</div>}
+      </Tooltip>
+    </Marker>
+  );
 }
 
 /** Ausdehnung eines Objekts für „hinfliegen“ (Fläche: Umriss, Linie: Verlauf, sonst Punkt) */
@@ -141,6 +236,8 @@ export function MapObjectsLayer({
 }) {
   // Lucide erst laden, wenn ein Punkt ein Symbol hat
   const icons = useMapIcons(objects.some((o) => o.kind === 'point' && o.data.icon));
+  // Lagezeichen erst laden, wenn eines auf der Karte steht
+  const dv102 = useDv102(objects.some((o) => o.kind === 'sign'));
   return (
     <>
       {objects
@@ -148,18 +245,35 @@ export function MapObjectsLayer({
         .map((o) => {
           switch (o.kind) {
             case 'area':
-              // Schlüssel mit Farbe: GeoJSON übernimmt geänderte Stile sonst nicht
-              return <GeoJSON key={`${o.id}:${o.data.osm}:${objectColor(o)}`} data={o.data.outline} interactive={false} style={areaStyle(objectColor(o))} />;
+              // Schlüssel mit Farbe und Form: GeoJSON übernimmt geänderte Stile und Daten sonst nicht
+              return <GeoJSON key={`${o.id}:${o.data.osm}:${objectColor(o)}:${shapeKey(o.data.outline)}`} data={o.data.outline} interactive={false} style={areaStyle(objectColor(o))} />;
             case 'line':
               return (
-                <GeoJSON key={`${o.id}:${o.data.osm}:${objectColor(o)}`} data={o.data.path} style={lineStyle(objectColor(o))}>
-                  {labels && <Tooltip sticky>{o.name}</Tooltip>}
+                <GeoJSON key={`${o.id}:${o.data.osm}:${objectColor(o)}:${shapeKey(o.data.path)}`} data={o.data.path} style={lineStyle(objectColor(o))}>
+                  {labels && o.label === 'off' && <Tooltip sticky>{o.name}</Tooltip>}
                 </GeoJSON>
               );
             case 'point':
               return (
                 <Marker key={o.id} position={[o.lat, o.lon]} icon={pointIcon(objectColor(o), pointSymbol(icons, o.data.icon), o.data.badge)}>
-                  {labels && <Tooltip direction="top" offset={[0, o.data.icon ? -14 : -8]}>{o.name}</Tooltip>}
+                  {labels && (
+                    // Schlüssel: Leaflet übernimmt „permanent“ nur beim Anlegen
+                    <Tooltip key={o.label} direction="top" offset={[0, o.data.icon ? -14 : -8]} permanent={o.label !== 'off'} className={o.label !== 'off' ? 'map-object-label' : undefined}>
+                      {o.name}
+                      {o.label === 'details' && <div className="map-object-label-sub mono">{labelSub(o)}</div>}
+                    </Tooltip>
+                  )}
+                </Marker>
+              );
+            case 'sign':
+              return (
+                <Marker key={o.id} position={[o.lat, o.lon]} icon={o.data.tactical ? personIcon(o.data.tactical) : dv102Icon(dv102, o.data.sign!)}>
+                  {labels && (
+                    <Tooltip key={o.label} direction="bottom" offset={[0, o.data.tactical ? (o.data.tactical.base === 'command' ? 30 : 22) : 14]} permanent={o.label !== 'off'} className={o.label !== 'off' ? 'map-object-label' : undefined}>
+                      {o.name}
+                      {o.label === 'details' && <div className="map-object-label-sub mono">{labelSub(o)}</div>}
+                    </Tooltip>
+                  )}
                 </Marker>
               );
             case 'gauss':
@@ -176,6 +290,7 @@ export function MapObjectsLayer({
               return <TrackedLayer key={o.id} object={o} labels={labels} links={links} />;
           }
         })}
+      {labels && objects.filter((o) => o.visible && o.label !== 'off' && ANCHORED_LABELS.includes(o.kind)).map((o) => <ObjectLabel key={o.id} object={o} />)}
     </>
   );
 }

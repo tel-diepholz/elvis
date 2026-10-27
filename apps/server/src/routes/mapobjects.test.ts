@@ -42,7 +42,7 @@ describe('Kartenobjekte', () => {
 
     const area = await req<MapObject>('POST', url, bremen);
     expect(area.status).toBe(201);
-    expect(area.body).toMatchObject({ kind: 'area', name: 'Bremen', visible: true, incidentId: incident.id, createdBy: 'Max Müller' });
+    expect(area.body).toMatchObject({ kind: 'area', name: 'Bremen', visible: true, label: 'off', incidentId: incident.id, createdBy: 'Max Müller' });
     const gauss = (await req<MapObject>('POST', url, { kind: 'gauss', name: 'Gauß-Fahne', lat: 52.7, lon: 8.5 })).body;
     expect(gauss.data).toEqual({ stability: 'auto', cloudOktas: 4, terrain: 'rural', sourceHeightM: 0, releaseRateKgS: null });
     const sector = (await req<MapObject>('POST', url, { kind: 'sector', name: 'Sektor', lat: 52.7, lon: 8.5 })).body;
@@ -56,6 +56,24 @@ describe('Kartenobjekte', () => {
     expect((await req('PATCH', `/api/map-objects/${area.body.id}`, { icon: 'Flame' })).status).toBe(400);
     expect((await req('POST', url, { kind: 'point', name: 'X', lat: 52.7, lon: 8.5, data: { detail: '', icon: 'GibtEsNicht' } })).status).toBe(400);
 
+    // Lagezeichen nach DV 102: nur bekannte Zeichen, tauschbar
+    const sign = await req<MapObject>('POST', url, { kind: 'sign', name: 'Gasgefahr', lat: 52.708, lon: 8.505, data: { sign: 'Gefahren/Gefahr_durch_Gas' } });
+    expect(sign.status).toBe(201);
+    expect(sign.body).toMatchObject({ kind: 'sign', label: 'off', data: { sign: 'Gefahren/Gefahr_durch_Gas', detail: '' } });
+    expect((await req('POST', url, { kind: 'sign', name: 'X', lat: 52.7, lon: 8.5, data: { sign: 'Fahrzeuge/LF_20' } })).status).toBe(400);
+    expect((await req<MapObject>('PATCH', `/api/map-objects/${sign.body.id}`, { sign: 'Gefahren/Vollbrand' })).body.data).toEqual({ detail: '', sign: 'Gefahren/Vollbrand' });
+    expect((await req('PATCH', `/api/map-objects/${sign.body.id}`, { sign: 'Gefahren/Gibt_es_nicht' })).status).toBe(400);
+    expect((await req('PATCH', `/api/map-objects/${point.id}`, { sign: 'Gefahren/Vollbrand' })).status).toBe(400);
+    // Personen, Einheiten, Stellen kommen aus dem Zeichengenerator (keine Fahrzeuge); Wechsel ersetzt das fertige Zeichen
+    const person = (await req<MapObject>('PATCH', `/api/map-objects/${sign.body.id}`, { tactical: { org: 'hilfsorganisation', function: 'rettung', text: 'NA' } })).body;
+    expect(person.data).toEqual({ detail: '', tactical: expect.objectContaining({ base: 'person', org: 'hilfsorganisation', function: 'rettung', text: 'NA' }) });
+    expect((await req('PATCH', `/api/map-objects/${sign.body.id}`, { tactical: { base: 'vehicle' } })).status).toBe(400);
+    expect((await req<MapObject>('PATCH', `/api/map-objects/${sign.body.id}`, { tactical: { base: 'command', function: 'fuehrung', text: 'EL' } })).body.data).toMatchObject({ tactical: { base: 'command', text: 'EL' } });
+    const created = await req<MapObject>('POST', url, { kind: 'sign', name: 'Führer', lat: 52.708, lon: 8.505, data: { tactical: { leader: true } } });
+    expect(created.body.data).toMatchObject({ tactical: { base: 'person', leader: true } });
+    expect((await req('DELETE', `/api/map-objects/${created.body.id}`)).status).toBe(204);
+    expect((await req('DELETE', `/api/map-objects/${sign.body.id}`)).status).toBe(204);
+
     // Ungültiges wird abgewiesen
     expect((await req('POST', url, { kind: 'kreis', name: 'X', lat: 1, lon: 1 })).status).toBe(400);
     expect((await req('POST', url, { ...bremen, data: { ...bremen.data, outline: { type: 'Point', coordinates: [8, 53] } } })).status).toBe(400);
@@ -65,6 +83,12 @@ describe('Kartenobjekte', () => {
     const patched = await req<MapObject>('PATCH', `/api/map-objects/${gauss.id}`, { data: { stability: 'IV', sourceHeightM: 20 }, visible: false });
     expect(patched.body).toMatchObject({ visible: false, data: { stability: 'IV', sourceHeightM: 20, terrain: 'rural' } });
     expect((await req('PATCH', `/api/map-objects/${area.body.id}`, { data: { sectorM: 500 } })).status).toBe(400);
+    // Beschriftung: standardmäßig aus, drei Stufen, bleibt bei anderen Änderungen erhalten
+    expect((await req<MapObject>('PATCH', `/api/map-objects/${point.id}`, { label: 'name' })).body.label).toBe('name');
+    expect((await req<MapObject>('PATCH', `/api/map-objects/${point.id}`, { label: 'details' })).body.label).toBe('details');
+    expect((await req<MapObject>('PATCH', `/api/map-objects/${point.id}`, { visible: false })).body).toMatchObject({ visible: false, label: 'details' });
+    expect((await req<MapObject>('PATCH', `/api/map-objects/${point.id}`, { visible: true, label: 'off' })).body).toMatchObject({ visible: true, label: 'off' });
+    expect((await req('PATCH', `/api/map-objects/${point.id}`, { label: true })).status).toBe(400);
     // Farbe: Flächen, Punkte und Sektoren; null setzt auf die Vorgabe zurück; Gauß-Fahnen behalten ihre Stufenfarben
     expect(area.body.color).toBeNull();
     expect((await req<MapObject>('PATCH', `/api/map-objects/${area.body.id}`, { color: '#43a047' })).body.color).toBe('#43a047');
@@ -73,6 +97,14 @@ describe('Kartenobjekte', () => {
     expect((await req<MapObject>('PATCH', `/api/map-objects/${sector.id}`, { color: '#8e24aa' })).body.color).toBe('#8e24aa');
     expect((await req<MapObject>('PATCH', `/api/map-objects/${sector.id}`, { color: null })).body.color).toBeNull();
     await req('PATCH', `/api/map-objects/${sector.id}`, { lat: 52.71, lon: 8.51 });
+    // Form bearbeiten: Umriss nur bei Flächen, Verlauf nur bei Linien, Beschreibung nicht bei Ausbreitungen
+    const square = { type: 'Polygon', coordinates: [[[8.5, 53.0], [8.6, 53.0], [8.6, 53.1], [8.5, 53.1], [8.5, 53.0]]] };
+    const reshaped = (await req<MapObject>('PATCH', `/api/map-objects/${area.body.id}`, { outline: square, detail: 'gezeichnet', lat: 53.05, lon: 8.55 })).body;
+    expect(reshaped.kind === 'area' && reshaped.data).toMatchObject({ outline: square, detail: 'gezeichnet', osm: 'R62718' });
+    expect((await req('PATCH', `/api/map-objects/${point.id}`, { outline: square })).status).toBe(400);
+    expect((await req('PATCH', `/api/map-objects/${area.body.id}`, { path: { type: 'LineString', coordinates: [[8.5, 53], [8.6, 53]] } })).status).toBe(400);
+    expect((await req('PATCH', `/api/map-objects/${gauss.id}`, { detail: 'x' })).status).toBe(400);
+    expect((await req('PATCH', `/api/map-objects/${area.body.id}`, { outline: { type: 'Polygon', coordinates: [[[8.5, 53.0], [8.6, 53.0]]] } })).status).toBe(400);
     expect((await req('DELETE', `/api/map-objects/${sector.id}`)).status).toBe(204);
 
     const list = (await req<MapObject[]>('GET', url)).body;
@@ -85,6 +117,7 @@ describe('Kartenobjekte', () => {
         'Kartenobjekt hinzugefügt: Fläche „Bremen“',
         'Kartenobjekt hinzugefügt: Gauß-Fahne „Gauß-Fahne“',
         'Kartenobjekt verschoben: Sektor 60° „Sektor“',
+        'Kartenobjekt geändert: Form von Fläche „Bremen“',
         'Kartenobjekt entfernt: Sektor 60° „Sektor“',
       ]),
     );

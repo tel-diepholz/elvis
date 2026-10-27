@@ -15,6 +15,8 @@ import {
   type VehicleInfo,
 } from '@elvis/shared';
 import { mapIconElements } from '@elvis/shared/mapIcons';
+import { DV102_FONT_WOFF, dv102Sign } from '@elvis/shared/dv102';
+import SVGtoPDF from 'svg-to-pdfkit';
 import type { TileService } from './tiles.js';
 
 const PT_PER_MM = 72 / 25.4;
@@ -167,6 +169,8 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
   for (const m of req.markers) {
     const [x, y] = toPt(m.lat, m.lon);
     if (x < fx || x > fx + fw || y < fy || y > fy + fh) {
+      // Beschriftungen gehören zu Flächen und Linien, die der Rahmen ohnehin abschneidet
+      if (m.kind === 'label') continue;
       outside.push(m.label || (m.kind === 'vehicle' ? 'Fahrzeug' : m.kind === 'incident' ? 'Einsatzort' : m.kind === 'unit' ? 'Einheit' : 'Punkt'));
       continue;
     }
@@ -177,6 +181,10 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
     } else if (m.kind === 'point' && m.icon && mapIconElements(m.icon)) {
       doc.circle(x, y, 9 * f).lineWidth(1.5 * f).fillAndStroke(m.color ?? '#1e6fd9', '#ffffff');
       drawMapIcon(doc, m.icon, x, y, 12 * f, '#ffffff');
+    } else if (m.kind === 'sign' && m.symbol && dv102Sign(m.symbol)) {
+      drawDv102Sign(doc, m.symbol, x, y, 44 * f);
+    } else if (m.kind === 'label') {
+      // nur Text, unten folgt die Beschriftung mittig auf der Stelle
     } else if (m.kind === 'point') {
       doc.circle(x, y, 5 * f).lineWidth(1.5 * f).fillAndStroke(m.color ?? '#1e6fd9', '#ffffff');
     } else {
@@ -187,7 +195,11 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
       const label = pdfText(m.label);
       doc.font('Helvetica-Bold').fontSize(8 * f);
       const lw = doc.widthOfString(label) + 6 * f;
-      const ly = sign ? y + (sign.box.y + sign.box.height - sign.anchor.y) * signScale + 2 * f : y + (m.kind === 'point' ? 7 : 12) * f;
+      const ly = sign
+        ? y + (sign.box.y + sign.box.height - sign.anchor.y) * signScale + 2 * f
+        : m.kind === 'label'
+          ? y - 5.5 * f
+          : y + (m.kind === 'point' ? 7 : m.kind === 'sign' ? 13 : 12) * f;
       doc.rect(x - lw / 2, ly, lw, 11 * f).fillOpacity(0.85).fill('#ffffff');
       doc.fillOpacity(1).fillColor('#111111').text(label, x - lw / 2, ly + 2 * f, { width: lw, align: 'center', lineBreak: false });
     }
@@ -280,6 +292,20 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
 
   doc.end();
   return { pdf: await done, missingTiles };
+}
+
+/** Schrift der Lagezeichen (Roboto Slab Bold) einmal je Dokument anmelden */
+const dv102Fonts = new WeakSet<PDFKit.PDFDocument>();
+
+/** Lagezeichen nach DV 102 (SVG im Raster 256 × 256) zentriert auf (x, y) mit der Kantenlänge size zeichnen */
+export function drawDv102Sign(doc: PDFKit.PDFDocument, id: string, x: number, y: number, size: number): void {
+  const sign = dv102Sign(id);
+  if (!sign) return;
+  if (!dv102Fonts.has(doc)) {
+    doc.registerFont('RobotoSlab-Bold', Buffer.from(DV102_FONT_WOFF, 'base64'));
+    dv102Fonts.add(doc);
+  }
+  SVGtoPDF(doc, sign.svg, x - size / 2, y - size / 2, { width: size, height: size, fontCallback: () => 'RobotoSlab-Bold' });
 }
 
 /** Lucide-Icon (Raster 24 × 24, Linien 2 breit) zentriert auf (x, y) mit der Kantenlänge size zeichnen */

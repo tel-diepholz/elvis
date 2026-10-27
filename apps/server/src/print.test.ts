@@ -9,7 +9,8 @@ import { buildApp, type App } from './app.js';
 import { parseConfig } from './config.js';
 import PDFDocument from 'pdfkit';
 import { mapIconList } from '@elvis/shared/mapIcons';
-import { drawMapIcon, pdfText } from './services/print.js';
+import { DV102_SIGNS } from '@elvis/shared/dv102';
+import { drawDv102Sign, drawMapIcon, pdfText } from './services/print.js';
 import { adminCookie } from './test-helpers.js';
 
 // 1×1 PNG (grau)
@@ -61,6 +62,10 @@ const request: MapPrintRequest = {
     { kind: 'incident', lat: 51.1662, lon: 10.456, label: 'Einsatzort' },
     { kind: 'point', lat: 51.1655, lon: 10.452, label: 'Hydrant Industriestr.', color: '#43a047' },
     { kind: 'point', lat: 51.1659, lon: 10.453, label: 'Brandstelle', color: '#e53935', icon: 'Flame' },
+    { kind: 'label', lat: 51.167, lon: 10.465, label: 'Absperrbereich · 12.400 m²' },
+    { kind: 'sign', lat: 51.1665, lon: 10.458, label: 'Gasgefahr', symbol: 'Gefahren/Gefahr_durch_Gas' },
+    { kind: 'sign', lat: 51.1667, lon: 10.459, label: '', symbol: 'Gefahren/Vollbrand' },
+    { kind: 'label', lat: 51.3, lon: 10.465, label: 'außerhalb' },
   ],
   lines: [{ points: [[51.165, 10.45], [51.166, 10.455], [51.167, 10.46]], color: '#4ea1ff' }],
   polygons: [{ points: [[51.1662, 10.456], [51.17, 10.47], [51.165, 10.47]], stroke: '#e53935', fill: '#e53935', fillOpacity: 0.3 }],
@@ -126,5 +131,19 @@ describe('PDF-Text', () => {
     const doc = new PDFDocument({ size: 'A4' });
     for (const { name } of mapIconList()) drawMapIcon(doc, name, 100, 100, 12, '#ffffff');
     doc.end();
+  });
+
+  it('zeichnet jedes Lagezeichen nach DV 102 ohne Warnung', () => {
+    const doc = new PDFDocument({ size: 'A4' });
+    const warnings: string[] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => void warnings.push(args.join(' '));
+    try {
+      for (const { id } of DV102_SIGNS) drawDv102Sign(doc, id, 100, 100, 44);
+    } finally {
+      console.warn = warn;
+    }
+    doc.end();
+    expect(warnings).toEqual([]);
   });
 });

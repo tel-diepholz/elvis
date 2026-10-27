@@ -1797,16 +1797,15 @@ input[type='checkbox'] {
   color: var(--text-muted);
 }
 /* Hinweis beim Setzen von Einsatzort und Ausbreitung */
+/* Hinweis beim Setzen und Zeichnen: unter der Suche, links neben der Objektliste */
 .map-placing {
   top: 74px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 12px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  max-width: calc(100% - 24px);
+  max-width: calc(100% - 376px);
   padding: 8px 10px 8px 14px;
   border-color: var(--info);
   font-weight: 600;
@@ -1824,6 +1823,57 @@ input[type='checkbox'] {
 .map-wind .map-wind-value {
   font-size: 16px;
 }
+/* Zoomknöpfe unten links, über der Windanzeige */
+.map-zoom {
+  left: 12px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  gap: 2px;
+}
+.map-zoom.above-wind {
+  bottom: 98px;
+}
+/* Griffe beim Bearbeiten einer Form: Ecken, Zwischenpunkte (Ecke einfügen), Verschieben */
+.map-edit-handle {
+  border: 2px solid var(--info);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.map-edit-handle.selected {
+  border-color: var(--alarm);
+  background: var(--alarm);
+}
+.map-edit-handle.mid {
+  opacity: 0.6;
+}
+.map-edit-handle.move {
+  border-radius: 6px;
+  background: var(--info);
+  cursor: move;
+}
+/* Mauskoordinate unten rechts, unter der Objektliste */
+.map-cursor {
+  right: 12px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 190px;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  user-select: text;
+  cursor: text;
+}
+/* Touchgeräte haben keinen Mauszeiger */
+@media (hover: none) {
+  .map-cursor {
+    display: none;
+  }
+}
 /* Objektliste rechts */
 .map-objects {
   top: calc(68px + var(--objects-shift, 0px));
@@ -1835,7 +1885,8 @@ input[type='checkbox'] {
   width: 340px;
   max-width: calc(100% - 24px);
   height: fit-content;
-  max-height: calc(100% - 92px - var(--objects-shift, 0px));
+  /* unten bleibt Platz für die Mauskoordinate */
+  max-height: calc(100% - 144px - var(--objects-shift, 0px));
   overflow: hidden;
 }
 .map-objects-head {
@@ -1898,6 +1949,15 @@ input[type='checkbox'] {
   text-align: left;
   cursor: pointer;
 }
+.map-object-rename {
+  display: flex;
+  min-width: 0;
+  padding: 4px 6px 4px 8px;
+}
+.map-object-rename input {
+  flex: 1;
+  min-width: 0;
+}
 .map-object-main:disabled {
   cursor: default;
 }
@@ -1947,6 +2007,103 @@ input[type='checkbox'] {
   width: auto;
   min-width: 28px;
   background: none;
+}
+.map-object-icon.sign {
+  background: none;
+}
+.map-object-signs {
+  grid-column: 1 / -1;
+  padding: 0 10px 10px;
+}
+.map-object-signs .dv102-groups {
+  max-height: 260px;
+}
+/* Lagezeichen nach DV 102: schwarz/rot auf transparentem Grund, darum auf heller Kachel bzw. mit hellem Rand */
+.dv102-image {
+  display: inline-grid;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: #fff;
+}
+.dv102-image svg {
+  width: 100%;
+  height: 100%;
+}
+.map-marker.dv102 svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff);
+}
+.dv102-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dv102-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(60dvh, 520px);
+  overflow-y: auto;
+}
+.dv102-groups h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.dv102-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 4px;
+}
+.dv102-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.dv102-choice:hover {
+  background: var(--bg-hover);
+}
+.dv102-choice.active {
+  border-color: var(--info);
+  background: var(--info-bg);
+}
+.dv102-choice .dv102-image {
+  width: 52px;
+  height: 52px;
+}
+.dv102-name {
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  hyphens: auto;
+  overflow-wrap: anywhere;
+}
+.dv102-generator {
+  place-items: center;
+}
+.generator-sign-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.generator-sign-dialog > .btn {
+  align-self: flex-end;
+}
+.dv102-credit {
+  margin: 0;
+  font-size: 11px;
 }
 .map-objects-subhead {
   border-top: 1px solid var(--border);
@@ -2056,6 +2213,13 @@ input[type='checkbox'] {
 .icon-btn:hover {
   background: var(--bg-elev);
   color: var(--text);
+}
+/* Beschriftung in der Objektliste: grau = keine, blau = Name, rot = Name mit Angaben */
+.icon-btn.label-name {
+  color: var(--info);
+}
+.icon-btn.label-details {
+  color: var(--alarm);
 }
 .dispersion-fields {
   display: flex;
@@ -2339,6 +2503,42 @@ input[type='checkbox'] {
 .print-summary {
   margin: 0;
   font-size: 13px;
+}
+/* Kartenobjekte im Druck: einzeln an/aus, Beschriftung wie in der Objektliste */
+.print-objects {
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  margin: 4px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.print-objects li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.print-objects li.hidden label {
+  opacity: 0.5;
+}
+.print-objects label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.print-objects .print-object-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.print-objects .muted {
+  flex-shrink: 0;
+  font-size: 12px;
 }
 .print-preview {
   position: relative;
@@ -3746,12 +3946,17 @@ select.unit-status.has-children {
   .map-objects ~ .map-wind {
     display: none;
   }
+  /* unten liegt hier die Objektliste in voller Breite */
+  .map-cursor {
+    display: none;
+  }
   .map-wind {
     bottom: 12px;
   }
   .map-placing {
     top: auto;
     bottom: 76px;
+    max-width: calc(100% - 24px);
   }
   .toasts {
     bottom: calc(var(--bottombar-h) + 12px + env(safe-area-inset-bottom));
@@ -5745,10 +5950,18 @@ select.auto-width {
   display: block;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
-.leaflet-tooltip.map-tracked-label {
+.leaflet-tooltip.map-tracked-label,
+.leaflet-tooltip.map-object-label {
   padding: 1px 6px;
   font-size: 12px;
   font-weight: 600;
+}
+.leaflet-tooltip.map-object-label {
+  text-align: center;
+}
+.map-object-label-sub {
+  font-weight: 400;
+  opacity: 0.75;
 }
 .map-traffic-status {
   left: 50%;
@@ -6239,5 +6452,68 @@ fieldset.field {
   /* Suche und Knöpfe brechen hier auf zwei Zeilen um */
   .map-radar {
     top: 186px;
+  }
+}
+
+/* Zeitstrahl der Lagekarte: unten mittig wie das Regenradar; ist beides offen, steht das Radar darüber */
+.map-timeline {
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(640px, calc(100% - 24px));
+  padding: 6px 8px 6px 12px;
+  font-size: 13px;
+}
+.map-timeline.past {
+  border-color: var(--warn);
+}
+.map-timeline-time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 132px;
+  font-variant-numeric: tabular-nums;
+}
+.map-timeline-time span {
+  color: var(--text-muted);
+}
+.with-timeline .map-radar {
+  bottom: 80px;
+}
+.with-timeline .map-traffic-status {
+  bottom: 80px;
+}
+.with-timeline .map-traffic-status.above-radar {
+  bottom: 136px;
+}
+/* Vergangene Lage: Kacheln leicht getönt, damit sie niemand für die aktuelle hält */
+.in-past .leaflet-tile-pane {
+  filter: sepia(0.45) saturate(0.8);
+}
+@media (max-width: 900px) {
+  /* unten liegen Objektliste und Wind – der Zeitstrahl sitzt unter der Suche, das Radar darunter */
+  .map-timeline {
+    top: 68px;
+    bottom: auto;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    transform: none;
+    flex-wrap: wrap;
+  }
+  .with-timeline .map-radar {
+    top: 124px;
+    bottom: auto;
+  }
+}
+@media (max-width: 720px) {
+  .map-timeline {
+    top: 186px;
+  }
+  .with-timeline .map-radar {
+    top: 242px;
   }
 }

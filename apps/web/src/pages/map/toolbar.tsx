@@ -1,10 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, ChevronDown, CloudRain, Crosshair, Database, Loader2, Search, X, Layers, MapPin, Plane, Shapes, Ship, Wind as WindIcon } from 'lucide-react';
-import type { MapSource, OverpassQuery } from '@elvis/shared';
+import { useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import { Check, ChevronDown, Circle, CircleDot, CloudRain, Hexagon, RectangleHorizontal, Spline, Crosshair, Database, Loader2, Minus, Plus, Search, X, Layers, MapPin, Plane, Shapes, Ship, TriangleAlert, Wind as WindIcon } from 'lucide-react';
+import { toMgrs, type MapSource, type OverpassQuery } from '@elvis/shared';
 import { MapIcon } from '../../components/map/mapIcons';
 import { compass, fmtOpt } from '../../lib/format';
 import { WindCompass } from '../../components/WindCompass';
 import type { TrafficLayers } from '../../components/map/traffic';
+import type { ShapeKind } from './draw';
 
 /** Knopf mit ausklappbarem Menü; Klick daneben oder Esc schließt */
 function Dropdown({
@@ -51,10 +54,10 @@ function Dropdown({
   );
 }
 
-export type PlaceKind = 'incident' | 'gauss' | 'sector';
+export type PlaceKind = 'incident' | 'point' | 'sign' | 'gauss' | 'sector';
 
 /**
- * Menü „Objekte“: Einsatzort setzen, Ausbreitung einfügen (danach in die Karte tippen), Flugzeug/Schiff suchen –
+ * Menü „Objekte“: Einsatzort setzen, Punkt oder Ausbreitung einfügen (danach in die Karte tippen), Flugzeug/Schiff suchen, Formen zeichnen –
  * das braucht einen laufenden Einsatz – sowie OpenStreetMap-Daten abfragen (nur angemeldet): die Vorlagen aus den
  * Einstellungen laufen sofort im Kartenausschnitt, „OpenStreetMap abfragen …“ öffnet den Abfragebereich.
  */
@@ -67,6 +70,8 @@ export function ObjectMenu({
   overpass,
   overpassRunning,
   onPlace,
+  onDraw,
+  onSign,
   onSearchTraffic,
   onTemplate,
   onOverpass,
@@ -84,6 +89,9 @@ export function ObjectMenu({
   /** Name der gerade laufenden Overpass-Abfrage, null = keine */
   overpassRunning: string | null;
   onPlace: (k: PlaceKind) => void;
+  onDraw: (k: ShapeKind) => void;
+  /** Lagezeichen nach DV 102 auswählen (danach in die Karte tippen) */
+  onSign: () => void;
   onSearchTraffic: () => void;
   onTemplate: (q: OverpassQuery) => void;
   onOverpass: () => void;
@@ -114,6 +122,25 @@ export function ObjectMenu({
           </button>
           <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onSearchTraffic())}>
             <Plane size={18} /> Flugzeug oder Schiff suchen …
+          </button>
+          <div className="map-dropdown-heading">Zeichnen</div>
+          <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onPlace('point'))}>
+            <CircleDot size={18} /> Punkt
+          </button>
+          <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onSign())}>
+            <TriangleAlert size={18} /> Zeichen …
+          </button>
+          <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onDraw('polygon'))}>
+            <Hexagon size={18} /> Fläche
+          </button>
+          <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onDraw('line'))}>
+            <Spline size={18} /> Linie
+          </button>
+          <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onDraw('rectangle'))}>
+            <RectangleHorizontal size={18} /> Rechteck
+          </button>
+          <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onDraw('circle'))}>
+            <Circle size={18} /> Kreis
           </button>
           <div className="map-dropdown-heading">OpenStreetMap</div>
           {templates.map((q, i) => (
@@ -195,6 +222,58 @@ export function MapStylePicker({
 }
 
 /** Kleine Windanzeige unten links */
+/** Zoomknöpfe unten links (über der Windanzeige); gehört in den MapContainer */
+export function ZoomControl({ aboveWind }: { aboveWind: boolean }) {
+  const map = useMap();
+  const box = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(() => map.getZoom());
+  useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
+  // Klicks und Doppelklicks nicht an die Karte durchreichen (kein Setzen, kein Doppelklick-Zoom)
+  useEffect(() => {
+    if (!box.current) return;
+    L.DomEvent.disableClickPropagation(box.current);
+    L.DomEvent.disableScrollPropagation(box.current);
+  }, []);
+  return (
+    <div className={`map-overlay map-zoom ${aboveWind ? 'above-wind' : ''}`} ref={box}>
+      <button type="button" className="btn btn-ghost btn-icon" aria-label="Hineinzoomen" title="Hineinzoomen" disabled={zoom >= map.getMaxZoom()} onClick={() => map.zoomIn()}>
+        <Plus size={18} />
+      </button>
+      <button type="button" className="btn btn-ghost btn-icon" aria-label="Herauszoomen" title="Herauszoomen" disabled={zoom <= map.getMinZoom()} onClick={() => map.zoomOut()}>
+        <Minus size={18} />
+      </button>
+    </div>
+  );
+}
+
+/** Koordinate unter dem Mauszeiger unten rechts, als UTMREF und Grad; gehört in den MapContainer */
+export function CursorPosition() {
+  const box = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ lat: number; lon: number } | null>(null);
+  useMapEvents({
+    mousemove: (e) => setPos({ lat: e.latlng.lat, lon: e.latlng.lng }),
+    mouseout: () => setPos(null),
+  });
+  // Text soll markier- und kopierbar sein, ohne dass die Karte den Klick bekommt
+  useEffect(() => {
+    if (box.current) L.DomEvent.disableClickPropagation(box.current);
+  }, []);
+  return (
+    <div className="map-overlay map-cursor" ref={box} aria-label="Koordinate unter dem Mauszeiger">
+      {pos ? (
+        <>
+          <span className="mono">{toMgrs(pos.lat, pos.lon)}</span>
+          <span className="mono muted">
+            {pos.lat.toFixed(5)}, {pos.lon.toFixed(5)}
+          </span>
+        </>
+      ) : (
+        <span className="muted">Maus über die Karte führen</span>
+      )}
+    </div>
+  );
+}
+
 export function WindTile({ speedMs, directionDeg, gustMs }: { speedMs: number | null; directionDeg: number | null; gustMs: number | null }) {
   return (
     <div className="map-overlay map-wind" aria-label="Wind">

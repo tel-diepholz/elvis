@@ -10,7 +10,12 @@
 //   gone <text>                 warten, bis Text verschwunden ist (40 s)
 //   click <selector>            klicken (Playwright-Selector, z. B. text=Objekte)
 //   clickcenter <selector>      Mausklick auf das passende Element nächst der Kartenmitte (Kartenmarker)
+//   clickat <x> <y>             Mausklick an eine Stelle im Fenster (Pixel), z. B. Punkte zeichnen
+//   move <x> <y>                Maus an eine Stelle bewegen (Vorschau beim Zeichnen, Mauskoordinate)
+//   drag <x1> <y1> <x2> <y2>    mit gedrückter Maus ziehen (Griffe, Marker)
+//   wheel <x> <y> <dy>          Mausrad an einer Stelle (dy < 0 = nach oben/hineinzoomen, eine Rastung ≈ 100)
 //   fill <selector> | <text>    Eingabe (React-tauglich)
+//   select <selector> | <wert>  Auswahlliste (<select>) auf einen Wert stellen
 //   press <taste>               z. B. Escape, Enter
 //   sleep <ms>
 //   text <selector>             Textinhalt ausgeben
@@ -100,6 +105,29 @@ async function run(line) {
       // Mausklick auf die Stelle: überlappende Marker (Hafen) würden Playwrights Element-Klick blockieren
       const best = pts.reduce((a, b) => (b.d < a.d ? b : a));
       await p.mouse.click(best.x, best.y);
+      return;
+    }
+    case 'clickat':
+      await p.mouse.click(Number(rest[0]), Number(rest[1]));
+      return;
+    case 'move':
+      await p.mouse.move(Number(rest[0]), Number(rest[1]));
+      return;
+    case 'wheel':
+      await p.mouse.move(Number(rest[0]), Number(rest[1]));
+      await p.mouse.wheel(0, Number(rest[2]));
+      return;
+    case 'drag': {
+      const [x1, y1, x2, y2] = rest.map(Number);
+      await p.mouse.move(x1, y1);
+      await p.mouse.down();
+      await p.mouse.move(x2, y2, { steps: 12 });
+      await p.mouse.up();
+      return;
+    }
+    case 'select': {
+      const [sel, value] = arg.split(/\s*\|\s*/);
+      await p.selectOption(sel, value ?? '');
       return;
     }
     case 'fill': {
