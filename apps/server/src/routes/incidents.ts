@@ -103,6 +103,12 @@ export function incidentRoutes(
   // Kartenobjekte (Flächen können große Umrisse mitbringen)
   app.get('/api/incidents/:id/objects', async (req) => incidents.mapObjects(parse(idParam, req.params).id));
 
+  // Zeitstrahl: Lage zu einem Zeitpunkt (ISO-Zeit)
+  app.get('/api/incidents/:id/map-history', async (req) => {
+    const { at } = parse(z.object({ at: z.string().datetime() }), req.query);
+    return incidents.mapHistory(parse(idParam, req.params).id, new Date(at).toISOString());
+  });
+
   app.post('/api/incidents/:id/objects', { bodyLimit: 8 * 1024 * 1024 }, async (req, reply) => {
     const { id } = parse(idParam, req.params);
     return reply.code(201).send(incidents.addMapObject(id, parse(newMapObjectSchema, req.body), operatorOf(req)));

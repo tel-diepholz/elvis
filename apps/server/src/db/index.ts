@@ -709,6 +709,22 @@ const MIGRATIONS: Migration[] = [
   );
   CREATE INDEX incident_overpass_queries_incident ON incident_overpass_queries(incident_id);
   `,
+  // Beschriftung eines Kartenobjekts auf der Karte: 0 = keine, 1 = Name, 2 = Name mit Angaben (MAP_LABELS)
+  `ALTER TABLE map_objects ADD COLUMN label INTEGER NOT NULL DEFAULT 0;`,
+  // Verlauf der Lage für den Zeitstrahl der Karte: Schnappschuss je Änderung an Kartenobjekt, Kraft (kartenrelevante
+  // Felder) und Einsatzort; state = JSON, NULL = entfernt
+  `
+  CREATE TABLE map_history (
+    id INTEGER PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    at TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    subject_id INTEGER NOT NULL,
+    state TEXT
+  );
+  CREATE INDEX map_history_time ON map_history(incident_id, at);
+  CREATE INDEX map_history_subject ON map_history(subject, subject_id, id);
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

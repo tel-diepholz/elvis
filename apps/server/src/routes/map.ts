@@ -23,7 +23,7 @@ const printRequest: z.ZodType<MapPrintRequest> = z.object({
   title: z.string().trim().min(1).max(120),
   subtitle: z.string().max(200).optional(),
   markers: z
-    .array(latLon.extend({ kind: z.enum(['vehicle', 'incident', 'point', 'unit']), label: z.string().max(120), color: color.optional(), icon: z.string().max(60).optional(), sign: tacticalSignSchema.optional() }))
+    .array(latLon.extend({ kind: z.enum(['vehicle', 'incident', 'point', 'unit', 'label', 'sign']), label: z.string().max(120), color: color.optional(), icon: z.string().max(60).optional(), symbol: z.string().max(100).optional(), sign: tacticalSignSchema.optional() }))
     .max(300),
   polygons: z
     .array(

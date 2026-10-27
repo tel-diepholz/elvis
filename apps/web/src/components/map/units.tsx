@@ -34,8 +34,21 @@ function unitIcon(sign: TacticalSign): L.DivIcon {
 /** Per App geortet und seit 20 min keine Meldung */
 const staleApp = (u: Unit) => u.positionSource === 'app' && !!u.positionAt && Date.now() - new Date(u.positionAt).getTime() > APP_POSITION_STALE_MS;
 
-/** Taktische Zeichen der Kräfte; verschiebbar, wenn `onMove` gesetzt ist. Per App geortete Kräfte zeigen Alter und Genauigkeit. */
-export function UnitsLayer({ units, labels = true, onMove }: { units: Unit[]; labels?: boolean; onMove?: (u: Unit, lat: number, lon: number) => void }) {
+/**
+ * Taktische Zeichen der Kräfte. Verschiebbar ist nur die Kraft `movable` (über „Position setzen“ gewählt), und nur mit `onMove`.
+ * Per App geortete Kräfte zeigen Alter und Genauigkeit.
+ */
+export function UnitsLayer({
+  units,
+  labels = true,
+  movable = null,
+  onMove,
+}: {
+  units: Unit[];
+  labels?: boolean;
+  movable?: number | null;
+  onMove?: (u: Unit, lat: number, lon: number) => void;
+}) {
   return (
     <>
       {placedUnits(units).map((u) =>
@@ -55,9 +68,9 @@ export function UnitsLayer({ units, labels = true, onMove }: { units: Unit[]; la
           position={[u.lat!, u.lon!]}
           icon={unitIcon(u.sign)}
           opacity={staleApp(u) ? 0.5 : 1}
-          draggable={!!onMove}
-          interactive={labels || !!onMove}
-          eventHandlers={onMove && { dragend: (e) => { const p = (e.target as L.Marker).getLatLng(); onMove(u, p.lat, p.lng); } }}
+          draggable={!!onMove && u.id === movable}
+          interactive={labels || (!!onMove && u.id === movable)}
+          eventHandlers={onMove && u.id === movable ? { dragend: (e) => { const p = (e.target as L.Marker).getLatLng(); onMove(u, p.lat, p.lng); } } : undefined}
         >
           {labels && (
             <Tooltip direction="bottom" offset={[0, 14]}>

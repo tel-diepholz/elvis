@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Eye, EyeOff, MapPin, Plane, Route, Shapes, Ship, Square, Trash2, Truck, Wind as WindIcon } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Eye, EyeOff, MapPin, Pencil, PenTool, Plane, Route, Shapes, Ship, Square, Trash2, TriangleAlert, Truck, Wind as WindIcon } from 'lucide-react';
 import {
   COLORABLE_KINDS,
   DEFAULT_OBJECT_COLORS,
@@ -9,19 +9,27 @@ import {
   SECTOR_LENGTHS,
   UNIT_STATUS,
   formatAltitude,
+  isTracked,
+  outlineArea,
   objectColor,
   unitChildren,
   type GaussSettings,
   type Incident,
+  type MapLabel,
   type MapObject,
+  type MapObjectPatch,
+  type TacticalSign,
   type Unit,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
-import { fmtAgo, fmtTime } from '../../lib/format';
+import { fmtAgo, fmtArea, fmtTime } from '../../lib/format';
 import { useToast } from '../../lib/toast';
 import { Field } from '../../components/ui';
 import { TacticalSignImage } from '../../components/tactical/TacticalSign';
 import { MapIcon, MapIconPicker } from '../../components/map/mapIcons';
+import { LabelToggle } from '../../components/map/objects';
+import { Dv102Image, Dv102Picker, GENERATOR_LABELS, GeneratorSignDialog, generatorName, generatorSign, useDv102, type GeneratorBase } from '../../components/map/dv102';
+import { isEditable } from './draw';
 import { GaussControls, NoWindWarning, fmtDistance, usePlume, type Wind } from '../../components/map/dispersion';
 
 const OPEN_KEY = 'elvis.map.objectsOpen';
@@ -33,7 +41,7 @@ const readOpen = () => {
   }
 };
 
-const KIND_ICONS = { point: MapPin, area: Square, line: Route, gauss: WindIcon, sector: Crosshair, aircraft: Plane, ship: Ship } as const;
+const KIND_ICONS = { point: MapPin, sign: TriangleAlert, area: Square, line: Route, gauss: WindIcon, sector: Crosshair, aircraft: Plane, ship: Ship } as const;
 
 function GaussEditor({ object, wind, now, canEdit }: { object: Extract<MapObject, { kind: 'gauss' }>; wind: Wind | undefined; now: Date; canEdit: boolean }) {
   const toast = useToast();
@@ -99,10 +107,13 @@ function unitRows(units: Unit[]): { unit: Unit; depth: number }[] {
 
 function summary(o: MapObject, now: Date): string {
   switch (o.kind) {
-    case 'point':
     case 'area':
+      return [o.data.detail, fmtArea(outlineArea(o.data.outline))].filter(Boolean).join(' · ');
+    case 'point':
     case 'line':
       return o.data.detail || MAP_OBJECT_LABELS[o.kind];
+    case 'sign':
+      return o.data.detail || `${MAP_OBJECT_LABELS.sign} · ${o.data.tactical ? GENERATOR_LABELS[o.data.tactical.base as GeneratorBase] : o.data.sign!.split('/')[0]}`;
     case 'gauss':
       return `${MAP_OBJECT_LABELS.gauss}${o.data.stability === 'auto' ? '' : ` · Klasse ${o.data.stability}`}`;
     case 'sector':
@@ -116,6 +127,33 @@ function summary(o: MapObject, now: Date): string {
       return [o.kind === 'aircraft' ? formatAltitude(last.altFt, last.onGround) : null, speed, fmtAgo(last.at, now)].filter(Boolean).join(' · ');
     }
   }
+}
+
+/** Name direkt in der Liste ändern: Enter oder Klick daneben speichert, Esc bricht ab */
+function NameEditor({ name, onSave, onCancel }: { name: string; onSave: (name: string) => void; onCancel: () => void }) {
+  const [value, setValue] = useState(name);
+  const done = useRef(false);
+  const finish = (save: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    const trimmed = value.trim();
+    if (save && trimmed) onSave(trimmed);
+    else onCancel();
+  };
+  return (
+    <form className="map-object-rename" onSubmit={(e) => (e.preventDefault(), finish(true))}>
+      <input
+        value={value}
+        maxLength={120}
+        autoFocus
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => e.key === 'Escape' && (e.stopPropagation(), finish(false))}
+        onBlur={() => finish(true)}
+        aria-label="Name"
+      />
+    </form>
+  );
 }
 
 /**
@@ -134,6 +172,7 @@ export function ObjectList({
   onFly,
   onMoveIncident,
   onPlaceUnit,
+  onEditShape,
 }: {
   incident: Incident;
   /** Eigenes Fahrzeug (immer erster Eintrag, nur ausblendbar); pos = null ohne GPS */
@@ -149,12 +188,22 @@ export function ObjectList({
   onFly: (target: MapObject | Unit | 'incident' | 'vehicle') => void;
   onMoveIncident: () => void;
   onPlaceUnit: (u: Unit) => void;
+  /** Gezeichnete Fläche oder Linie auf der Karte bearbeiten */
+  onEditShape: (o: MapObject) => void;
 }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(readOpen);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [coloring, setColoring] = useState<number | null>(null);
+  const [renaming, setRenaming] = useState<number | null>(null);
+  /** Zeichen, dessen Lagezeichen gerade gewählt wird */
+  const [signing, setSigning] = useState<number | null>(null);
+  const dv102 = useDv102(objects.some((o) => o.kind === 'sign'));
+  /** Zeichen aus dem Generator, das gerade zusammengestellt wird */
+  const [generating, setGenerating] = useState<{ object: MapObject; initial: TacticalSign } | null>(null);
+  /** Vorgabename eines Zeichens: Name des fertigen Zeichens bzw. Grundzeichen mit Text */
+  const signName = (o: MapObject) => (o.kind !== 'sign' ? null : o.data.tactical ? generatorName(o.data.tactical) : dv102?.dv102Sign(o.data.sign!)?.name);
   const hasLocation = incident.lat != null && incident.lon != null;
   const shift = { '--objects-shift': `${shiftPx}px` } as CSSProperties;
 
@@ -170,7 +219,7 @@ export function ObjectList({
   };
 
   const patch = useMutation({
-    mutationFn: ({ id, ...p }: { id: number; visible?: boolean; color?: string | null; icon?: string | null; data?: { sectorM: number } }) => api.patchMapObject(id, p),
+    mutationFn: ({ id, ...p }: { id: number; name?: string; sign?: string; tactical?: MapObjectPatch['tactical']; visible?: boolean; label?: MapLabel; color?: string | null; icon?: string | null; data?: { sectorM: number } }) => api.patchMapObject(id, p),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mapObjects', incident.id] }),
     onError: (e) => toast('error', e.message),
   });
@@ -264,15 +313,31 @@ export function ObjectList({
           const color = objectColor(o);
           return (
             <li key={o.id} className={`map-object ${o.visible ? '' : 'hidden'}`}>
-              <button type="button" className="map-object-main" onClick={() => onFly(o)}>
-                <span className={`map-object-icon ${o.kind}`} style={colorable ? { color, background: `${color}26` } : undefined}>
-                  {o.kind === 'point' && o.data.icon ? <MapIcon name={o.data.icon} /> : <Icon size={16} />}
-                </span>
-                <span className="map-object-text">
-                  <strong>{o.name}</strong>
-                  <span className="muted">{summary(o, now)}</span>
-                </span>
-              </button>
+              {renaming === o.id ? (
+                <NameEditor
+                  name={o.name}
+                  onSave={(name) => (setRenaming(null), name !== o.name && patch.mutate({ id: o.id, name }))}
+                  onCancel={() => setRenaming(null)}
+                />
+              ) : (
+                <button type="button" className="map-object-main" onClick={() => onFly(o)}>
+                  <span className={`map-object-icon ${o.kind}`} style={colorable ? { color, background: `${color}26` } : undefined}>
+                    {o.kind === 'point' && o.data.icon ? <MapIcon name={o.data.icon} /> : o.kind === 'sign' ? (
+                      o.data.tactical ? (
+                        <TacticalSignImage sign={o.data.tactical} height={26} />
+                      ) : (
+                        <Dv102Image id={o.data.sign!} size={26} />
+                      )
+                    ) : (
+                      <Icon size={16} />
+                    )}
+                  </span>
+                  <span className="map-object-text">
+                    <strong>{o.name}</strong>
+                    <span className="muted">{summary(o, now)}</span>
+                  </span>
+                </button>
+              )}
               <span className="map-object-actions">
                 {settings && (
                   <button type="button" className="icon-btn" onClick={() => setExpanded(isOpen ? null : o.id)} aria-expanded={isOpen} aria-label="Einstellungen" title="Einstellungen">
@@ -291,8 +356,26 @@ export function ObjectList({
                     <span className="map-color-dot" style={{ background: color }} />
                   </button>
                 )}
+                {canEdit && o.kind === 'sign' && (
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    onClick={() => (o.data.tactical ? setGenerating({ object: o, initial: o.data.tactical }) : setSigning(signing === o.id ? null : o.id))}
+                    aria-expanded={signing === o.id} aria-label={`Zeichen von ${o.name} ändern`} title="Zeichen ändern">
+                    <TriangleAlert size={16} />
+                  </button>
+                )}
                 {canEdit && (
                   <>
+                    {isEditable(o) && (
+                      <button type="button" className="icon-btn" onClick={() => onEditShape(o)} aria-label={`Form von ${o.name} bearbeiten`} title="Form bearbeiten">
+                        <PenTool size={16} />
+                      </button>
+                    )}
+                    {!isTracked(o.kind) && <LabelToggle object={o} value={o.label} onChange={(label) => patch.mutate({ id: o.id, label })} />}
+                    <button type="button" className="icon-btn" onClick={() => setRenaming(renaming === o.id ? null : o.id)} aria-label={`${o.name} umbenennen`} title="Umbenennen">
+                      <Pencil size={16} />
+                    </button>
                     <button type="button" className="icon-btn" onClick={() => patch.mutate({ id: o.id, visible: !o.visible })} aria-label={o.visible ? 'Ausblenden' : 'Einblenden'} title={o.visible ? 'Ausblenden' : 'Einblenden'}>
                       {o.visible ? <Eye size={16} /> : <EyeOff size={16} />}
                     </button>
@@ -302,6 +385,20 @@ export function ObjectList({
                   </>
                 )}
               </span>
+              {signing === o.id && canEdit && o.kind === 'sign' && o.data.sign && (
+                <div className="map-object-signs">
+                  <Dv102Picker
+                    value={o.data.sign}
+                    onPick={(sign) => {
+                      // Trägt das Objekt noch den Namen des alten Zeichens, wandert der Name mit
+                      const name = signName(o) === o.name ? dv102?.dv102Sign(sign)?.name : undefined;
+                      patch.mutate({ id: o.id, sign, ...(name && { name }) });
+                      setSigning(null);
+                    }}
+                    onGenerator={(base) => (setSigning(null), setGenerating({ object: o, initial: generatorSign(base) }))}
+                  />
+                </div>
+              )}
               {coloring === o.id && canEdit && <ColorPalette object={o} onPick={(c) => (patch.mutate({ id: o.id, color: c }), o.kind !== 'point' && setColoring(null))} />}
               {coloring === o.id && canEdit && o.kind === 'point' && (
                 <MapIconPicker value={o.data.icon ?? null} label={`Symbol von ${o.name}`} onPick={(icon) => (patch.mutate({ id: o.id, icon }), setColoring(null))} />
@@ -327,6 +424,20 @@ export function ObjectList({
         })}
       </ul>
       {!objects.length && <p className="muted map-objects-empty">Weitere Objekte über „Objekte“ oder aus der Suche hinzufügen.</p>}
+      <GeneratorSignDialog
+        open={!!generating}
+        initial={generating?.initial ?? generatorSign()}
+        action="Übernehmen"
+        onClose={() => setGenerating(null)}
+        onDone={(tactical) => {
+          const o = generating!.object;
+          // Trägt das Objekt noch seinen Vorgabenamen, wandert der Name mit
+          const name = signName(o) === o.name ? generatorName(tactical) : undefined;
+          // Der Editor bietet nur SIGN_GENERATOR_BASES an
+          patch.mutate({ id: o.id, tactical: tactical as MapObjectPatch['tactical'], ...(name && { name }) });
+          setGenerating(null);
+        }}
+      />
       {forces.length > 0 && (
         <>
           <div className="map-objects-head map-objects-subhead">

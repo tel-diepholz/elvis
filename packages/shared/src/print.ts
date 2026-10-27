@@ -122,8 +122,13 @@ export interface MapSource {
 }
 
 export interface PrintMarker {
-  /** Fahrzeug (taktisches Zeichen), Einsatzort, Kartenobjekt (Punkt aus der Objektliste), Einheit der Kräfteübersicht */
-  kind: 'vehicle' | 'incident' | 'point' | 'unit';
+  /**
+   * Fahrzeug (taktisches Zeichen), Einsatzort, Kartenobjekt (Punkt aus der Objektliste), Einheit der Kräfteübersicht oder
+   * nur Text (Beschriftung einer Fläche, Linie oder Ausbreitung, mittig auf der Stelle) oder Lagezeichen nach DV 102
+   */
+  kind: 'vehicle' | 'incident' | 'point' | 'unit' | 'label' | 'sign';
+  /** Kennung des Lagezeichens (kind „sign“), z. B. „Gefahren/Gefahr_durch_Gas“ */
+  symbol?: string;
   /** Taktisches Zeichen einer Einheit */
   sign?: Partial<TacticalSign>;
   /** Farbe eines Punkts (#rrggbb), sonst Blau */

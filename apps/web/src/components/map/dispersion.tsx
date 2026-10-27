@@ -28,7 +28,7 @@ export const LEVELS = [
 const KM_CLASSES = Object.keys(KLUG_MANIER) as KlugManierClass[];
 
 /** Destination point from start, bearing and distance (spherical earth). */
-function destination(lat: number, lon: number, bearingDeg: number, meters: number): [number, number] {
+export function destination(lat: number, lon: number, bearingDeg: number, meters: number): [number, number] {
   const R = 6371e3;
   const δ = meters / R;
   const θ = (bearingDeg * Math.PI) / 180;

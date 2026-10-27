@@ -13,8 +13,11 @@ import {
   niceScale,
   printFrame,
   formatAltitude,
+  isTracked,
+  MAP_OBJECT_LABELS,
   type Incident,
   objectColor,
+  type MapLabel,
   type MapObject,
   type MapPrintRequest,
   type MapSource,
@@ -30,7 +33,7 @@ import { useSettings } from '../../lib/hooks';
 import { tacticalIcon } from '../../components/tactical/TacticalSign';
 import { Field, Segmented, Toggle } from '../../components/ui';
 import { computePlume, dispersionSector, fmtDistance, fmtExp, type Wind } from '../../components/map/dispersion';
-import { MapObjectsLayer } from '../../components/map/objects';
+import { LabelToggle, MapObjectsLayer, labelPlace, labelSub } from '../../components/map/objects';
 import { UnitsLayer, placedUnits } from '../../components/map/units';
 
 const incidentIcon = L.divIcon({ className: 'map-marker incident', html: '<span>!</span>', iconSize: [30, 30], iconAnchor: [15, 15] });
@@ -45,7 +48,7 @@ export interface PrintDialogProps {
   /** null, solange kein Fahrzeugstandort (GPS) bekannt ist. */
   vehicle: (LatLon & { name: string }) | null;
   incident: Incident | null;
-  /** Kartenobjekte des Einsatzes; gedruckt werden die sichtbaren */
+  /** Kartenobjekte des Einsatzes; vorgewählt sind die sichtbaren mit ihrer Beschriftung, im Dialog einzeln änderbar */
   objects: MapObject[];
   /** Kräfte des Einsatzes; gedruckt werden die gesetzten und eingeblendeten */
   units: Unit[];
@@ -62,6 +65,11 @@ function thin<T>(points: T[], max = 2000): T[] {
   return Array.from({ length: max }, (_, i) => points[Math.floor(i * step)]!);
 }
 
+/** Beschriftung im Druck (eine Zeile, höchstens 120 Zeichen) */
+function printLabel(o: MapObject, name: string): string {
+  return (o.label === 'details' ? `${name} · ${labelSub(o)}` : name).slice(0, 120);
+}
+
 /** Sichtbare Kartenobjekte als Markierungen, Flächen, Legende und Hinweise für den PDF-Druck */
 function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: Date) {
   const markers: MapPrintRequest['markers'] = [];
@@ -71,7 +79,20 @@ function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: D
   const notes: string[] = [];
   for (const o of objects.filter((x) => x.visible)) {
     const color = objectColor(o);
-    if (o.kind === 'point') markers.push({ kind: 'point', lat: o.lat, lon: o.lon, label: o.data.badge ? `${o.name} (${o.data.badge})` : o.name, color, ...(o.data.icon && { icon: o.data.icon }) });
+    if (o.kind === 'point') {
+      const label = o.label === 'off' ? '' : printLabel(o, o.data.badge ? `${o.name} (${o.data.badge})` : o.name);
+      markers.push({ kind: 'point', lat: o.lat, lon: o.lon, label, color, ...(o.data.icon && { icon: o.data.icon }) });
+    }
+    if (o.kind === 'sign') {
+      const label = o.label === 'off' ? '' : printLabel(o, o.name);
+      // Personen aus dem Generator druckt der Server wie die Kräfte
+      markers.push(o.data.tactical ? { kind: 'unit', lat: o.lat, lon: o.lon, sign: o.data.tactical, label } : { kind: 'sign', lat: o.lat, lon: o.lon, symbol: o.data.sign, label });
+    }
+    // Flächen, Linien und Ausbreitungen: Beschriftung als Text an derselben Stelle wie auf der Karte
+    if (o.label !== 'off' && o.kind !== 'point' && o.kind !== 'sign' && !isTracked(o.kind)) {
+      const [lat, lon] = labelPlace(o).pos;
+      markers.push({ kind: 'label', lat, lon, label: printLabel(o, o.name) });
+    }
     if (o.kind === 'aircraft' || o.kind === 'ship') {
       const { last, lostSince } = o.data;
       const extra = lostSince ? `kein Signal seit ${fmtTime(lostSince)}` : last ? [o.kind === 'aircraft' ? formatAltitude(last.altFt, last.onGround) : null, `Stand ${fmtTime(last.at)}`].filter(Boolean).join(', ') : null;
@@ -121,6 +142,30 @@ function CenterSync({ onCenter }: { onCenter: (c: LatLon) => void }) {
   return null;
 }
 
+/**
+ * Mausrad ändert die Zoomstufe des Ausdrucks statt der Vorschau (die Vorschau passt sich über FitFrame an). Kleine
+ * Schritte (Touchpad) werden gesammelt, bis sie einer Rastung entsprechen.
+ */
+function WheelPrintZoom({ onStep }: { onStep: (delta: 1 | -1) => void }) {
+  const map = useMap();
+  const step = useRef(onStep);
+  step.current = onStep;
+  useEffect(() => {
+    const el = map.getContainer();
+    let acc = 0;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      acc += e.deltaMode === WheelEvent.DOM_DELTA_LINE ? e.deltaY * 33 : e.deltaY;
+      if (Math.abs(acc) < 100) return;
+      step.current(acc < 0 ? 1 : -1);
+      acc = 0;
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [map]);
+  return null;
+}
+
 /** Passt die Vorschau an, wenn sich Format, Ausrichtung oder Zoomstufe ändern. */
 function FitFrame({ bounds, deps }: { bounds: L.LatLngBoundsExpression; deps: unknown[] }) {
   const map = useMap();
@@ -163,6 +208,12 @@ export function PrintDialog(props: PrintDialogProps) {
   const [title, setTitle] = useState(incident ? [incident.keyword, incident.title].filter(Boolean).join(' · ') : 'Lagekarte');
   const hasIncidentPos = incident?.lat != null && incident.lon != null;
   const visibleObjects = objects.filter((o) => o.visible);
+  // Auswahl und Beschriftung nur für diesen Druck – die Karte und ihre Objekte bleiben unverändert
+  const [choice, setChoice] = useState<Record<number, { show: boolean; label: MapLabel }>>({});
+  const choiceOf = (o: MapObject) => choice[o.id] ?? { show: o.visible, label: o.label };
+  const choose = (o: MapObject, c: Partial<{ show: boolean; label: MapLabel }>) => setChoice((all) => ({ ...all, [o.id]: { ...choiceOf(o), ...c } }));
+  const printObjects = objects.map((o) => ({ ...o, visible: choiceOf(o).show, label: choiceOf(o).label }) as MapObject);
+  const shownCount = printObjects.filter((o) => o.visible).length;
   const [withVehicle, setWithVehicle] = useState(!!props.vehicle && (incident?.vehicleVisible ?? true));
   const [withIncident, setWithIncident] = useState(hasIncidentPos);
   const [withObjects, setWithObjects] = useState(visibleObjects.length > 0);
@@ -197,7 +248,7 @@ export function PrintDialog(props: PrintDialogProps) {
     const notes: string[] = [];
     if (withUnits) for (const u of mapUnits) markers.push({ kind: 'unit', lat: u.lat!, lon: u.lon!, label: u.name, sign: u.sign });
     if (withObjects) {
-      const o = objectsForPrint(objects, weather, now);
+      const o = objectsForPrint(printObjects, weather, now);
       markers.push(...o.markers);
       polygons.push(...o.polygons);
       lines.push(...o.lines);
@@ -297,7 +348,24 @@ export function PrintDialog(props: PrintDialogProps) {
         <div className="toggle-group">
           <Toggle label="Fahrzeugstandort" checked={withVehicle} onChange={setWithVehicle} disabled={!vehicle} />
           <Toggle label="Einsatzort" checked={withIncident} onChange={setWithIncident} disabled={!hasIncidentPos} />
-          <Toggle label={`Kartenobjekte (${visibleObjects.length})`} checked={withObjects} onChange={setWithObjects} disabled={!visibleObjects.length} />
+          <Toggle label={`Kartenobjekte (${shownCount}/${objects.length})`} checked={withObjects} onChange={setWithObjects} disabled={!objects.length} />
+          {withObjects && objects.length > 0 && (
+            <ul className="print-objects" aria-label="Kartenobjekte im Druck">
+              {objects.map((o) => {
+                const c = choiceOf(o);
+                return (
+                  <li key={o.id} className={c.show ? '' : 'hidden'}>
+                    <label>
+                      <input type="checkbox" checked={c.show} onChange={(e) => choose(o, { show: e.target.checked })} />
+                      <span className="print-object-name">{o.name}</span>
+                      <span className="muted">{MAP_OBJECT_LABELS[o.kind]}</span>
+                    </label>
+                    {!isTracked(o.kind) && <LabelToggle object={o} value={c.label} onChange={(label) => choose(o, { label })} />}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           <Toggle label={`Kräfte (${mapUnits.length})`} checked={withUnits} onChange={setWithUnits} disabled={!mapUnits.length} />
         </div>
         <p className="muted print-summary">
@@ -339,15 +407,16 @@ export function PrintDialog(props: PrintDialogProps) {
       </div>
 
       <div className="print-preview">
-        <MapContainer center={[center.lat, center.lon]} zoom={zoom - 2} className="map" zoomControl={false} attributionControl={false}>
+        <MapContainer center={[center.lat, center.lon]} zoom={zoom - 2} className="map" zoomControl={false} attributionControl={false} scrollWheelZoom={false}>
           <TileLayer url={api.tileUrl(sourceId)} maxZoom={source.maxZoom} />
           <Polygon positions={mask} pathOptions={{ stroke: false, fillColor: '#000', fillOpacity: 0.4 }} interactive={false} />
           <Rectangle bounds={frameBounds} pathOptions={{ color: '#e53935', weight: 3, fill: false }} interactive={false} />
-          {withObjects && <MapObjectsLayer objects={objects} wind={weather} now={previewTime} labels={false} />}
+          {withObjects && <MapObjectsLayer objects={printObjects} wind={weather} now={previewTime} />}
           {withUnits && <UnitsLayer units={mapUnits} labels={false} />}
           {withVehicle && vehicle && <Marker position={[vehicle.lat, vehicle.lon]} icon={vehicleIcon} interactive={false} />}
           {withIncident && hasIncidentPos && <Marker position={[incident!.lat!, incident!.lon!]} icon={incidentIcon} interactive={false} />}
           <CenterSync onCenter={setCenter} />
+          <WheelPrintZoom onStep={(d) => setZoom((z) => Math.min(maxZoom, Math.max(MIN_PRINT_ZOOM, z + d)))} />
           <FitFrame bounds={frameBounds} deps={[paper, orientation, zoom]} />
         </MapContainer>
         <div className="print-paper-label">

@@ -52,5 +52,8 @@ export function beaufort(ms: number): number {
 
 export const fmtNum = (n: number, digits = 1) => n.toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
+/** Fläche: bis 1 km² in m² (ganze Zahl mit Tausenderpunkt), darüber in km² */
+export const fmtArea = (m2: number) => (m2 < 1_000_000 ? `${Math.round(m2).toLocaleString('de-DE')} m²` : `${fmtNum(m2 / 1_000_000, 2)} km²`);
+
 /** Zahl oder „–“, wenn der Sensor keinen Wert liefert. */
 export const fmtOpt = (n: number | null | undefined, digits = 1) => (n === null || n === undefined ? '–' : fmtNum(n, digits));

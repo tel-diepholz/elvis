@@ -17,6 +17,7 @@ import {
   type JournalEntry,
   type MapObject,
   type MapObjectPatch,
+  type MapHistoryState,
   type MapObjectData,
   type IncidentOverpassQuery,
   type OverpassQuery,
@@ -31,6 +32,7 @@ import {
   type unitPatchSchema,
 } from '@elvis/shared';
 import { isMapIcon } from '@elvis/shared/mapIcons';
+import { isDv102Sign } from '@elvis/shared/dv102';
 import type { Store } from '../db/store.js';
 import { checkOverpassIcon } from './overpass.js';
 import type { ForceService } from './forces.js';
@@ -150,10 +152,19 @@ export class IncidentService {
     return this.store.mapObjects(id);
   }
 
+  /** Lage der Karte zu einem Zeitpunkt (Zeitstrahl); vor Einsatzbeginn gibt es keine */
+  mapHistory(id: number, at: string): MapHistoryState {
+    const incident = this.get(id);
+    if (at < incident.startedAt) throw new HttpError(400, 'Der Zeitpunkt liegt vor Einsatzbeginn');
+    return this.store.mapHistory(id, at);
+  }
+
   addMapObject(id: number, input: Pick<MapObject, 'kind' | 'name' | 'lat' | 'lon' | 'data'> & { color?: string | null }, operator: string): MapObject {
     this.requireOpen(id);
     const icon = input.kind === 'point' ? (input.data as MapObjectData['point']).icon : null;
     if (icon && !isMapIcon(icon)) throw new HttpError(400, `Symbol „${icon}“ gibt es nicht`);
+    const signData = input.kind === 'sign' ? (input.data as MapObjectData['sign']) : null;
+    if (signData?.sign !== undefined && !isDv102Sign(signData.sign)) throw new HttpError(400, 'Dieses Zeichen gibt es nicht');
     const created = this.store.transaction(() => {
       const o = this.store.addMapObject(id, input, operator);
       this.system(id, `Kartenobjekt hinzugefügt: ${MAP_OBJECT_LABELS[o.kind]} „${o.name}“`, operator);
@@ -163,7 +174,7 @@ export class IncidentService {
     return created;
   }
 
-  /** Name, Sichtbarkeit, Lage und Einstellungen; Änderungen an Einstellungen landen nicht im Tagebuch */
+  /** Name, Sichtbarkeit, Beschriftung, Lage und Einstellungen; Änderungen an Einstellungen landen nicht im Tagebuch */
   patchMapObject(objectId: number, patch: MapObjectPatch, operator: string): MapObject {
     const before = this.store.mapObject(objectId);
     if (!before) throw new HttpError(404, `Kartenobjekt ${objectId} nicht gefunden`);
@@ -172,24 +183,42 @@ export class IncidentService {
     if (patch.color && !COLORABLE_KINDS.includes(before.kind)) throw new HttpError(400, 'Die Farben einer Gauß-Fahne stehen für die Konzentrationsstufen');
     if (patch.icon !== undefined && before.kind !== 'point') throw new HttpError(400, 'Ein Symbol haben nur Punkte');
     if (patch.icon && !isMapIcon(patch.icon)) throw new HttpError(400, `Symbol „${patch.icon}“ gibt es nicht`);
+    if (patch.outline && before.kind !== 'area') throw new HttpError(400, 'Einen Umriss haben nur Flächen');
+    if (patch.path && before.kind !== 'line') throw new HttpError(400, 'Einen Verlauf haben nur Linien');
+    if ((patch.sign !== undefined || patch.tactical) && before.kind !== 'sign') throw new HttpError(400, 'Ein Lagezeichen haben nur Zeichen');
+    if (patch.sign !== undefined && patch.tactical) throw new HttpError(400, 'Entweder fertiges Zeichen oder Zeichen aus dem Generator');
+    if (patch.sign !== undefined && !isDv102Sign(patch.sign)) throw new HttpError(400, 'Dieses Zeichen gibt es nicht');
+    if (patch.detail !== undefined && before.kind !== 'point' && before.kind !== 'sign' && before.kind !== 'area' && before.kind !== 'line') throw new HttpError(400, 'Dieses Objekt hat keine Beschreibung');
     if ((patch.lat !== undefined || patch.lon !== undefined) && isTracked(before.kind)) throw new HttpError(400, 'Die Position kommt live vom Empfang und lässt sich nicht verschieben');
     const next = {
       ...before,
       ...(patch.name !== undefined && { name: patch.name }),
       ...(patch.visible !== undefined && { visible: patch.visible }),
+      ...(patch.label !== undefined && { label: patch.label }),
       ...(patch.color !== undefined && { color: patch.color }),
       ...(patch.lat !== undefined && { lat: patch.lat }),
       ...(patch.lon !== undefined && { lon: patch.lon }),
       ...(patch.data && { data: { ...before.data, ...patch.data } }),
       ...(patch.icon !== undefined && { data: { ...before.data, icon: patch.icon } }),
     } as MapObject;
+    if (patch.outline || patch.path || patch.detail !== undefined)
+      next.data = {
+        ...next.data,
+        ...(patch.outline && { outline: patch.outline }),
+        ...(patch.path && { path: patch.path }),
+        ...(patch.detail !== undefined && { detail: patch.detail }),
+      } as MapObject['data'];
+    // Zeichen: fertiges Zeichen und Person schließen einander aus
+    if (patch.sign || patch.tactical) next.data = { detail: (next.data as MapObjectData['sign']).detail, ...(patch.sign ? { sign: patch.sign } : { tactical: patch.tactical }) } as MapObject['data'];
+    const reshaped = !!(patch.outline || patch.path);
     const saved = this.store.transaction(() => {
       const o = this.store.saveMapObject(next);
       if (before.name !== o.name) this.system(o.incidentId, `Kartenobjekt umbenannt: „${before.name}“ → „${o.name}“`, operator);
-      if (before.lat !== o.lat || before.lon !== o.lon) this.system(o.incidentId, `Kartenobjekt verschoben: ${MAP_OBJECT_LABELS[o.kind]} „${o.name}“`, operator);
+      if (reshaped) this.system(o.incidentId, `Kartenobjekt geändert: Form von ${MAP_OBJECT_LABELS[o.kind]} „${o.name}“`, operator);
+      else if (before.lat !== o.lat || before.lon !== o.lon) this.system(o.incidentId, `Kartenobjekt verschoben: ${MAP_OBJECT_LABELS[o.kind]} „${o.name}“`, operator);
       return o;
     });
-    this.notify(before.name !== saved.name || before.lat !== saved.lat || before.lon !== saved.lon ? ['mapObjects', 'journal'] : ['mapObjects']);
+    this.notify(reshaped || before.name !== saved.name || before.lat !== saved.lat || before.lon !== saved.lon ? ['mapObjects', 'journal'] : ['mapObjects']);
     return saved;
   }
 

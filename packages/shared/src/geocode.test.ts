@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { latLonToUtm, parseCoordinates, toMgrs, utmToLatLon } from './geocode';
+import { latLonToUtm, outlineArea, parseCoordinates, toMgrs, utmToLatLon } from './geocode';
 
 // Referenzwerte aus der Bibliothek mgrs (proj4js) 2.1.0
 const REF = [
@@ -67,5 +67,28 @@ describe('Koordinaten im Suchtext', () => {
 
   it.each(['Barnstorf', 'Lange Straße 3', '49406', 'B 51', 'A1 12', '95.1, 8.5', 'Hauptstraße 12, 49406 Barnstorf'])('„%s“ ist keine Koordinate', (q) => {
     expect(parseCoordinates(q)).toBeNull();
+  });
+});
+
+describe('outlineArea', () => {
+  // Quadrat von 100 m × 100 m bei 52° N (1 m in Breite ≈ 1/111 250°, in Länge entsprechend cos 52°)
+  const square = (lat: number, lon: number, m: number) => {
+    const dLat = m / 111_250;
+    const dLon = m / (111_320 * Math.cos((lat * Math.PI) / 180));
+    return [[lon, lat], [lon + dLon, lat], [lon + dLon, lat + dLat], [lon, lat + dLat], [lon, lat]];
+  };
+
+  it('misst ein Quadrat auf etwa 1 % genau', () => {
+    expect(outlineArea({ type: 'Polygon', coordinates: [square(52, 8.5, 100)] })).toBeGreaterThan(9_900);
+    expect(outlineArea({ type: 'Polygon', coordinates: [square(52, 8.5, 100)] })).toBeLessThan(10_100);
+  });
+
+  it('zieht Löcher ab und zählt Teilflächen zusammen', () => {
+    const holed = outlineArea({ type: 'Polygon', coordinates: [square(52, 8.5, 100), square(52.0002, 8.5003, 20)] });
+    expect(holed).toBeGreaterThan(9_500);
+    expect(holed).toBeLessThan(9_700);
+    const multi = outlineArea({ type: 'MultiPolygon', coordinates: [[square(52, 8.5, 100)], [square(53, 9, 100)]] });
+    expect(multi).toBeGreaterThan(19_800);
+    expect(multi).toBeLessThan(20_200);
   });
 });

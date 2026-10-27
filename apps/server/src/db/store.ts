@@ -6,6 +6,7 @@ import type {
   IncidentPatch,
   JournalCategory,
   JournalEntry,
+  MapHistoryState,
   MapObject,
   IncidentOverpassQuery,
   OverpassQuery,
@@ -14,7 +15,7 @@ import type {
   Unit,
   UnitStatus,
 } from '@elvis/shared';
-import { tacticalSignSchema } from '@elvis/shared';
+import { MAP_LABELS, tacticalSignSchema } from '@elvis/shared';
 import type { Db } from './index.js';
 
 type Row = Record<string, unknown>;
@@ -105,6 +106,7 @@ const toMapObject = (r: Row): MapObject =>
     lat: r.lat as number,
     lon: r.lon as number,
     visible: r.visible === 1,
+    label: MAP_LABELS[r.label as number] ?? 'off',
     color: (r.color as string | null) ?? null,
     data: JSON.parse(r.data as string),
     createdAt: r.created_at as string,
@@ -162,12 +164,98 @@ const toAudit = (r: Row): AuditEntry => ({
 
 const now = () => new Date().toISOString();
 
+type HistorySubject = 'object' | 'unit' | 'incident';
+/** Felder einer Kraft, die die Karte zeigt – nur ihre Änderungen kommen in den Verlauf */
+const unitMapState = (u: Unit) => ({
+  name: u.name,
+  sign: u.sign,
+  parentId: u.parentId,
+  status: u.status,
+  lat: u.lat,
+  lon: u.lon,
+  mapVisible: u.mapVisible,
+  positionSource: u.positionSource,
+  positionAt: u.positionAt,
+  positionAccuracyM: u.positionAccuracyM,
+});
+const incidentMapState = (i: Incident): MapHistoryState['incident'] => ({ lat: i.lat, lon: i.lon, vehicleVisible: i.vehicleVisible });
+/** Verfolgte Ziele melden alle 10 s eine Position; in den Verlauf kommt höchstens alle 30 s ein Stand */
+const TRACKED_HISTORY_MS = 30_000;
+
 /** Thin persistence layer; business rules live in the services. */
 export class Store {
   constructor(readonly db: Db) {}
 
   transaction<T>(fn: () => T): T {
     return this.db.transaction(fn)();
+  }
+
+  // --- Verlauf der Lage (Zeitstrahl) ---
+
+  private lastHistory(subject: HistorySubject, id: number): { at: string; state: string | null } | null {
+    return (this.db.prepare('SELECT at, state FROM map_history WHERE subject = ? AND subject_id = ? ORDER BY id DESC LIMIT 1').get(subject, id) as { at: string; state: string | null } | undefined) ?? null;
+  }
+
+  /** Schnappschuss festhalten, wenn er sich vom letzten unterscheidet; state null = entfernt */
+  private recordHistory(incidentId: number, subject: HistorySubject, id: number, state: unknown, minGapMs = 0): void {
+    const json = state === null ? null : JSON.stringify(state);
+    const last = this.lastHistory(subject, id);
+    if (last && last.state === json) return;
+    const at = now();
+    if (last && minGapMs && Date.parse(at) - Date.parse(last.at) < minGapMs) return;
+    this.db.prepare('INSERT INTO map_history (incident_id, at, subject, subject_id, state) VALUES (?, ?, ?, ?, ?)').run(incidentId, at, subject, id, json);
+  }
+
+  private recordObject(o: MapObject): void {
+    // Verfolgte Ziele gedrosselt – außer Name, Sichtbarkeit, Beschriftung oder Farbe ändern sich
+    const throttle = (o.kind === 'aircraft' || o.kind === 'ship') && this.sameLook(o) ? TRACKED_HISTORY_MS : 0;
+    this.recordHistory(o.incidentId, 'object', o.id, o, throttle);
+  }
+
+  private sameLook(o: MapObject): boolean {
+    const last = this.lastHistory('object', o.id);
+    if (!last?.state) return false;
+    const before = JSON.parse(last.state) as MapObject;
+    return before.name === o.name && before.visible === o.visible && before.label === o.label && before.color === o.color;
+  }
+
+  /**
+   * Lage zu einem Zeitpunkt: je Objekt, Kraft und Einsatzort der letzte Stand bis dahin. Was schon vor dem Verlauf
+   * bestand (ältere Einsätze), erscheint ab seiner Anlage mit dem frühesten bekannten Stand.
+   */
+  mapHistory(incidentId: number, at: string): MapHistoryState {
+    const rows = this.db
+      .prepare(
+        `SELECT h.subject, h.subject_id, h.state FROM map_history h
+         JOIN (SELECT MAX(id) AS id FROM map_history WHERE incident_id = ? AND at <= ? GROUP BY subject, subject_id) m ON m.id = h.id`,
+      )
+      .all(incidentId, at) as { subject: HistorySubject; subject_id: number; state: string | null }[];
+    const known = new Map(rows.map((r) => [`${r.subject}:${r.subject_id}`, r.state]));
+    const earliest = (subject: HistorySubject, id: number) =>
+      (this.db.prepare('SELECT state FROM map_history WHERE subject = ? AND subject_id = ? ORDER BY id LIMIT 1').get(subject, id) as { state: string | null } | undefined)?.state;
+    const stateOf = <T>(subject: HistorySubject, id: number, createdAt: string, current: T): T | null => {
+      const key = `${subject}:${id}`;
+      if (known.has(key)) return known.get(key) ? (JSON.parse(known.get(key)!) as T) : null;
+      if (createdAt > at) return null;
+      const first = earliest(subject, id);
+      return first ? (JSON.parse(first) as T) : current;
+    };
+
+    // Entfernte Objekte gibt es nur noch im Verlauf
+    const objects = rows.filter((r) => r.subject === 'object' && r.state).map((r) => JSON.parse(r.state!) as MapObject);
+    for (const o of this.mapObjects(incidentId)) {
+      if (known.has(`object:${o.id}`)) continue;
+      const s = stateOf('object', o.id, o.createdAt, o);
+      if (s) objects.push(s);
+    }
+    objects.sort((a, b) => a.id - b.id);
+
+    const units = this.units(incidentId).flatMap((u) => {
+      const s = stateOf('unit', u.id, u.createdAt, unitMapState(u));
+      return s ? [{ ...u, ...s }] : [];
+    });
+    const incident = this.incident(incidentId)!;
+    return { at, incident: stateOf('incident', incidentId, '', incidentMapState(incident)) ?? incidentMapState(incident), objects, units };
   }
 
   // --- Einsätze ---
@@ -201,7 +289,9 @@ export class Store {
         lon: input.lon ?? null,
         startedAt: now(),
       });
-    return this.incident(Number(info.lastInsertRowid))!;
+    const created = this.incident(Number(info.lastInsertRowid))!;
+    this.recordHistory(created.id, 'incident', created.id, incidentMapState(created));
+    return created;
   }
 
   updateIncident(id: number, patch: IncidentPatch): Incident {
@@ -221,7 +311,9 @@ export class Store {
         lon: next.lon ?? null,
         vehicleVisible: next.vehicleVisible ? 1 : 0,
       });
-    return this.incident(id)!;
+    const updated = this.incident(id)!;
+    this.recordHistory(id, 'incident', id, incidentMapState(updated));
+    return updated;
   }
 
   closeIncident(id: number): Incident {
@@ -285,7 +377,9 @@ export class Store {
            @section, @status, @lat, @lon, @positionSource, @positionAt, @positionAccuracyM, @mapVisible, @ts, @arrivedAt, @releasedAt, @ts)`,
       )
       .run({ ...unitParams(u), incidentId: u.incidentId, ts });
-    return this.unit(Number(info.lastInsertRowid))!;
+    const created = this.unit(Number(info.lastInsertRowid))!;
+    this.recordHistory(created.incidentId, 'unit', created.id, unitMapState(created));
+    return created;
   }
 
   saveUnit(u: Unit): Unit {
@@ -296,7 +390,9 @@ export class Store {
          lon=@lon, position_source=@positionSource, position_at=@positionAt, position_accuracy_m=@positionAccuracyM, map_visible=@mapVisible, arrived_at=@arrivedAt, released_at=@releasedAt, updated_at=@ts WHERE id=@id`,
       )
       .run({ ...unitParams(u), id: u.id, ts: now() });
-    return this.unit(u.id)!;
+    const saved = this.unit(u.id)!;
+    this.recordHistory(saved.incidentId, 'unit', saved.id, unitMapState(saved));
+    return saved;
   }
 
   // --- Kartenobjekte ---
@@ -318,18 +414,24 @@ export class Store {
          VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
       )
       .run(incidentId, o.kind, o.name, o.lat, o.lon, o.color ?? null, JSON.stringify(o.data), ts, author, ts);
-    return this.mapObject(Number(info.lastInsertRowid))!;
+    const created = this.mapObject(Number(info.lastInsertRowid))!;
+    this.recordObject(created);
+    return created;
   }
 
   saveMapObject(o: MapObject): MapObject {
     this.db
-      .prepare('UPDATE map_objects SET name = ?, lat = ?, lon = ?, visible = ?, color = ?, data = ?, updated_at = ? WHERE id = ?')
-      .run(o.name, o.lat, o.lon, o.visible ? 1 : 0, o.color, JSON.stringify(o.data), now(), o.id);
-    return this.mapObject(o.id)!;
+      .prepare('UPDATE map_objects SET name = ?, lat = ?, lon = ?, visible = ?, label = ?, color = ?, data = ?, updated_at = ? WHERE id = ?')
+      .run(o.name, o.lat, o.lon, o.visible ? 1 : 0, MAP_LABELS.indexOf(o.label), o.color, JSON.stringify(o.data), now(), o.id);
+    const saved = this.mapObject(o.id)!;
+    this.recordObject(saved);
+    return saved;
   }
 
   removeMapObject(id: number): void {
+    const before = this.mapObject(id);
     this.db.prepare('DELETE FROM map_objects WHERE id = ?').run(id);
+    if (before) this.recordHistory(before.incidentId, 'object', id, null);
   }
 
   // --- Overpass-Abfragen ---
