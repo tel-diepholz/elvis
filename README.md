@@ -4,6 +4,9 @@ Zentrale, responsive Weboberfläche für den ELW 2 der Freiwilligen Feuerwehr. E
 Einzelsysteme des Fahrzeugs (Funk, Netzwerk, Medien, Wetterstation mit GPS – weitere folgen) und die
 Einsatzführung (Einsatztagebuch, Kräfte, Dokumente) in einer Anwendung zusammen.
 
+Projekthomepage mit Bildern und Funktionsübersicht: **<https://einsatzleitwagen.app>**
+([Quelle](https://github.com/tel-diepholz/elvis-homepage))
+
 ## Bereiche
 
 | Bereich | Verfügbarkeit | Inhalt |
