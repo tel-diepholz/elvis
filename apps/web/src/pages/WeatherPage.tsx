@@ -1,66 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarDays, CloudRain, CloudSun, Clock, Droplets, MapPin, Navigation, Sunrise, Sunset, Thermometer, TriangleAlert, Wind } from 'lucide-react';
-import { WARNING_LEVEL, weatherCodeText, type WeatherDay, type WeatherHour, type WeatherNow, type WeatherReport, type WeatherWarning } from '@elvis/shared';
+import { CalendarDays, CloudRain, CloudSun, Clock, Droplets, MapPin, Navigation, Printer, Sunrise, Sunset, Thermometer, TriangleAlert, Wind } from 'lucide-react';
+import { WARNING_LEVEL, weatherCodeText, type GeoPosition, type GnssInfo, type GnssMethod, type WeatherDay, type WeatherHour, type WeatherNow, type WeatherReport, type WeatherWarning } from '@elvis/shared';
 import { api } from '../lib/api';
-import { beaufort, compass, fmtDateTime, fmtNum, fmtOpt, fmtTime } from '../lib/format';
+import { beaufort, compass, fmtDateTime, fmtNum, fmtOpt, fmtTime, fmtTimeSec } from '../lib/format';
 import { useActiveIncident, useInfo } from '../lib/hooks';
+import { useAuth } from '../lib/auth';
 import { useDevice } from '../lib/live';
 import { WindCompass } from '../components/WindCompass';
 import { WeatherIcon, WindArrow, gustTone } from '../components/WeatherIcon';
-import { Badge, Card, EmptyState, Loading, PageHeader, Stat } from '../components/ui';
-
-interface Sample {
-  t: number;
-  speed: number;
-  gust: number;
-}
-
-const HISTORY_MIN = 30;
-
-/** Rolling wind history kept in the browser while the page is open. */
-function useWindHistory(speed?: number | null, gust?: number | null): Sample[] {
-  const [samples, setSamples] = useState<Sample[]>([]);
-  const last = useRef(0);
-  useEffect(() => {
-    if (speed === undefined || gust === undefined || speed === null || gust === null) return;
-    const now = Date.now();
-    if (now - last.current < 5000) return;
-    last.current = now;
-    setSamples((s) => [...s.filter((x) => now - x.t < HISTORY_MIN * 60_000), { t: now, speed, gust }]);
-  }, [speed, gust]);
-  return samples;
-}
-
-function WindChart({ samples, limit }: { samples: Sample[]; limit: number }) {
-  if (samples.length < 2) return <p className="muted">Verlauf wird aufgezeichnet …</p>;
-  const W = 600;
-  const H = 160;
-  const t0 = samples[0]!.t;
-  const t1 = samples.at(-1)!.t;
-  const max = Math.max(limit + 3, ...samples.map((s) => s.gust));
-  const x = (t: number) => ((t - t0) / Math.max(1, t1 - t0)) * W;
-  const y = (v: number) => H - (v / max) * H;
-  const line = (key: 'speed' | 'gust') => samples.map((s, i) => `${i ? 'L' : 'M'}${x(s.t).toFixed(1)},${y(s[key]).toFixed(1)}`).join(' ');
-
-  return (
-    <figure className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Windverlauf">
-        <line x1="0" x2={W} y1={y(limit)} y2={y(limit)} className="chart-limit" />
-        <path d={line('gust')} className="chart-line gust" />
-        <path d={line('speed')} className="chart-line speed" />
-      </svg>
-      <figcaption className="chart-legend">
-        <span className="legend speed">Mittelwind</span>
-        <span className="legend gust">Böen</span>
-        <span className="legend limit">Sturmwarnung ({limit} m/s)</span>
-        <span className="muted">
-          {fmtTime(new Date(t0))} – {fmtTime(new Date(t1))}
-        </span>
-      </figcaption>
-    </figure>
-  );
-}
+import { Badge, Card, EmptyState, Loading, Modal, PageHeader, Stat } from '../components/ui';
+import { WeatherPrintDialog } from './WeatherPrintDialog';
 
 const kmh = (ms: number | null) => (ms === null ? '–' : fmtNum(ms * 3.6, 0));
 const dayName = new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
@@ -229,39 +179,132 @@ function useForecastPosition() {
   return null;
 }
 
+const GNSS_METHOD: Record<GnssMethod, string> = {
+  none: 'kein Fix',
+  gnss: 'GPS',
+  dgnss: 'DGPS',
+  precise: 'präzise',
+  'rtk-fixed': 'RTK',
+  'rtk-float': 'RTK (float)',
+  estimated: 'geschätzt',
+  manual: 'manuell',
+  simulated: 'simuliert',
+};
+/** Ab dieser Geschwindigkeit gilt das Fahrzeug als in Fahrt (GPS-Rauschen im Stand liegt darunter). */
+const MOVING_MS = 0.5;
+/** Ab dieser Neigung zeigt der Windsensor merklich falsch. */
+const TILT_WARN_DEG = 5;
+/** Ab dieser Abweichung von der GPS-Zeit gilt die Server-Uhr als falsch gestellt. */
+const CLOCK_WARN_S = 2;
+
+function hdopText(h: number): string {
+  return h < 1 ? 'sehr gut' : h < 2 ? 'gut' : h < 5 ? 'mäßig' : 'ungenau';
+}
+
+function GpsDetails({ position: p, gnss: g }: { position: GeoPosition; gnss: GnssInfo | null }) {
+  const moving = g?.speedMs != null && g.speedMs >= MOVING_MS;
+  const tilt = g && g.pitchDeg !== null && g.rollDeg !== null ? Math.max(Math.abs(g.pitchDeg), Math.abs(g.rollDeg)) : null;
+  const offset = g?.clockOffsetS ?? null;
+  return (
+    <dl className="kv">
+      <dt>Position</dt>
+      <dd className="mono">
+        {p.lat.toFixed(5)}, {p.lon.toFixed(5)}
+      </dd>
+      <dt>GPS</dt>
+      <dd>
+        <Badge tone={p.fix ? 'ok' : 'warn'}>{p.fix ? (g?.method ? GNSS_METHOD[g.method] : 'Fix') : 'kein Fix – letzte Position'}</Badge>
+        {g?.satellites != null && ` ${g.satellites} Satelliten`}
+      </dd>
+      {g?.hdop != null && (
+        <>
+          <dt>Genauigkeit</dt>
+          <dd>
+            {hdopText(g.hdop)} <small className="muted">(HDOP {fmtNum(g.hdop)})</small>
+          </dd>
+        </>
+      )}
+      {g?.altitudeM != null && (
+        <>
+          <dt>Höhe</dt>
+          <dd>{fmtNum(g.altitudeM, 0)} m ü. NN</dd>
+        </>
+      )}
+      <dt>Kurs</dt>
+      <dd>{p.headingDeg === null ? '–' : `${p.headingDeg}° (${compass(p.headingDeg)})`}</dd>
+      {g?.speedMs != null && (
+        <>
+          <dt>Fahrt</dt>
+          <dd>
+            {moving ? `${kmh(g.speedMs)} km/h` : 'steht'}
+            {moving && g.courseDeg !== null && ` · über Grund ${g.courseDeg}° (${compass(g.courseDeg)})`}
+          </dd>
+        </>
+      )}
+      {tilt !== null && (
+        <>
+          <dt>Neigung</dt>
+          <dd>
+            {tilt >= TILT_WARN_DEG ? <Badge tone="warn">schief – Wind ungenau</Badge> : 'eben'}{' '}
+            <small className="muted">
+              (Nicken {fmtNum(g!.pitchDeg!)}°, Rollen {fmtNum(g!.rollDeg!)}°)
+            </small>
+          </dd>
+        </>
+      )}
+      {g?.time && (
+        <>
+          <dt>GPS-Zeit</dt>
+          <dd>
+            {fmtTimeSec(g.time)}
+            {offset !== null && Math.abs(offset) >= CLOCK_WARN_S && (
+              <>
+                {' '}
+                <Badge tone="warn">Server-Uhr geht {fmtNum(Math.abs(offset), 0)} s {offset > 0 ? 'nach' : 'vor'}</Badge>
+              </>
+            )}
+          </dd>
+        </>
+      )}
+    </dl>
+  );
+}
+
 export function WeatherPage() {
   const dev = useDevice('weather');
   const { data: info } = useInfo();
   const stormLimit = info?.limits.stormWarnMs ?? 17;
-  const history = useWindHistory(dev?.state.windSpeedMs, dev?.state.windGustMs);
   const pos = useForecastPosition();
   // auf ca. 1 km runden, damit kleine GPS-Schwankungen keine neue Abfrage auslösen
   const at = pos && { lat: Math.round(pos.lat * 100) / 100, lon: Math.round(pos.lon * 100) / 100 };
+  const loggedIn = !!useAuth().user;
+  const [printing, setPrinting] = useState(false);
+  // der Server hält den letzten Stand vor und lädt ihn alle 15 Minuten neu; hier nur dessen Stand abholen
   const { data: report, isLoading, error } = useQuery({
     queryKey: ['weather', at?.lat, at?.lon],
     queryFn: () => api.weather(at!),
     enabled: !!at,
-    refetchInterval: 5 * 60_000,
+    refetchInterval: 60_000,
     placeholderData: (prev) => prev,
   });
   const fc = report?.forecast ?? null;
+  const asOf = fc?.fetchedAt ?? report?.warnings?.fetchedAt ?? null;
 
   const s = dev?.state;
   const dir = s?.windDirectionDeg ?? null;
   const gust = s?.windGustMs ?? null;
-  // Taupunkt nach Magnus-Formel, nur mit Temperatur und Luftfeuchte
-  const dewPoint =
-    s && s.temperatureC !== null && s.humidityPercent !== null && s.humidityPercent > 0
-      ? (() => {
-          const g = Math.log(s.humidityPercent / 100) + (17.62 * s.temperatureC) / (243.12 + s.temperatureC);
-          return (243.12 * g) / (17.62 - g);
-        })()
-      : null;
-
   return (
     <>
       <PageHeader
         title="Wetter"
+        actions={
+          loggedIn &&
+          at && (
+            <button className="btn" onClick={() => setPrinting(true)}>
+              <Printer size={18} /> Drucken
+            </button>
+          )
+        }
         subtitle={
           pos ? (
             <>
@@ -271,6 +314,12 @@ export function WeatherPage() {
                   {' '}
                   · Wetterstation <Badge tone={dev.online ? 'ok' : 'alarm'}>{dev.online ? 'empfängt Daten' : 'keine Daten'}</Badge>
                 </>
+              )}
+              {asOf && (
+                <span className="page-subtitle-line">
+                  <Clock size={14} /> Stand {fmtDateTime(asOf)}
+                  {error && ` · Server nicht erreichbar: ${error.message}`}
+                </span>
               )}
             </>
           ) : undefined
@@ -283,11 +332,11 @@ export function WeatherPage() {
               Für Prognose und Warnungen braucht ELVIS einen Standort: das GPS der Wetterstation oder den Einsatzort des laufenden Einsatzes.
             </EmptyState>
           </div>
-        ) : isLoading ? (
+        ) : !report && isLoading ? (
           <div className="span-3">
             <Loading />
           </div>
-        ) : error ? (
+        ) : !report && error ? (
           <Card title="Wetter" className="span-3">
             <p className="muted">Wetterdaten nicht abrufbar: {error.message}</p>
           </Card>
@@ -332,45 +381,23 @@ export function WeatherPage() {
                   <Stat label="Ausbreitung nach" value={dir === null ? '–' : compass((dir + 180) % 360)} sub="Rauch / Gefahrstoffe" />
                 </div>
               </div>
-              <WindChart samples={history} limit={stormLimit} />
             </Card>
-            <Card title="Atmosphäre (Wetterstation)" icon={<Thermometer size={18} />}>
-              <div className="grid-2">
-                <Stat label="Temperatur" value={fmtOpt(s.temperatureC)} unit="°C" />
-                <Stat label="Luftfeuchte" value={fmtOpt(s.humidityPercent, 0)} unit="%" />
-                <Stat label="Luftdruck" value={fmtOpt(s.pressureHpa, 0)} unit="hPa" />
-                <Stat label="Niederschlag" value={fmtOpt(s.precipitationMmH)} unit="mm/h" />
-              </div>
-              <ul className="icon-list muted">
-                {dewPoint !== null && (
+            <div className="stack">
+              <Card title="Atmosphäre (Wetterstation)" icon={<Thermometer size={18} />}>
+                <div className="grid-2">
+                  <Stat label="Temperatur" value={fmtOpt(s.temperatureC)} unit="°C" />
+                  <Stat label="Luftdruck" value={fmtOpt(s.pressureHpa, 0)} unit="hPa" />
+                </div>
+                <ul className="icon-list muted">
                   <li>
-                    <Droplets size={16} /> Taupunkt {fmtNum(dewPoint)} °C
+                    <CloudRain size={16} /> Aktualisiert {fmtTime(dev.updatedAt)}
                   </li>
-                )}
-                <li>
-                  <CloudRain size={16} /> Aktualisiert {fmtTime(dev.updatedAt)}
-                </li>
-                {s.humidityPercent === null && <li>Luftfeuchte und Niederschlag misst diese Station nicht (bzw. noch keine Werte).</li>}
-              </ul>
-            </Card>
-            <Card title="GPS & Kurs" icon={<Navigation size={18} />}>
-              {s.position ? (
-                <dl className="kv">
-                  <dt>Position</dt>
-                  <dd className="mono">
-                    {s.position.lat.toFixed(5)}, {s.position.lon.toFixed(5)}
-                  </dd>
-                  <dt>GPS</dt>
-                  <dd>
-                    <Badge tone={s.position.fix ? 'ok' : 'warn'}>{s.position.fix ? 'Fix' : 'kein Fix – letzte Position'}</Badge>
-                  </dd>
-                  <dt>Kurs</dt>
-                  <dd>{s.position.headingDeg === null ? '–' : `${s.position.headingDeg}° (${compass(s.position.headingDeg)})`}</dd>
-                </dl>
-              ) : (
-                <p className="muted">Keine GPS-Daten von der Wetterstation.</p>
-              )}
-            </Card>
+                </ul>
+              </Card>
+              <Card title="GPS & Kurs" icon={<Navigation size={18} />}>
+                {s.position ? <GpsDetails position={s.position} gnss={s.gnss} /> : <p className="muted">Keine GPS-Daten von der Wetterstation.</p>}
+              </Card>
+            </div>
           </>
         )}
       </div>
@@ -379,6 +406,11 @@ export function WeatherPage() {
           Prognose: <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo.com</a> (Modelle u. a. DWD ICON) · Warnungen: Deutscher Wetterdienst über{' '}
           <a href="https://brightsky.dev/" target="_blank" rel="noreferrer">Bright Sky</a>
         </p>
+      )}
+      {at && (
+        <Modal open={printing} title="Wetterbericht drucken" onClose={() => setPrinting(false)}>
+          {printing && <WeatherPrintDialog position={at} onDone={() => setPrinting(false)} />}
+        </Modal>
       )}
     </>
   );

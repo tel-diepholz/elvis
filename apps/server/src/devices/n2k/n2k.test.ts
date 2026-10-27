@@ -89,6 +89,36 @@ describe('PGN-Dekodierung (Airmar)', () => {
     expect((decodePgn(129029, d) as { fix: boolean }).fix).toBe(false);
   });
 
+  it('GNSS 129029: Höhe, Genauigkeit und Uhrzeit', () => {
+    const d = Buffer.alloc(43, 0xff);
+    d.writeUInt16LE(20_000, 1); // 04.10.2024
+    d.writeUInt32LE(12 * 36_000_000 + 345_678, 3); // 12:00:34,5678
+    d.writeBigInt64LE(BigInt(511657000) * 1000000000n, 7);
+    d.writeBigInt64LE(BigInt(104515000) * 1000000000n, 15);
+    d.writeBigInt64LE(275_500_000n, 23); // 275,5 m über dem Ellipsoid
+    d[31] = (2 << 4) | 0; // DGNSS
+    d[33] = 11;
+    d.writeInt16LE(85, 34); // HDOP 0,85
+    d.writeInt32LE(4_700, 38); // Geoidundulation 47 m
+    const g = decodePgn(129029, d);
+    expect(g).toMatchObject({ method: 'dgnss', satellites: 11, fix: true });
+    expect(g).toMatchObject({ time: new Date('2024-10-04T12:00:34.568Z') });
+    expect((g as { hdop: number }).hdop).toBeCloseTo(0.85, 5);
+    expect((g as { altitudeM: number }).altitudeM).toBeCloseTo(275.5, 5);
+    expect((g as { geoidSeparationM: number }).geoidSeparationM).toBeCloseTo(47, 5);
+  });
+
+  it('Fahrt 129026 und Lage 127257', () => {
+    const c = decodePgn(129026, Buffer.from([0, 0xfc, ...le16(15708), ...le16(1250), 0xff, 0xff])) as { courseDeg: number; speedMs: number; reference: string };
+    expect(c.reference).toBe('true');
+    expect(c.courseDeg).toBeCloseTo(90, 1);
+    expect(c.speedMs).toBeCloseTo(12.5, 5);
+    const a = decodePgn(127257, Buffer.from([0, 0xff, 0x7f, ...le16(873), ...le16(-524 & 0xffff), 0xff])) as { yawDeg: null; pitchDeg: number; rollDeg: number };
+    expect(a.yawDeg).toBeNull();
+    expect(a.pitchDeg).toBeCloseTo(5, 1);
+    expect(a.rollDeg).toBeCloseTo(-3, 1);
+  });
+
   it('Kurs 127250 magnetisch mit Missweisung', () => {
     const v = decodePgn(127250, Buffer.from([0, ...le16(31416), 0xff, 0x7f, ...le16(524), 0xfd])) as { headingDeg: number; variationDeg: number; reference: string };
     expect(v.reference).toBe('magnetic');
@@ -146,6 +176,35 @@ describe('Airmar-Treiber', () => {
     expect(s.humidityPercent).toBeNull(); // 150WX ohne Feuchtemodul
     expect(s.pressureHpa).toBe(1009);
     expect(s.position).toMatchObject({ lat: 51.1657, lon: 10.4515, headingDeg: 90, fix: true });
+    expect(s.gnss).toBeNull();
+
+    // GNSS-Details: Höhe über NN, Uhrzeit (Server-Uhr 3 s nach), Fahrt und Neigung
+    const g = Buffer.alloc(43, 0xff);
+    g.writeUInt16LE(Math.floor((t + 3000) / 86_400_000), 1);
+    g.writeUInt32LE(((t + 3000) % 86_400_000) * 10, 3);
+    g.writeBigInt64LE(511657000n * 1000000000n, 7);
+    g.writeBigInt64LE(104515000n * 1000000000n, 15);
+    g.writeBigInt64LE(277_000_000n, 23);
+    g[31] = 1 << 4;
+    g[33] = 9;
+    g.writeInt16LE(120, 34);
+    g.writeInt32LE(4_700, 38);
+    feed(msg(129029, g));
+    feed(msg(129026, [0, 0xfc, ...le16(15708), ...le16(0), 0xff, 0xff]));
+    feed(msg(127257, [0, 0xff, 0x7f, ...le16(175), ...le16(0), 0xff]));
+    a.publish();
+    expect(a.getState().gnss).toEqual({
+      method: 'gnss',
+      satellites: 9,
+      hdop: 1.2,
+      altitudeM: 230,
+      speedMs: 0,
+      courseDeg: 90,
+      pitchDeg: 1,
+      rollDeg: 0,
+      time: new Date(t + 3000).toISOString(),
+      clockOffsetS: 3,
+    });
 
     // Wahrer Wind (Nord) hat Vorrang vor scheinbarem
     t += 1000;

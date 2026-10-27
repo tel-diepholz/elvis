@@ -497,23 +497,33 @@ export const api = {
   weather: (pos: { lat: number; lon: number }) => request<WeatherReport>('GET', `/api/weather?lat=${pos.lat}&lon=${pos.lon}`),
   /** Liefert das PDF als Blob; Fehler kommen wie bei den übrigen Aufrufen als ApiError. */
   printMap: async (req: MapPrintRequest): Promise<{ pdf: Blob; filename: string; missingTiles: number }> => {
-    let res: Response;
-    try {
-      res = await fetch('/api/print/map', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(req),
-      });
-    } catch {
-      throw new ApiError(0, 'Server nicht erreichbar');
-    }
-    if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      throw new ApiError(res.status, (data as { error?: string } | null)?.error ?? `Fehler ${res.status}`);
-    }
-    const disposition = res.headers.get('content-disposition') ?? '';
-    const encoded = /filename\*=UTF-8''([^;]+)/.exec(disposition)?.[1];
-    const filename = encoded ? decodeURIComponent(encoded) : (/filename="([^"]+)"/.exec(disposition)?.[1] ?? 'Lagekarte.pdf');
-    return { pdf: await res.blob(), filename, missingTiles: Number(res.headers.get('x-missing-tiles') ?? 0) };
+    const { res, pdf, filename } = await fetchPdf('/api/print/map', req, 'Lagekarte.pdf');
+    return { pdf, filename, missingTiles: Number(res.headers.get('x-missing-tiles') ?? 0) };
+  },
+  printWeather: async (pos: { lat: number; lon: number }): Promise<{ pdf: Blob; filename: string }> => {
+    const { pdf, filename } = await fetchPdf('/api/print/weather', pos, 'Wetterbericht.pdf');
+    return { pdf, filename };
   },
 };
+
+/** POST mit JSON, Antwort als PDF samt Dateiname aus Content-Disposition */
+async function fetchPdf(url: string, body: unknown, fallbackName: string): Promise<{ res: Response; pdf: Blob; filename: string }> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0, 'Server nicht erreichbar');
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(res.status, (data as { error?: string } | null)?.error ?? `Fehler ${res.status}`);
+  }
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const encoded = /filename\*=UTF-8''([^;]+)/.exec(disposition)?.[1];
+  const filename = encoded ? decodeURIComponent(encoded) : (/filename="([^"]+)"/.exec(disposition)?.[1] ?? fallbackName);
+  return { res, pdf: await res.blob(), filename };
+}

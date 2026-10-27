@@ -170,7 +170,10 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   );
   const overpass = new OverpassService({ onlineUrl: config.map.overpassUrl, userAgent: config.map.userAgent, retryDelaysMs: opts.overpassRetryDelaysMs }, db, opts.overpassFetch);
   const radar = new RadarService({ ...config.map.radar, userAgent: config.map.userAgent }, opts.radarFetch);
-  const weather = new WeatherService({ ...config.weather, userAgent: config.map.userAgent }, opts.weatherFetch);
+  const weather = new WeatherService(
+    { ...config.weather, userAgent: config.map.userAgent, cacheFile: config.dataDir === ':memory:' ? null : join(config.dataDir, 'weather-cache.json') },
+    opts.weatherFetch,
+  );
   // Unwetter am Fahrzeugstandort (GPS der Wetterstation, sonst Einsatzort) erscheinen als Meldung
   const weatherWatch = new WeatherAlertWatch(
     weather,
@@ -288,7 +291,13 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     monitoringRoutes(api, { monitoring, store, notify: (t) => hub.invalidate(t) });
     bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
     mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder, overpass, radar);
-    weatherRoutes(api, weather, weatherWatch);
+    weatherRoutes(api, weather, weatherWatch, {
+      settings,
+      store,
+      notify: (t) => hub.invalidate(t),
+      station: () => (devices.adapter('weather') ? devices.snapshot('weather') : null),
+      stormLimitMs: config.alerts.stormWarnMs,
+    });
     trafficRoutes(api, { traffic, store, notify: (t) => hub.invalidate(t) });
     appLinkRoutes(api, appLinks);
     personnelRoutes(api, personnel);

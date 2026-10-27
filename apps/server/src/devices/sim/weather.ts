@@ -19,6 +19,7 @@ export class WeatherSim extends SimAdapter<'weather'> {
         humidityPercent: 71,
         pressureHpa: 1013,
         precipitationMmH: 0,
+        gnss: { method: 'gnss', satellites: 9, hdop: 0.9, altitudeM: 230, speedMs: 0, courseDeg: null, pitchDeg: 0.5, rollDeg: -1.2, time: null, clockOffsetS: 0 },
       } satisfies WeatherState,
       { tickMs: 2000 },
     );
@@ -26,13 +27,18 @@ export class WeatherSim extends SimAdapter<'weather'> {
 
   protected tick(): void {
     this.update((s) => {
+      // Simulator liefert immer alle Werte (null nur bei echten Sensoren ohne Messwert)
+      const v = (x: number | null, d: number) => x ?? d;
       // Fahrzeug steht: nur GPS-Rauschen (~1 m)
       if (s.position) {
         s.position.lat = round(drift(s.position.lat, HOME.lat, 0.000005, 0.1), 6);
         s.position.lon = round(drift(s.position.lon, HOME.lon, 0.000005, 0.1), 6);
       }
-      // Simulator liefert immer alle Werte (null nur bei echten Sensoren ohne Messwert)
-      const v = (x: number | null, d: number) => x ?? d;
+      if (s.gnss) {
+        s.gnss.satellites = Math.round(clamp(drift(v(s.gnss.satellites, 9), 9, 0.4, 0.1), 4, 14));
+        s.gnss.hdop = round(clamp(drift(v(s.gnss.hdop, 0.9), 0.9, 0.05, 0.1), 0.6, 3));
+        s.gnss.time = new Date().toISOString();
+      }
       s.windSpeedMs = round(clamp(drift(v(s.windSpeedMs, 5), 5, 0.6, 0.03), 0, 35));
       s.windGustMs = round(Math.max(s.windSpeedMs, s.windSpeedMs * (1.2 + Math.random() * 0.6)));
       s.windDirectionDeg = Math.round((v(s.windDirectionDeg, 245) + jitter(6) + 360) % 360);

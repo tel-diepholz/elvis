@@ -7,6 +7,7 @@ import { buildApp } from '../app.js';
 import { parseConfig } from '../config.js';
 import { WeatherAlertWatch, WeatherService, warningAlerts, type WeatherFetch } from './weather.js';
 import type { AlertDraft } from '../alerts.js';
+import { adminCookie } from '../test-helpers.js';
 
 const FORECAST = 'https://meteo.example';
 const WARNINGS = 'https://warn.example';
@@ -53,6 +54,9 @@ function fakeFetch(answers: Record<string, unknown>) {
 
 const NOW = Date.parse('2026-10-25T12:00:00Z');
 
+/** Abruf im Hintergrund abschließen lassen */
+const settle = () => new Promise((r) => setTimeout(r, 0));
+
 describe('Wetter', () => {
   it('liefert Prognose und Warnungen, schwerste zuerst, ohne Tests und abgelaufene', async () => {
     const f = fakeFetch({ [FORECAST]: openMeteo, [WARNINGS]: brightSky });
@@ -80,11 +84,16 @@ describe('Wetter', () => {
     await w.report(52.7102, 8.5039);
     expect(f.calls).toHaveLength(2);
 
+    // nach 15 Minuten neu laden; die Abfrage wartet nicht darauf, sondern liefert den vorhandenen Stand
     now += 20 * 60_000;
     answers[FORECAST] = new Error('HTTP 503');
-    const r = await w.report(52.70986, 8.50425);
+    const first = await w.report(52.70986, 8.50425);
     expect(f.calls).toHaveLength(4);
+    expect(first.forecastError).toBeNull();
+    await settle();
+    const r = await w.report(52.70986, 8.50425);
     expect(r.forecast?.current.temperatureC).toBe(9.8);
+    expect(r.forecast?.fetchedAt).toBe(new Date(NOW).toISOString());
     expect(r.forecastError).toMatch(/HTTP 503/);
     expect(r.warningsError).toBeNull();
 
@@ -92,6 +101,38 @@ describe('Wetter', () => {
     now += 30_000;
     await w.report(52.70986, 8.50425);
     expect(f.calls).toHaveLength(4);
+
+    // der letzte Stand bleibt, bis ein Abruf gelingt – auch nach Stunden
+    now += 24 * 3600_000;
+    await w.report(52.70986, 8.50425);
+    await settle();
+    expect((await w.report(52.70986, 8.50425)).forecast?.current.temperatureC).toBe(9.8);
+    answers[FORECAST] = { ...openMeteo, current: { ...openMeteo.current, temperature_2m: 12.5 } };
+    now += 60_000;
+    await w.report(52.70986, 8.50425);
+    await settle();
+    const fresh = await w.report(52.70986, 8.50425);
+    expect(fresh.forecast?.current.temperatureC).toBe(12.5);
+    expect(fresh.forecastError).toBeNull();
+  });
+
+  it('übersteht mit dem letzten Stand einen Neustart', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'elvis-weather-'));
+    try {
+      const cacheFile = join(dir, 'weather-cache.json');
+      const opts = { forecastUrl: FORECAST, warningsUrl: WARNINGS, userAgent: 'ELVIS-Test', cacheFile };
+      await new WeatherService(opts, fakeFetch({ [FORECAST]: openMeteo, [WARNINGS]: brightSky }).fetch, () => NOW).report(52.71, 8.5);
+
+      // nach dem Neustart ist der Dienst nicht erreichbar: der gesicherte Stand wird sofort geliefert
+      const offline = fakeFetch({});
+      const w = new WeatherService(opts, offline.fetch, () => NOW + 60_000);
+      const r = await w.report(52.71, 8.5);
+      expect(offline.calls).toHaveLength(0);
+      expect(r.forecast?.current.temperatureC).toBe(9.8);
+      expect(r.warnings?.items.map((i) => i.id)).toEqual(['b', 'a']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('meldet abgeschaltete und unerreichbare Dienste', async () => {
@@ -113,6 +154,28 @@ describe('Wetter', () => {
       expect(body.forecast?.current.temperatureC).toBe(9.8);
       expect(body.warnings).toMatchObject({ area: null, items: [] });
       expect((await app.server.inject({ method: 'GET', url: '/api/weather?lat=95&lon=8.5' })).statusCode).toBe(400);
+    } finally {
+      await app.close();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it('druckt den Wetterbericht als PDF nur mit Anmeldung und protokolliert das', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'elvis-weather-'));
+    const f = fakeFetch({ 'https://api.open-meteo.com': openMeteo, 'https://api.brightsky.dev': brightSky });
+    const app = await buildApp(parseConfig({ dataDir, docker: { enabled: false }, devices: { weather: { driver: 'sim' } } }), { logger: false, weatherFetch: f.fetch });
+    try {
+      const payload = { lat: 52.7, lon: 8.5 };
+      expect((await app.server.inject({ method: 'POST', url: '/api/print/weather', payload })).statusCode).toBe(401);
+      const cookie = await adminCookie(app);
+      const res = await app.server.inject({ method: 'POST', url: '/api/print/weather', headers: { cookie }, payload });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('application/pdf');
+      expect(res.headers['content-disposition']).toMatch(/Wetterbericht_.*\.pdf/);
+      expect(res.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
+      const audit = (await app.server.inject({ method: 'GET', url: '/api/audit', headers: { cookie } })).json<{ target: string; action: string }[]>();
+      expect(audit.some((a) => a.target === 'wetter' && a.action === 'print')).toBe(true);
+      expect((await app.server.inject({ method: 'POST', url: '/api/print/weather', headers: { cookie }, payload: { lat: 95, lon: 8.5 } })).statusCode).toBe(400);
     } finally {
       await app.close();
       rmSync(dataDir, { recursive: true, force: true });

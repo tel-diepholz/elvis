@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { WeatherState } from '@elvis/shared';
+import type { GnssInfo, WeatherState } from '@elvis/shared';
 import { BaseAdapter, type AdapterContext } from '../adapter.js';
 import { ActisenseDecoder, SET_RX_ALL_FRAME, type N2kMessage } from '../n2k/actisense.js';
 import { HUMIDITY_SOURCE_OUTSIDE, TEMP_SOURCE_OUTSIDE, decodePgn } from '../n2k/pgns.js';
@@ -54,6 +54,7 @@ export class AirmarAdapter extends BaseAdapter<'weather'> {
   private lastData = 0;
   private lastTrueWind = 0;
   private headingTrueDeg: number | null = null;
+  private gnss: GnssInfo | null = null;
   private dirty = false;
   private timers: NodeJS.Timeout[] = [];
   private reconnect: NodeJS.Timeout | null = null;
@@ -75,6 +76,7 @@ export class AirmarAdapter extends BaseAdapter<'weather'> {
       humidityPercent: null,
       pressureHpa: null,
       precipitationMmH: null,
+      gnss: null,
     } satisfies WeatherState);
     this.options = airmarOptionsSchema.parse(options);
     this.online = false;
@@ -191,10 +193,31 @@ export class AirmarAdapter extends BaseAdapter<'weather'> {
       case 129025:
         this.patch({ position: { lat: v.lat, lon: v.lon, headingDeg: this.headingTrueDeg, fix: s.position?.fix ?? true } });
         break;
-      case 129029:
+      case 129029: {
         if (v.lat !== null && v.lon !== null) this.patch({ position: { lat: v.lat, lon: v.lon, headingDeg: this.headingTrueDeg, fix: v.fix } });
         else if (s.position) this.patch({ position: { ...s.position, fix: false } });
+        const g = this.gnssInfo();
+        g.method = v.method;
+        g.satellites = v.satellites;
+        g.hdop = v.hdop;
+        g.altitudeM = v.altitudeM === null ? null : v.altitudeM - (v.geoidSeparationM ?? 0);
+        g.time = v.time?.toISOString() ?? null;
+        g.clockOffsetS = v.time ? (v.time.getTime() - t) / 1000 : null;
         break;
+      }
+      case 129026: {
+        const g = this.gnssInfo();
+        g.speedMs = v.speedMs;
+        // magnetischer Kurs nur mit bekannter Missweisung umrechenbar; die Airmar meldet ihn rechtweisend
+        g.courseDeg = v.reference === 'true' ? v.courseDeg : null;
+        break;
+      }
+      case 127257: {
+        const g = this.gnssInfo();
+        g.pitchDeg = v.pitchDeg;
+        g.rollDeg = v.rollDeg;
+        break;
+      }
       case 127250: {
         if (v.headingDeg === null) break;
         const trueHeading = v.reference === 'magnetic' ? (v.headingDeg + (v.variationDeg ?? 0) + 360) % 360 : v.headingDeg;
@@ -204,6 +227,11 @@ export class AirmarAdapter extends BaseAdapter<'weather'> {
       }
     }
     this.dirty = true;
+  }
+
+  private gnssInfo(): GnssInfo {
+    this.gnss ??= { method: null, satellites: null, hdop: null, altitudeM: null, speedMs: null, courseDeg: null, pitchDeg: null, rollDeg: null, time: null, clockOffsetS: null };
+    return this.gnss;
   }
 
   private pending: Partial<WeatherState> = {};
@@ -227,6 +255,17 @@ export class AirmarAdapter extends BaseAdapter<'weather'> {
       s.temperatureC = round(s.temperatureC);
       s.humidityPercent = s.humidityPercent === null ? null : Math.round(s.humidityPercent);
       s.pressureHpa = round(s.pressureHpa);
+      const g = this.gnss;
+      s.gnss = g && {
+        ...g,
+        hdop: round(g.hdop),
+        altitudeM: round(g.altitudeM, 0),
+        speedMs: round(g.speedMs),
+        courseDeg: g.courseDeg === null ? null : Math.round(g.courseDeg) % 360,
+        pitchDeg: round(g.pitchDeg),
+        rollDeg: round(g.rollDeg),
+        clockOffsetS: round(g.clockOffsetS),
+      };
       if (s.position) {
         s.position = {
           ...s.position,
