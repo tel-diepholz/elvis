@@ -17,11 +17,15 @@ export interface BluetoothOptions {
   retryMs?: number;
   /** Änderungen höchstens so oft an die Oberfläche (Victron sendet etwa jede Sekunde) */
   publishMs?: number;
+  /** Kommt so lange gar kein Paket, obwohl Geräte eingetragen sind, gilt der Adapter als gestört */
+  silenceMs?: number;
   now?: () => number;
 }
 
 /** Geräte in der Nähe so lange anbieten */
 const NEARBY_MS = 5 * 60_000;
+
+const SILENT = 'Seit Minuten kein Bluetooth-Paket empfangen – hängt der Dongle? Auf dem Server „dmesg“ prüfen und den Dongle neu einstecken.';
 
 interface Live {
   seenAt: number | null;
@@ -46,6 +50,10 @@ export class BluetoothAdapter extends BaseAdapter<'bluetooth'> {
   private dirty = false;
   private stopped = true;
   private startedAt = 0;
+  /** Letztes Werbepaket bzw. Start der Suche – für die Erkennung eines stummen Adapters */
+  private heardAt = 0;
+  /** Adapter läuft, empfängt aber nichts: Meldung bleibt bis zum nächsten Paket */
+  private silent = false;
   private readonly now: () => number;
 
   protected readonly commands = {
@@ -96,12 +104,14 @@ export class BluetoothAdapter extends BaseAdapter<'bluetooth'> {
   private async connect(): Promise<void> {
     if (this.stopped) return;
     try {
-      await this.scanner.start(
+      const how = await this.scanner.start(
         (a) => this.onAdvertisement(a),
         (err) => this.fail(err),
       );
-      this.update((s) => void (s.adapter = { name: this.scanner.label, scanning: true, error: null }));
-      this.setOnline(true);
+      if (how) this.ctx.log.info(`Bluetooth: ${this.scanner.label} bereit, ${how}`);
+      this.heardAt = this.now();
+      this.update((s) => void (s.adapter = { name: this.scanner.label, scanning: true, error: this.silent ? SILENT : null }));
+      this.setOnline(!this.silent);
     } catch (err) {
       this.fail(err as Error);
     }
@@ -122,6 +132,13 @@ export class BluetoothAdapter extends BaseAdapter<'bluetooth'> {
 
   /** Ein Werbepaket auswerten (öffentlich für Tests) */
   onAdvertisement(a: BleAdvertisement): void {
+    this.heardAt = this.now();
+    if (this.silent) {
+      this.silent = false;
+      this.ctx.log.info('Bluetooth: wieder Empfang');
+      this.update((s) => void (s.adapter.error = null));
+      this.setOnline(true);
+    }
     const data = a.manufacturerData.get(VICTRON_COMPANY_ID);
     const packet = data && victronPacket(data);
     if (!packet) return;
@@ -144,6 +161,12 @@ export class BluetoothAdapter extends BaseAdapter<'bluetooth'> {
   /** Nur veröffentlichen, wenn ein Gerät veraltet bzw. aus „in der Nähe“ herausfällt */
   private checkStale(): void {
     const now = this.now();
+    // Einmal neu anmelden; hilft das nicht, bleibt die Meldung bis zum nächsten Paket stehen
+    if (!this.silent && this.state.adapter.scanning && this.configs.some((c) => c.enabled) && now - this.heardAt > (this.opts.silenceMs ?? 5 * 60_000)) {
+      this.silent = true;
+      this.fail(new Error(SILENT));
+      return;
+    }
     const changed =
       this.state.devices.some((d) => !d.stale && now - (d.seenAt ? Date.parse(d.seenAt) : this.startedAt) > this.opts.staleMs) ||
       this.state.nearby.some((n) => now - Date.parse(n.seenAt) > NEARBY_MS);

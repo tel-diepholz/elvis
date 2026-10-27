@@ -3,7 +3,7 @@ import { connect as netConnect, type Socket } from 'node:net';
 
 /**
  * Kleiner D-Bus-Client (System-Bus über Unix-Socket) – gerade genug für BlueZ: Anmelden, Methoden aufrufen,
- * Signale empfangen. Wire-Format nach der D-Bus-Spezifikation (dbus.freedesktop.org/doc/dbus-specification.html).
+ * Signale empfangen und Aufrufe an eigene Objekte beantworten (z. B. den Advertisement Monitor). Wire-Format nach der D-Bus-Spezifikation (dbus.freedesktop.org/doc/dbus-specification.html).
  *
  * Werte: Zahlen (64 Bit als bigint), Strings, Buffer (ay), Arrays, Objekte (Dictionaries; Schlüssel als String),
  * Strukturen als Arrays. Variants werden beim Lesen ausgepackt, beim Schreiben als `new Variant(sig, wert)` angegeben.
@@ -348,7 +348,7 @@ export interface CallOptions {
   timeoutMs?: number;
 }
 
-export class DbusConnection extends EventEmitter<{ signal: [DbusMessage]; close: [Error | null] }> {
+export class DbusConnection extends EventEmitter<{ signal: [DbusMessage]; call: [DbusMessage]; close: [Error | null] }> {
   private serial = 1;
   private buffer: Buffer = Buffer.alloc(0);
   private readonly pending = new Map<number, { resolve: (body: unknown[]) => void; reject: (err: Error) => void; timer: NodeJS.Timeout }>();
@@ -428,6 +428,18 @@ export class DbusConnection extends EventEmitter<{ signal: [DbusMessage]; close:
     return this.call({ destination: 'org.freedesktop.DBus', path: '/org/freedesktop/DBus', interface: 'org.freedesktop.DBus', member: 'AddMatch', signature: 's', body: [rule] });
   }
 
+  /** Antwort auf einen eingegangenen Methodenaufruf (Ereignis „call“) */
+  reply(to: DbusMessage, signature = '', body: unknown[] = []): void {
+    if (this.closed || to.sender === undefined) return;
+    this.socket.write(encodeMessage({ type: 'return', serial: this.serial++, replySerial: to.serial, destination: to.sender, signature, body }));
+  }
+
+  /** Fehler als Antwort auf einen eingegangenen Methodenaufruf */
+  replyError(to: DbusMessage, name: string, message = ''): void {
+    if (this.closed || to.sender === undefined) return;
+    this.socket.write(encodeMessage({ type: 'error', serial: this.serial++, replySerial: to.serial, destination: to.sender, errorName: name, signature: 's', body: [message || name] }));
+  }
+
   close(): void {
     this.socket.destroy();
   }
@@ -451,6 +463,7 @@ export class DbusConnection extends EventEmitter<{ signal: [DbusMessage]; close:
         if (m.type === 'return') p.resolve(m.body);
         else p.reject(new DbusError(m.errorName ?? 'org.freedesktop.DBus.Error.Failed', typeof m.body[0] === 'string' ? m.body[0] : ''));
       } else if (m.type === 'signal') this.emit('signal', m);
+      else if (m.type === 'call') this.emit('call', m);
     }
   }
 }

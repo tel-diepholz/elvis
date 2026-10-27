@@ -175,7 +175,7 @@ export function EnergyPage() {
 
   return (
     <>
-      <PageHeader title="Energie" subtitle={adapter.scanning ? `Bluetooth (${adapter.name})` : adapter.error ? <span className="tone-alarm">{adapter.error}</span> : 'Bluetooth wird gestartet …'} />
+      <PageHeader title="Energie" subtitle={adapter.error ? <span className="tone-alarm">{adapter.error}</span> : adapter.scanning ? `Bluetooth (${adapter.name})` : 'Bluetooth wird gestartet …'} />
       {devices.length === 0 ? (
         <EmptyState icon={<Bluetooth size={32} />} title="Keine Geräte eingetragen">
           {user?.isAdmin ? (

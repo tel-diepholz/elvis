@@ -133,6 +133,28 @@ describe('Modul Bluetooth', () => {
     expect(scanner.starts).toBe(3);
     expect(adapter.isOnline()).toBe(true);
   });
+
+  it('meldet einen stummen Adapter, meldet ihn einmal neu an und hebt die Meldung beim nächsten Paket auf', async () => {
+    let now = 0;
+    const scanner = new FakeScanner();
+    adapter = new BluetoothAdapter('bluez', source([{ address: 'AA:00:00:00:00:01' }]), scanner, { staleMs: 60_000, silenceMs: 300_000, publishMs: 10, retryMs: 20, now: () => now });
+    await adapter.start(ctx);
+    now = 299_000;
+    await sleep(30);
+    expect(adapter.isOnline()).toBe(true);
+    now = 301_000;
+    await sleep(80);
+    // Einmal neu angemeldet, Meldung bleibt trotzdem stehen
+    expect(scanner.starts).toBe(2);
+    expect(adapter.isOnline()).toBe(false);
+    expect(adapter.getState().adapter).toMatchObject({ scanning: true, error: expect.stringMatching(/hängt der Dongle/) });
+    now = 900_000;
+    await sleep(80);
+    expect(scanner.starts).toBe(2);
+    scanner.emit!(adv('AA:00:00:00:00:01', lithium(13.2)));
+    expect(adapter.isOnline()).toBe(true);
+    expect(adapter.getState().adapter.error).toBeNull();
+  });
 });
 
 describe('Bluetooth-Geräte in den Einstellungen', () => {
