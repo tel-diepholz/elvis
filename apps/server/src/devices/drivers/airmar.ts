@@ -191,11 +191,12 @@ export class AirmarAdapter extends BaseAdapter<'weather'> {
         if (v.pressureHpa !== null) this.patch({ pressureHpa: v.pressureHpa });
         break;
       case 129025:
-        this.patch({ position: { lat: v.lat, lon: v.lon, headingDeg: this.headingTrueDeg, fix: s.position?.fix ?? true } });
+        this.patch({ position: { lat: v.lat, lon: v.lon, headingDeg: this.headingTrueDeg, fix: this.position()?.fix ?? true } });
         break;
       case 129029: {
+        const pos = this.position();
         if (v.lat !== null && v.lon !== null) this.patch({ position: { lat: v.lat, lon: v.lon, headingDeg: this.headingTrueDeg, fix: v.fix } });
-        else if (s.position) this.patch({ position: { ...s.position, fix: false } });
+        else if (pos) this.patch({ position: { ...pos, fix: false } });
         const g = this.gnssInfo();
         g.method = v.method;
         g.satellites = v.satellites;
@@ -221,8 +222,8 @@ export class AirmarAdapter extends BaseAdapter<'weather'> {
       case 127250: {
         if (v.headingDeg === null) break;
         const trueHeading = v.reference === 'magnetic' ? (v.headingDeg + (v.variationDeg ?? 0) + 360) % 360 : v.headingDeg;
+        // wird erst beim Veröffentlichen in die Position übernommen – sonst überschreibt der häufige Kurs eine neue Position mit der alten
         this.headingTrueDeg = trueHeading;
-        if (s.position) this.patch({ position: { ...s.position, headingDeg: Math.round(trueHeading) } });
         break;
       }
     }
@@ -238,6 +239,11 @@ export class AirmarAdapter extends BaseAdapter<'weather'> {
 
   private patch(p: Partial<WeatherState>): void {
     Object.assign(this.pending, p);
+  }
+
+  /** Aktuellste Position – noch nicht veröffentlichte Änderungen haben Vorrang vor dem Zustand. */
+  private position(): WeatherState['position'] {
+    return 'position' in this.pending ? this.pending.position! : this.state.position;
   }
 
   /** Höchstens einmal pro Sekunde veröffentlichen – der Bus liefert Werte mehrmals pro Sekunde. */
@@ -271,7 +277,7 @@ export class AirmarAdapter extends BaseAdapter<'weather'> {
           ...s.position,
           lat: Math.round(s.position.lat * 1e6) / 1e6,
           lon: Math.round(s.position.lon * 1e6) / 1e6,
-          headingDeg: s.position.headingDeg === null ? null : Math.round(s.position.headingDeg) % 360,
+          headingDeg: this.headingTrueDeg === null ? s.position.headingDeg : Math.round(this.headingTrueDeg) % 360,
         };
       }
     });
