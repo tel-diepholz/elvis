@@ -206,6 +206,12 @@ describe('Airmar-Treiber', () => {
       clockOffsetS: 3,
     });
 
+    // Neue Position bleibt erhalten, auch wenn danach noch Kurs gemeldet wird
+    feed(msg(129025, [...le32(511667000), ...le32(104525000)]));
+    feed(msg(127250, [0, ...le16(31416), 0xff, 0x7f, 0xff, 0x7f, 0xfc]));
+    a.publish();
+    expect(a.getState().position).toMatchObject({ lat: 51.1667, lon: 10.4525, headingDeg: 180 });
+
     // Wahrer Wind (Nord) hat Vorrang vor scheinbarem
     t += 1000;
     feed(msg(130306, [0, ...le16(400), ...le16(0), 0xf8, 0xff, 0xff]));
