@@ -22,8 +22,17 @@ function useUnreadSheets(): number {
   return user ? (data?.count ?? 0) : 0;
 }
 
+/** Postfach eingerichtet und ungelesene Mails */
+function useMail(): { available: boolean; unread: number } {
+  const { user } = useAuth();
+  const { data: avail } = useQuery({ queryKey: ['mail', 'available'], queryFn: api.mailAvailable, enabled: !!user });
+  const available = !!user && !!avail?.available;
+  const { data } = useQuery({ queryKey: ['mail', 'unread'], queryFn: api.mailUnread, enabled: available });
+  return { available, unread: available ? (data?.count ?? 0) : 0 };
+}
+
 type Badges = Record<NonNullable<NavItem['badge']>, number>;
-const BADGE_TITLE: Record<keyof Badges, string> = { personnelSheets: 'neue Personalbögen', messages: 'Meldungen zu bearbeiten' };
+const BADGE_TITLE: Record<keyof Badges, string> = { personnelSheets: 'neue Personalbögen', messages: 'Meldungen zu bearbeiten', mail: 'ungelesene Mails' };
 
 function NavEntry({ item, locked, lockReason, onNavigate, badges }: { item: NavItem; locked: boolean; lockReason?: string; onNavigate?: () => void; badges: Badges }) {
   const Icon = item.icon;
@@ -63,7 +72,8 @@ export function Layout() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const unreadSheets = useUnreadSheets();
   const messageCount = useMessageAttention(now).attention.length;
-  const badges: Badges = { personnelSheets: unreadSheets, messages: messageCount };
+  const mail = useMail();
+  const badges: Badges = { personnelSheets: unreadSheets, messages: messageCount, mail: mail.unread };
 
   useEffect(() => setDrawerOpen(false), [location.pathname]);
 
@@ -80,7 +90,7 @@ export function Layout() {
             {group.label === 'Einsatz' && incident && <span className="nav-live">aktiv</span>}
           </div>
           {group.items
-            .filter((item) => (!item.requiresDocker || dockerEnabled) && (!item.requiresAdmin || user?.isAdmin))
+            .filter((item) => (!item.requiresDocker || dockerEnabled) && (!item.requiresAdmin || user?.isAdmin) && (!item.requiresMail || mail.available))
             .map((item) => {
               const needsLogin = !!item.requiresLogin && !user;
               const noIncident = !!item.requiresIncident && !incident;
@@ -115,7 +125,7 @@ export function Layout() {
       <header className="topbar">
         <button className="btn btn-ghost btn-icon mobile-only menu-btn" onClick={() => setDrawerOpen(true)} aria-label={unreadSheets ? `Menü öffnen – ${unreadSheets} neue Personalbögen` : 'Menü öffnen'}>
           <Menu size={22} />
-          {unreadSheets + messageCount > 0 && <span className="menu-dot" />}
+          {unreadSheets + messageCount + mail.unread > 0 && <span className="menu-dot" />}
         </button>
 
         <div className="clock" title={fmtWeekday(now)}>

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  AtSign,
   Activity,
   Bluetooth,
   Cctv,
@@ -32,6 +33,7 @@ import { useSettings } from '../lib/hooks';
 import { SettingsGroup, SettingsSection } from '../components/SettingsSection';
 import { Loading, PageHeader } from '../components/ui';
 import { AppRelayCard } from './system/AppRelayCard';
+import { MailCard } from './system/MailCard';
 import { BluetoothCard } from './system/BluetoothCard';
 import { CamerasCard } from './system/CamerasCard';
 import { DisplaysCard } from './system/DisplaysCard';
@@ -132,6 +134,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="app" title="App-Anbindung" icon={<Smartphone {...ICON} />} summary="Positionen von Einsatzkräften per App">
             <AppRelayCard />
+          </SettingsSection>
+          <SettingsSection id="mail" title="E-Mail" icon={<AtSign {...ICON} />} summary="Verschlüsseltes Postfach des ELW (…@einsatzleitwagen.app)">
+            <MailCard />
           </SettingsSection>
         </SettingsGroup>
 

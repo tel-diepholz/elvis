@@ -1,6 +1,7 @@
 import {
   Activity,
   Archive,
+  AtSign,
   BatteryCharging,
   BookOpenText,
   CloudSun,
@@ -39,8 +40,10 @@ export interface NavItem {
   requiresLogin?: boolean;
   /** Only shown to admins. */
   requiresAdmin?: boolean;
+  /** Nur mit eingerichtetem Postfach (Einstellungen → E-Mail) */
+  requiresMail?: boolean;
   /** Zähler für Ungelesenes (siehe Layout) */
-  badge?: 'personnelSheets' | 'messages';
+  badge?: 'personnelSheets' | 'messages' | 'mail';
 }
 
 export interface NavGroup {
@@ -62,6 +65,7 @@ export const NAV: NavGroup[] = [
       { to: '/bildschirme', label: 'Bildschirme', icon: MonitorSmartphone },
       { to: '/drucken', label: 'Drucken', icon: Printer },
       { to: '/scans', label: 'Posteingang', icon: ScanLine, requiresLogin: true, badge: 'personnelSheets' },
+      { to: '/mail', label: 'E-Mail', icon: AtSign, requiresLogin: true, requiresMail: true, badge: 'mail' },
     ],
   },
   {
