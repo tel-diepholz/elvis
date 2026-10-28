@@ -18,6 +18,7 @@ const BEFORE_FORCES = `
 `;
 
 /** v37 zurückdrehen: Anforderungen samt Verweisen */
+const UNDO_MAIL = 'DROP TABLE mail_attachments; DROP TABLE mail_messages; DROP TABLE mail_keys';
 const UNDO_REQUESTS = `
   DROP TABLE requests; DROP INDEX journal_request;
   ALTER TABLE tasks DROP COLUMN request_id; ALTER TABLE messages DROP COLUMN request_id; ALTER TABLE journal DROP COLUMN request_id;
@@ -33,6 +34,7 @@ describe('Migrationen', () => {
       const legacy = new Database(join(dir, 'elvis.sqlite'));
       legacy.exec('ALTER TABLE addons DROP COLUMN manifest');
       // v19: Rollen und Aufgaben (Spalten mit Fremdschlüssel lassen sich nicht einzeln entfernen)
+      legacy.exec(UNDO_MAIL); // v38
       legacy.exec(UNDO_REQUESTS); // v37
       legacy.exec('DROP TABLE map_history; DROP TABLE incident_overpass_queries; DROP TABLE message_copies; DROP TABLE messages'); // v33–v36, Verlauf
       legacy.exec('DROP TABLE session_roles'); // v32
@@ -75,6 +77,7 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec(UNDO_MAIL);
       legacy.exec(UNDO_REQUESTS);
       legacy.exec('DROP TABLE map_history; DROP TABLE incident_overpass_queries; DROP TABLE message_copies; DROP TABLE messages; ALTER TABLE map_objects DROP COLUMN label');
       legacy.exec(BEFORE_FORCES);

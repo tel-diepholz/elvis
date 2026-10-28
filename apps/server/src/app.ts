@@ -50,6 +50,9 @@ import { RelayClient, type RelayFetch } from './services/relay.js';
 import { PersonnelService } from './services/personnel.js';
 import { personnelRoutes } from './routes/personnel.js';
 import { appLinkRoutes } from './routes/applinks.js';
+import { MailService, type MailFetch } from './services/mail.js';
+import type { WkdFetch } from './services/mailcrypto.js';
+import { mailRoutes } from './routes/mail.js';
 import { TileService } from './services/tiles.js';
 import type { UbusHttp } from './services/openwrt.js';
 import { WifiService } from './services/wifi.js';
@@ -87,12 +90,13 @@ export interface App {
   workstations: WorkstationService;
   appLinks: AppLinkService;
   personnel: PersonnelService;
+  mail: MailService;
   traffic: TrafficService;
   start(): Promise<void>;
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -204,6 +208,13 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const relay = new RelayClient(db, config.app.relayUrl, opts.relayFetch);
   const appLinks = new AppLinkService(db, store, incidents, (t) => hub.invalidate(t), relay);
   const personnel = new PersonnelService(db, store, incidents, (t) => hub.invalidate(t), relay, () => settings.get().vehicle.name);
+  const mail = new MailService(db, store, (t) => hub.invalidate(t), relay, {
+    ...config.mail,
+    dataDir: config.dataDir,
+    vehicleName: () => settings.get().vehicle.name,
+    fetch: opts.mailFetch,
+    wkdFetch: opts.wkdFetch,
+  });
   const users = new UserService(db);
   const limiter = new LoginLimiter();
   const workstations = new WorkstationService(db, store, () => wifi.opsCredentials());
@@ -301,6 +312,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     trafficRoutes(api, { traffic, store, notify: (t) => hub.invalidate(t) });
     appLinkRoutes(api, appLinks);
     personnelRoutes(api, personnel);
+    mailRoutes(api, mail);
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
       const parsed = settingsInputSchema.safeParse(req.body);
@@ -339,6 +351,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     workstations,
     appLinks,
     personnel,
+    mail,
     traffic,
     async start() {
       await devices.start();
@@ -348,6 +361,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       traffic.start();
       appLinks.start();
       personnel.start();
+      mail.start();
       cleanup();
       cleanupTimer = setInterval(cleanup, 3600_000);
       if (docker) {
@@ -369,6 +383,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       traffic.stop();
       appLinks.stop();
       personnel.stop();
+      mail.stop();
       if (cleanupTimer) clearInterval(cleanupTimer);
       docker?.hosts.stop();
       docker?.addons.stop();

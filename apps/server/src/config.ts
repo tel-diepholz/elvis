@@ -132,6 +132,16 @@ const configSchema = z.object({
       relayUrl: z.string().url().nullable().default('https://elvis-relay.hhansen06.workers.dev'),
     })
     .default({}),
+  mail: z
+    .object({
+      /** Postfach des ELW über das Cloud-Relay (app.relayUrl); false = Bereich „E-Mail“ aus */
+      enabled: z.boolean().default(true),
+      /** Abruf neuer Mails beim Relay */
+      pollMs: z.number().int().min(5000).default(30_000),
+      /** Domain der Postfächer (muss zum Relay passen) */
+      domain: z.string().default('einsatzleitwagen.app'),
+    })
+    .default({}),
   alerts: z
     .object({
       stormWarnMs: z.number().default(17),

@@ -757,6 +757,52 @@ const MIGRATIONS: Migration[] = [
   ALTER TABLE incidents ADD COLUMN procurement_mode TEXT NOT NULL DEFAULT 'self' CHECK (procurement_mode IN ('self', 'staff'));
   ALTER TABLE incidents ADD COLUMN procurement_staff TEXT NOT NULL DEFAULT '';
   `,
+  // E-Mail: Postfach des ELW (Zustand und Schlüssel in settings unter mail:*), Nachrichten, Schlüssel der Gegenstellen
+  `
+  CREATE TABLE mail_messages (
+    id INTEGER PRIMARY KEY,
+    folder TEXT NOT NULL CHECK (folder IN ('inbox', 'sent')),
+    -- seq der Mail im Relay (nur Eingang), verhindert doppelte Ablage
+    relay_seq INTEGER UNIQUE,
+    message_id TEXT,
+    in_reply_to TEXT,
+    from_text TEXT NOT NULL,
+    from_address TEXT NOT NULL,
+    reply_to TEXT,
+    to_json TEXT NOT NULL DEFAULT '[]',
+    cc_json TEXT NOT NULL DEFAULT '[]',
+    subject TEXT NOT NULL DEFAULT '',
+    date TEXT NOT NULL,
+    body_text TEXT NOT NULL DEFAULT '',
+    body_html TEXT,
+    encryption TEXT NOT NULL CHECK (encryption IN ('e2e', 'relay', 'none')),
+    signature TEXT NOT NULL CHECK (signature IN ('valid', 'invalid', 'unknown-key', 'none')),
+    seen INTEGER NOT NULL DEFAULT 0,
+    -- Rohmail (entschlüsselt) für Export und Nachweis
+    raw BLOB NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL
+  );
+  CREATE INDEX mail_messages_folder ON mail_messages(folder, date);
+  CREATE TABLE mail_attachments (
+    id INTEGER PRIMARY KEY,
+    message_id INTEGER NOT NULL REFERENCES mail_messages(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    content BLOB NOT NULL
+  );
+  CREATE INDEX mail_attachments_message ON mail_attachments(message_id);
+  -- Öffentliche Schlüssel der Gegenstellen; public_key NULL = per WKD gesucht, nichts gefunden (checked_at)
+  CREATE TABLE mail_keys (
+    address TEXT PRIMARY KEY,
+    public_key TEXT,
+    fingerprint TEXT,
+    source TEXT CHECK (source IN ('autocrypt', 'wkd', 'manual')),
+    checked_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

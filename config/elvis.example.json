@@ -41,6 +41,10 @@
   "scan": {
     "smtpPort": 2525
   },
+  "mail": {
+    "enabled": true,
+    "pollMs": 30000
+  },
   "alerts": {
     "batteryWarnPercent": 40,
     "batteryAlarmPercent": 20,
