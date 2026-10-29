@@ -23,6 +23,7 @@ class FakeRelay {
   sent: { to: string[]; raw: string }[] = [];
   nonces = new Set<string>();
   moved = false;
+  sendError: { status: number; error: string } | null = null;
   seq = 0;
 
   relayFetch: RelayFetch = async (_url, { method }) => (method === 'POST' ? { status: 201, body: { elwId: 'E1', token: 'elw-token' } } : { status: 404, body: null });
@@ -64,6 +65,7 @@ class FakeRelay {
     const one = /^\/v1\/elws\/me\/mail\/(\d+)$/.exec(path);
     if (method === 'GET' && one) return { status: 200, body: Buffer.from(this.inbox.find((m) => m.seq === Number(one[1]))!.blob) };
     if (method === 'POST' && path === '/v1/elws/me/mail/outbox') {
+      if (this.sendError) return json(this.sendError.status, { error: this.sendError.error });
       const b = JSON.parse(body) as { to: string[]; raw: string };
       this.sent.push({ to: b.to, raw: Buffer.from(b.raw, 'base64').toString('latin1') });
       return json(200, { sent: b.to.length });
@@ -221,6 +223,13 @@ describe('E-Mail', () => {
     ]);
     const audit = (await req<{ target: string; action: string }[]>('GET', '/api/audit')).body.filter((e) => e.target === 'mail');
     expect(audit.filter((e) => e.action === 'send')).toHaveLength(2);
+    // Fehler des Relays kommen mit seiner Meldung an, nicht als „Interner Fehler“
+    relay.sendError = { status: 429, error: 'Das Tageskontingent für den Mailversand des Relays ist erschöpft, Versand erst morgen wieder möglich' };
+    const quota = await req<{ error: string }>('POST', '/api/mail/send', { to: ['ohne@example.org'], subject: 'Info', text: 'Hallo', allowUnencrypted: true });
+    expect(quota.status).toBe(429);
+    expect(quota.body.error).toMatch(/^Cloud: Das Tageskontingent/);
+    relay.sendError = { status: 502, error: 'Versand fehlgeschlagen' };
+    expect((await req('POST', '/api/mail/send', { to: ['ohne@example.org'], subject: 'Info', text: 'Hallo', allowUnencrypted: true })).status).toBe(502);
   });
 
   it('erkennt ein übertragenes Postfach und kündigt', async () => {

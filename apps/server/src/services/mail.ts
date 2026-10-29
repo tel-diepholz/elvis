@@ -676,6 +676,8 @@ export class MailService {
     } catch (e) {
       this.audit(operator, 'send', all.join(', '), false, e instanceof Error ? e.message : String(e));
       this.notify(['audit']);
+      // Meldung des Relays (z. B. Versandlimit, Tageskontingent erschöpft) an die Oberfläche statt „Interner Fehler“
+      if (e instanceof RelayError) throw new HttpError(e.status === 429 ? 429 : 502, e.message);
       throw e;
     }
 
