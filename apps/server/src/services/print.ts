@@ -288,7 +288,9 @@ export async function drawTiles(
   const tx1 = Math.floor((origin.x + widthPx - 1) / TILE_SIZE);
   const ty1 = Math.floor((origin.y + heightPx - 1) / TILE_SIZE);
   const jobs: Promise<{ tx: number; ty: number; tile: Awaited<ReturnType<TileService['get']>> }>[] = [];
-  for (let ty = ty0; ty <= ty1; ty++) {
+  // Bei kleinen Zoomstufen reicht der Ausschnitt über Nord- und Südrand der Welt hinaus: dort gibt es keine Kacheln
+  const rows = 2 ** zoom;
+  for (let ty = Math.max(0, ty0); ty <= Math.min(rows - 1, ty1); ty++) {
     for (let tx = tx0; tx <= tx1; tx++) jobs.push(tiles.get(sourceId, zoom, tx, ty).then((tile) => ({ tx, ty, tile })));
   }
   const loaded = await Promise.all(jobs);

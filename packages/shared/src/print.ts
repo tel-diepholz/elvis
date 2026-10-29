@@ -25,7 +25,7 @@ export const PRINT_MARGIN_MM = 10;
 export const PRINT_MM_PER_PX = 0.25;
 
 export const TILE_SIZE = 256;
-export const MIN_PRINT_ZOOM = 10;
+export const MIN_PRINT_ZOOM = 5;
 export const MAX_PRINT_ZOOM = 19;
 
 const EARTH_CIRCUMFERENCE_M = 40_075_016.686;

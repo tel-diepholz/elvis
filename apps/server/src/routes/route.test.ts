@@ -113,7 +113,7 @@ afterEach(async () => {
 
 async function req<T = unknown>(method: 'GET' | 'POST', url: string, payload?: unknown, c = cookie) {
   const res = await app.server.inject({ method, url, payload: payload as object, headers: c ? { cookie: c } : {} });
-  return { status: res.statusCode, body: (res.headers['content-type']?.includes('json') ? res.json() : res.rawPayload) as T, headers: res.headers };
+  return { status: res.statusCode, body: (String(res.headers['content-type'] ?? '').includes('json') ? res.json() : res.rawPayload) as T, headers: res.headers };
 }
 
 const local = () => app.router.setProvisions([{ id: 'osm-daten-valhalla', name: 'Routing (lokal)', type: 'valhalla', url: 'http://10.0.0.5:8002/' }]);
