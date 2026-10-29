@@ -45,6 +45,7 @@ interface PersonRow {
   qualifications: string;
   organization: string;
   phone: string;
+  email: string;
   address: string;
   employer: string;
   emergency_contact: string;
@@ -94,6 +95,7 @@ const toPerson = (r: PersonRow): Person => ({
   qualifications: JSON.parse(r.qualifications) as string[],
   organization: r.organization,
   phone: r.phone,
+  email: r.email,
   address: r.address,
   employer: r.employer,
   emergencyContact: r.emergency_contact,
@@ -112,6 +114,8 @@ const personParams = (p: PersonData) => ({
   qualifications: JSON.stringify(p.qualifications),
   organization: p.organization,
   phone: p.phone,
+  // Bögen von vor dem E-Mail-Feld haben keins
+  email: p.email ?? '',
   address: p.address,
   employer: p.employer,
   emergencyContact: p.emergencyContact,
@@ -122,7 +126,7 @@ const toSheet = (r: SheetRow): PersonnelSheet => ({
   id: r.id,
   incidentId: r.incident_id,
   unitLabel: r.unit_label,
-  persons: JSON.parse(r.persons) as PersonData[],
+  persons: (JSON.parse(r.persons) as PersonData[]).map((p) => ({ ...p, email: p.email ?? '' })),
   submittedAt: r.submitted_at,
   receivedAt: r.received_at,
   readAt: r.read_at,
@@ -177,7 +181,7 @@ export class PersonnelService {
     return (this.db.prepare('SELECT * FROM personnel WHERE incident_id = ? ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE, id').all(incidentId) as PersonRow[]).map(toPerson);
   }
 
-  private person(id: number): Person {
+  person(id: number): Person {
     const r = this.db.prepare('SELECT * FROM personnel WHERE id = ?').get(id) as PersonRow | undefined;
     if (!r) throw new HttpError(404, `Person ${id} nicht gefunden`);
     return toPerson(r);
@@ -195,9 +199,9 @@ export class PersonnelService {
     const ts = new Date().toISOString();
     const stmt = this.db.prepare(
       `INSERT INTO personnel (incident_id, unit_id, sheet_id, last_name, first_name, birth_date, grade, function, qualifications, organization,
-         phone, address, employer, emergency_contact, notes, created_at, created_by, updated_at)
+         phone, email, address, employer, emergency_contact, notes, created_at, created_by, updated_at)
        VALUES (@incidentId, @unitId, @sheetId, @lastName, @firstName, @birthDate, @grade, @function, @qualifications, @organization,
-         @phone, @address, @employer, @emergencyContact, @notes, @ts, @operator, @ts)`,
+         @phone, @email, @address, @employer, @emergencyContact, @notes, @ts, @operator, @ts)`,
     );
     for (const p of persons) stmt.run({ ...personParams(p), incidentId: unit.incidentId, unitId: unit.id, sheetId, ts, operator });
   }
@@ -220,7 +224,7 @@ export class PersonnelService {
     this.db
       .prepare(
         `UPDATE personnel SET last_name=@lastName, first_name=@firstName, birth_date=@birthDate, grade=@grade, function=@function,
-           qualifications=@qualifications, organization=@organization, phone=@phone, address=@address, employer=@employer,
+           qualifications=@qualifications, organization=@organization, phone=@phone, email=@email, address=@address, employer=@employer,
            emergency_contact=@emergencyContact, notes=@notes, updated_at=@ts WHERE id=@id`,
       )
       .run({ ...personParams(input), id, ts: new Date().toISOString() });

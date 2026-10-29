@@ -53,6 +53,13 @@ export const personInputSchema = z.object({
   /** Feuerwehr / Ortsverband */
   organization: text(100).default(''),
   phone: text(40).default(''),
+  /** leer oder eine Adresse (für die Übernahme in die Kontakte) */
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine((v) => v === '' || z.string().email().safeParse(v).success, 'E-Mail-Adresse ungültig')
+    .default(''),
   address: text(200).default(''),
   /** Für Freistellung und Verdienstausfall */
   employer: text(200).default(''),

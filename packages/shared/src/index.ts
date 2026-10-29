@@ -33,3 +33,4 @@ export * from './overpass';
 export * from './radar';
 export * from './mailrelay';
 export * from './mail';
+export * from './contacts';

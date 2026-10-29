@@ -103,6 +103,11 @@ export function UnitDetailPage() {
     onError,
   });
   const removePerson = useMutation({ mutationFn: (p: Person) => api.removePerson(p.id), onError });
+  const adoptContact = useMutation({
+    mutationFn: (p: Person) => api.personToContact(p.id),
+    onSuccess: (_, p) => toast('success', `${personName(p)} in die Kontakte übernommen`),
+    onError,
+  });
   const patch = useMutation({
     mutationFn: (p: UnitPatch) => api.patchUnit(id, p),
     onSuccess: () => setEditingUnit(false),
@@ -260,6 +265,7 @@ export function UnitDetailPage() {
               persons={persons}
               onEdit={readOnly ? undefined : setEditingPerson}
               onRemove={readOnly ? undefined : (p) => removePerson.mutate(p)}
+              onAdoptContact={(p) => adoptContact.mutate(p)}
             />
           )}
         </Card>

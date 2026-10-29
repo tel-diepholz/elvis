@@ -17,6 +17,7 @@ const BEFORE_FORCES = `
   CREATE INDEX units_incident ON units(incident_id);
 `;
 
+const UNDO_CONTACTS = 'DROP TABLE contact_category_members; DROP TABLE contacts; DROP TABLE contact_categories; ALTER TABLE personnel DROP COLUMN email';
 /** v37 zurückdrehen: Anforderungen samt Verweisen */
 const UNDO_MAIL = 'DROP TABLE mail_attachments; DROP TABLE mail_messages; DROP TABLE mail_keys';
 const UNDO_REQUESTS = `
@@ -34,6 +35,7 @@ describe('Migrationen', () => {
       const legacy = new Database(join(dir, 'elvis.sqlite'));
       legacy.exec('ALTER TABLE addons DROP COLUMN manifest');
       // v19: Rollen und Aufgaben (Spalten mit Fremdschlüssel lassen sich nicht einzeln entfernen)
+      legacy.exec(UNDO_CONTACTS); // v39
       legacy.exec(UNDO_MAIL); // v38
       legacy.exec(UNDO_REQUESTS); // v37
       legacy.exec('DROP TABLE map_history; DROP TABLE incident_overpass_queries; DROP TABLE message_copies; DROP TABLE messages'); // v33–v36, Verlauf
@@ -77,6 +79,7 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec(UNDO_CONTACTS);
       legacy.exec(UNDO_MAIL);
       legacy.exec(UNDO_REQUESTS);
       legacy.exec('DROP TABLE map_history; DROP TABLE incident_overpass_queries; DROP TABLE message_copies; DROP TABLE messages; ALTER TABLE map_objects DROP COLUMN label');

@@ -803,6 +803,37 @@ const MIGRATIONS: Migration[] = [
     updated_at TEXT NOT NULL
   );
   `,
+  // Kontakte: globales Adressbuch des ELW mit Kategoriebaum (ein Kontakt in mehreren Kategorien); E-Mail im Personalbogen
+  `
+  CREATE TABLE contact_categories (
+    id INTEGER PRIMARY KEY,
+    parent_id INTEGER REFERENCES contact_categories(id),
+    name TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX contact_categories_name ON contact_categories(COALESCE(parent_id, 0), name COLLATE NOCASE);
+  CREATE TABLE contacts (
+    id INTEGER PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('person', 'organization')),
+    last_name TEXT NOT NULL DEFAULT '',
+    first_name TEXT NOT NULL DEFAULT '',
+    organization TEXT NOT NULL DEFAULT '',
+    function TEXT NOT NULL DEFAULT '',
+    phones TEXT NOT NULL DEFAULT '[]',
+    email TEXT NOT NULL DEFAULT '',
+    address TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX contacts_email ON contacts(email) WHERE email <> '';
+  CREATE TABLE contact_category_members (
+    contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    category_id INTEGER NOT NULL REFERENCES contact_categories(id) ON DELETE CASCADE,
+    PRIMARY KEY (contact_id, category_id)
+  );
+  CREATE INDEX contact_category_members_category ON contact_category_members(category_id);
+  ALTER TABLE personnel ADD COLUMN email TEXT NOT NULL DEFAULT '';
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */
