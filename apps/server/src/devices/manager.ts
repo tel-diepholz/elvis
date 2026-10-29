@@ -217,6 +217,9 @@ export class DeviceManager {
   }
 
   private async startAdapter(id: DeviceId, adapter: DeviceAdapter): Promise<void> {
+    // Hängt der Start, soll das im Log stehen – die folgenden Geräte warten so lange
+    const slow = setTimeout(() => this.log.warn(`Gerät ${id}: Start dauert länger als 30 s (Treiber: ${adapter.driver})`), 30_000);
+    slow.unref();
     try {
       await adapter.start(this.ctx);
       this.updatedAt.set(id, new Date().toISOString());
@@ -224,6 +227,8 @@ export class DeviceManager {
     } catch (err) {
       this.errors.set(id, (err as Error).message);
       this.log.error(`Gerät ${id}: Start fehlgeschlagen (${(err as Error).message})`);
+    } finally {
+      clearTimeout(slow);
     }
   }
 

@@ -354,6 +354,9 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     mail,
     traffic,
     async start() {
+      // Webserver zuerst: ein hängendes Gerät (z. B. ein Monitoring-Ziel, das nicht antwortet) darf
+      // Weboberfläche und Healthcheck nicht blockieren
+      await server.listen({ host: config.host, port: config.port });
       await devices.start();
       videos.start();
       wifi.start();
@@ -369,7 +372,6 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
         docker.hosts.start();
         docker.addons.start();
       }
-      await server.listen({ host: config.host, port: config.port });
       await scanning.start(config.scan.smtpPort);
       const scan = scanning.status();
       if (scan.error) server.log.warn(`Scan-Eingang (SMTP) nicht gestartet: ${scan.error}`);

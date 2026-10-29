@@ -50,7 +50,8 @@ export class MonitoringAdapter extends BaseAdapter<'monitoring'> {
     this.unsubscribe = this.source.onChange(() => void this.pollAll());
     this.timer = setInterval(() => void this.pollAll(), this.pollMs);
     this.timer.unref();
-    await this.pollAll();
+    // Erste Abfrage im Hintergrund: langsame Ziele sollen den Start der übrigen Geräte nicht aufhalten
+    void this.pollAll();
   }
 
   override async stop(): Promise<void> {
