@@ -27,6 +27,8 @@ export interface AuthStatus {
   roles: Role[];
   /** false direkt nach der Anmeldung: die Oberfläche fragt dann nach den Rollen */
   roleChosen: boolean;
+  /** Zuletzt gewählte Rollen des Benutzers – Vorauswahl im Rollendialog nach der Anmeldung */
+  lastRoleIds: number[];
 }
 
 export interface NewUser {

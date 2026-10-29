@@ -72,6 +72,27 @@ describe('Rollen', () => {
     expect((await req('PUT', '/api/auth/role', { roleIds: [] }, '')).status).toBe(401);
   });
 
+  it('wählt nach der nächsten Anmeldung die zuletzt gewählten Rollen vor', async () => {
+    const funk = await role('Funk');
+    const lage = await role('Lage');
+    const { cookie, user } = await userCookie();
+    expect((await req<AuthStatus>('GET', '/api/auth/status', undefined, cookie)).body.lastRoleIds).toEqual([]);
+    await req('PUT', '/api/auth/role', { roleIds: [funk.id, lage.id] }, cookie);
+    await req('POST', '/api/auth/logout', undefined, cookie);
+
+    const login = async () => {
+      const res = await app.server.inject({ method: 'POST', url: '/api/auth/login', payload: { userId: user.id, pin: '1111' } });
+      return sessionCookie(res.headers['set-cookie']);
+    };
+    // Neue Sitzung ohne Rollen – gefragt wird weiterhin, nur vorausgewählt
+    const again = await login();
+    expect((await req<AuthStatus>('GET', '/api/auth/status', undefined, again)).body).toMatchObject({ roles: [], roleChosen: false, lastRoleIds: [funk.id, lage.id] });
+
+    // Gelöschte Rollen fallen aus der Vorauswahl
+    expect((await req('DELETE', `/api/system/roles/${lage.id}`)).status).toBeLessThan(300);
+    expect((await req<AuthStatus>('GET', '/api/auth/status', undefined, await login())).body.lastRoleIds).toEqual([funk.id]);
+  });
+
   it('trägt Rollenwechsel im laufenden Einsatz ins Einsatztagebuch ein', async () => {
     const funk = await role('Funk');
     const lage = await role('Lage');

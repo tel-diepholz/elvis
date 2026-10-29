@@ -58,6 +58,7 @@ export function authRoutes(
     user: req.user,
     roles: req.user ? deps.roles.list().filter((r) => req.roleIds.includes(r.id)) : [],
     roleChosen: req.roleChosen,
+    lastRoleIds: req.user ? sessions.lastRoles(req.user.id) : [],
   }));
 
   // Rollen der eigenen Sitzung übernehmen oder abgeben (nach der Anmeldung und über das Profilmenü)

@@ -3,6 +3,8 @@
 - **Anmeldung:** Den eigenen Namen in der durchsuchbaren Liste wählen und die 4-stellige PIN eingeben, per
   Ziffernblock (Touch) oder Tastatur. Benutzernamen und Passwörter gibt es nicht. „Benutzer wechseln“ im
   Kontomenü ist für gemeinsam genutzte Arbeitsplätze gedacht.
+- **Rollen:** Nach der Anmeldung wählt man seine [Rollen im Einsatz](rollen.md), vorausgewählt sind die zuletzt
+  gewählten. Rollen steuern Aufgaben, Meldungen und Anforderungen, nicht die Rechte.
 - **Ersteinrichtung:** Beim allerersten Start legt man den ersten Benutzer an, er ist Admin. `deploy/install.sh` fragt
   ihn im Terminal ab.
 - **Rechte:**
