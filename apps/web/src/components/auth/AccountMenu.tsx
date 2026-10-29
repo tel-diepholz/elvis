@@ -5,8 +5,9 @@ import { fullName } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
-import { Modal } from '../ui';
+import { Modal, Segmented } from '../ui';
 import { LoginDialog } from './LoginDialog';
+import { RestoreForm } from './RestoreForm';
 import { RoleDialog } from './RoleDialog';
 import { ChangePinForm, UserCreateForm } from './UserForms';
 
@@ -18,6 +19,7 @@ export function AccountMenu() {
   const { data: roles } = useQuery({ queryKey: ['roles'], queryFn: api.roles, enabled: !!user });
   const toast = useToast();
   const [view, setView] = useState<View>(null);
+  const [setupMode, setSetupMode] = useState<'new' | 'restore'>('new');
 
   const logout = useMutation({
     mutationFn: api.logout,
@@ -92,7 +94,16 @@ export function AccountMenu() {
 
       {/* Allererster Start: ohne Benutzer geht es erst nach dem Anlegen des Admins weiter. */}
       <Modal open={!loading && !hasUsers} title="Ersteinrichtung" onClose={() => undefined} dismissible={false}>
-        <UserCreateForm mode="setup" onDone={() => undefined} />
+        <Segmented
+          label="Art der Einrichtung"
+          value={setupMode}
+          onChange={setSetupMode}
+          options={[
+            { value: 'new', label: 'Neu einrichten' },
+            { value: 'restore', label: 'Aus Backup wiederherstellen' },
+          ]}
+        />
+        {setupMode === 'new' ? <UserCreateForm mode="setup" onDone={() => undefined} /> : <RestoreForm />}
       </Modal>
     </>
   );

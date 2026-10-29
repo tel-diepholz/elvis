@@ -11,7 +11,7 @@ Absender ──SMTP──▶ Relay (verschlüsselt sofort) ◀──signierter A
   eintragen. ELVIS erzeugt einen OpenPGP-Schlüssel (Curve25519) und einen Ed25519-Schlüssel für signierte Abrufe. Der
   Admin bestätigt per Link und bekommt **einmalig** Fingerprint, öffentlichen Schlüssel und Widerrufszertifikat per Mail.
   Der private Schlüssel verlässt den ELW nie. Er liegt passphrasegeschützt in der Datenbank, die Passphrase in
-  `<dataDir>/mail.secret` (nur für den Dienst lesbar). Für eine Sicherung braucht es beides.
+  `<dataDir>/mail.secret` (nur für den Dienst lesbar). Für eine Sicherung braucht es beides, das [Backup](../backup.md) enthält beides.
 - **Empfang:** Das Relay verschlüsselt jede Mail beim Eingang komplett mit dem Schlüssel des ELW. ELVIS holt sie ab,
   entschlüsselt sie und packt PGP/MIME aus (verschlüsselt und/oder signiert, Signatur geprüft). Die Liste zeigt, ob eine
   Mail Ende zu Ende verschlüsselt war oder nur beim Eingang. HTML-Mails erscheinen in einer Sandbox ohne Skripte und ohne

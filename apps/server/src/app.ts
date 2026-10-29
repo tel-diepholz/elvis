@@ -55,6 +55,10 @@ import type { WkdFetch } from './services/mailcrypto.js';
 import { mailRoutes } from './routes/mail.js';
 import { contactRoutes } from './routes/contacts.js';
 import { ContactService } from './services/contacts.js';
+import { backupRoutes } from './routes/backup.js';
+import { BackupService, type DriverFactory } from './services/backup/service.js';
+import { ElwCloudDriver, type BackupFetch } from './services/backup/elwCloud.js';
+import { RestoreService } from './services/backup/restore.js';
 import { TileService } from './services/tiles.js';
 import type { UbusHttp } from './services/openwrt.js';
 import { WifiService } from './services/wifi.js';
@@ -94,11 +98,12 @@ export interface App {
   personnel: PersonnelService;
   mail: MailService;
   traffic: TrafficService;
+  backup: BackupService;
   start(): Promise<void>;
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; restart?: () => void } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -211,6 +216,21 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const appLinks = new AppLinkService(db, store, incidents, (t) => hub.invalidate(t), relay);
   const personnel = new PersonnelService(db, store, incidents, (t) => hub.invalidate(t), relay, () => settings.get().vehicle.name);
   const contacts = new ContactService(db, store, (t) => hub.invalidate(t));
+  const backupDrivers: DriverFactory = (_driver, keys) =>
+    new ElwCloudDriver(config.app.relayUrl, keys.vaultId, keys.vaultToken, async () => (await relay.ensureCredentials()).token, opts.backupFetch);
+  const backup = new BackupService(db, {
+    dataDir: config.dataDir,
+    configFile: config.configFile,
+    drivers: backupDrivers,
+    vehicle: () => settings.get().vehicle.name,
+    notify: (t) => hub.invalidate(t),
+    audit: (message, operator) => {
+      store.addAudit({ operator, target: 'backup', action: 'update', params: '', success: true, message });
+      hub.invalidate(['audit']);
+    },
+  });
+  // Ohne Neustart-Funktion (Tests) bleibt die Wiederherstellung vorbereitet bis zum nächsten Start
+  const restore = new RestoreService({ dataDir: config.dataDir, drivers: backupDrivers, hasUsers: () => users.hasUsers(), restart: opts.restart ?? (() => undefined) });
   const mail = new MailService(db, store, (t) => hub.invalidate(t), relay, {
     ...config.mail,
     dataDir: config.dataDir,
@@ -317,6 +337,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     personnelRoutes(api, personnel);
     mailRoutes(api, mail);
     contactRoutes(api, { contacts, personnel });
+    backupRoutes(api, { backup, restore });
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
       const parsed = settingsInputSchema.safeParse(req.body);
@@ -357,6 +378,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     personnel,
     mail,
     traffic,
+    backup,
     async start() {
       // Webserver zuerst: ein hängendes Gerät (z. B. ein Monitoring-Ziel, das nicht antwortet) darf
       // Weboberfläche und Healthcheck nicht blockieren
@@ -369,6 +391,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       appLinks.start();
       personnel.start();
       mail.start();
+      backup.start();
       cleanup();
       cleanupTimer = setInterval(cleanup, 3600_000);
       if (docker) {
@@ -390,6 +413,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       appLinks.stop();
       personnel.stop();
       mail.stop();
+      backup.stop();
       if (cleanupTimer) clearInterval(cleanupTimer);
       docker?.hosts.stop();
       docker?.addons.stop();

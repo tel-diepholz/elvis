@@ -32,6 +32,8 @@ const configSchema = z.object({
   host: z.string().default('0.0.0.0'),
   port: z.coerce.number().int().default(8080),
   dataDir: z.string().default('./data'),
+  /** Pfad dieser Konfigurationsdatei (setzt loadConfig); das Backup sichert sie mit, null = ohne */
+  configFile: z.string().nullable().default(null),
   /** Built web frontend; served by the backend in production. */
   webDist: z.string().nullable().default(null),
   vehicle: z
@@ -160,6 +162,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ElvisConfig {
   const fromFile = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
   return configSchema.parse({
     ...fromFile,
+    configFile: file,
     ...(env.HOST && { host: env.HOST }),
     ...(env.PORT && { port: env.PORT }),
     ...(env.ELVIS_DATA_DIR && { dataDir: env.ELVIS_DATA_DIR }),
