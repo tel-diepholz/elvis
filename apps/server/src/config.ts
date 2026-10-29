@@ -129,7 +129,7 @@ const configSchema = z.object({
   app: z
     .object({
       /** Cloud-Relay der ELVIS-App (tel-diepholz/elvis-relay), über das Einsatzkräfte ihre Position senden; null = aus. */
-      relayUrl: z.string().url().nullable().default('https://elvis-relay.hhansen06.workers.dev'),
+      relayUrl: z.string().url().nullable().default('https://relay.einsatzleitwagen.app'),
     })
     .default({}),
   mail: z
