@@ -102,7 +102,7 @@ describe('OSM-Daten-Addon', () => {
     expect(done.jobs[0]!.schedule).toBeNull();
 
     const archive = daemon.archives.find((a) => a.volume === 'elvis-addon-osm-daten-data');
-    expect(archive?.entries).toEqual(expect.arrayContaining(['addon/scripts/regions.sh', 'addon/scripts/nominatim.sh', 'addon/scripts/valhalla.sh', 'addon/styles/druck.json']));
+    expect(archive?.entries).toEqual(expect.arrayContaining(['addon/scripts/regions.sh', 'addon/scripts/nominatim.sh', 'addon/scripts/valhalla.sh', 'addon/styles/dunkel.json', 'addon/styles/druck.json']));
 
     // Regionen gelangen als Listen in den Download-Schritt
     const download = daemon.byName('elvis-osm-daten-job-build-1')!.spec;
@@ -242,9 +242,9 @@ describe('Job-Verwaltung', () => {
   });
 });
 
-describe('Druckstil', () => {
-  it('ist ein gültiger MapLibre-Stil, der nur lokale Quellen und Schriften verwendet', () => {
-    const style = JSON.parse(readFileSync(join(BUILTIN, 'osm-daten/files/styles/druck.json'), 'utf8'));
+describe('Eigene Stile', () => {
+  it.each(['dunkel', 'druck'])('%s ist ein gültiger MapLibre-Stil, der nur lokale Quellen und Schriften verwendet', (name) => {
+    const style = JSON.parse(readFileSync(join(BUILTIN, `osm-daten/files/styles/${name}.json`), 'utf8'));
     expect(validateStyleMin(style)).toEqual([]);
     expect(style.sources.openmaptiles.url).toBe('mbtiles://{openmaptiles}');
     const fonts = new Set<string>();
