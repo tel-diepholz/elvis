@@ -34,7 +34,7 @@ function explain(err: unknown, adapter: string): Error {
   if (err instanceof DbusError) {
     if (err.name === 'org.freedesktop.DBus.Error.ServiceUnknown') return new Error('BlueZ (bluetoothd) läuft auf dem Server nicht');
     if (err.name === 'org.freedesktop.DBus.Error.UnknownObject' || err.name === 'org.freedesktop.DBus.Error.UnknownMethod') return new Error(`Bluetooth-Adapter ${adapter} nicht gefunden`);
-    if (err.name === 'org.freedesktop.DBus.Error.AccessDenied') return new Error('Kein Zugriff auf BlueZ – D-Bus-Freigabe für den ELVIS-Benutzer fehlt (siehe README)');
+    if (err.name === 'org.freedesktop.DBus.Error.AccessDenied') return new Error('Kein Zugriff auf BlueZ – D-Bus-Freigabe für den ELVIS-Benutzer fehlt (siehe docs/fahrzeugmodule/bluetooth-victron.md)');
     if (err.name === 'org.bluez.Error.NotReady') return new Error(`Bluetooth-Adapter ${adapter} ist nicht bereit (ausgeschaltet oder blockiert, „rfkill list“)`);
     // Meist hängt der Controller (dmesg: „tx timeout“) – das behebt nur Ab- und Anstecken
     if (err.name === 'org.bluez.Error.Failed') return new Error(`Bluetooth-Adapter ${adapter} antwortet nicht (${err.message}) – auf dem Server „dmesg“ prüfen, Dongle neu einstecken`);
