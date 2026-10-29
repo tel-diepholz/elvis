@@ -20,7 +20,7 @@ grep -qi microsoft /proc/version 2>/dev/null && IS_WSL=1
 
 if ! command -v dockerd >/dev/null 2>&1; then
   if [ "$IS_WSL" -eq 1 ] && command -v docker >/dev/null 2>&1; then
-    fail "Hier ist nur die WSL-Integration von Docker Desktop vorhanden. Deren Engine läuft außerhalb dieser WSL-Distribution und lässt sich nicht für TLS einrichten. Bitte Docker Engine direkt in der Distribution installieren und die Docker-Desktop-Integration für sie abschalten (siehe ELVIS-README, 'Docker-Host unter Windows/WSL')."
+    fail "Hier ist nur die WSL-Integration von Docker Desktop vorhanden. Deren Engine läuft außerhalb dieser WSL-Distribution und lässt sich nicht für TLS einrichten. Bitte Docker Engine direkt in der Distribution installieren und die Docker-Desktop-Integration für sie abschalten (siehe ELVIS-Doku docs/addons/README.md, 'Docker-Host unter Windows/WSL')."
   fi
   fail "Docker Engine (dockerd) ist nicht installiert – z. B. mit: curl -fsSL https://get.docker.com | sudo sh"
 fi
