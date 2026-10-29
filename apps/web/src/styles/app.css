@@ -2555,6 +2555,15 @@ input[type='checkbox'] {
 .map-route .map-search {
   width: 100%;
 }
+/* Die Box scrollt selbst: Treffer im Fluss statt ausgeklappt, sonst schneidet sie der Rand ab bzw. liegen sie unter
+   der Objektauswahl */
+.map-route .map-search-results {
+  position: static;
+  width: 100%;
+  max-height: 260px;
+  margin-top: 6px;
+  box-shadow: none;
+}
 .map-route-summary {
   display: flex;
   align-items: center;

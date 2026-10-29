@@ -113,6 +113,14 @@ describe('Kartendruck', () => {
     await new Promise<void>((r) => tileServer.listen(0, '127.0.0.1', r)); // für afterEach
   });
 
+  it('druckt auch kleine Zoomstufen bis 5 (ganze Region)', async () => {
+    const res = await app.server.inject({ method: 'POST', url: '/api/print/map', payload: { ...request, paper: 'A1', orientation: 'portrait', zoom: 5 }, headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['x-missing-tiles']).toBe('0');
+    const tooFar = await app.server.inject({ method: 'POST', url: '/api/print/map', payload: { ...request, zoom: 4 }, headers: { cookie } });
+    expect(tooFar.statusCode).toBe(400);
+  });
+
   it('weist zu hohe Zoomstufen und unbekannte Quellen ab', async () => {
     const tooClose = await app.server.inject({ method: 'POST', url: '/api/print/map', payload: { ...request, zoom: 20 }, headers: { cookie } });
     expect(tooClose.statusCode).toBe(400);
