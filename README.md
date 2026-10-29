@@ -11,7 +11,7 @@ Projekthomepage mit Bildern und Funktionsübersicht: **<https://einsatzleitwagen
 
 | Bereich | Verfügbarkeit | Inhalt |
 | --- | --- | --- |
-| **Fahrzeug** | immer | Übersicht, Karte, Wetter, Netzwerk, E-Mail (mit Postfach) |
+| **Fahrzeug** | immer | Übersicht, Karte, Wetter, Netzwerk, E-Mail (mit Postfach), Kontakte |
 | **Einsatz** | Unterseiten erst mit aufgelegtem Einsatz | Einsatztagebuch, Kräfteübersicht, Dokumente |
 | **Verwaltung** | immer | Einsatzarchiv (schreibgeschützt); nur Admins: Bedienprotokoll, Einstellungen |
 
@@ -170,7 +170,8 @@ Absender ──SMTP──▶ Relay (verschlüsselt sofort) ◀──signierter A
   der Empfängerdomain oder von Hand importiert (*E-Mail → Schlüssel*). Gibt es für alle einen, geht die Mail signiert und
   verschlüsselt hinaus. Sonst warnt der Editor und sendet erst nach Bestätigung, dann nur signiert. Jede Mail trägt einen
   Autocrypt-Kopf, der eigene Schlüssel steht per WKD unter `openpgpkey.einsatzleitwagen.app`. Gesendete Mails stehen im
-  Bedienprotokoll.
+  Bedienprotokoll. Die Adresszeilen (An, Cc, Bcc) schlagen beim Tippen Adressen aus den **Kontakten** und aus bisherigen
+  Mails vor.
 - **Abruf nur durch den ELW:** Jeder Abruf ist zusätzlich zum Zugangstoken mit dem Ed25519-Schlüssel signiert
   (Zeitfenster und Einmal-Nonce gegen Wiederholung). Anders als die App-Anbindung meldet sich ELVIS bei Mail-Fehlern
   nicht neu beim Relay an. Die Mail-Karte zeigt Zeit und Land des letzten Abrufs.
@@ -192,9 +193,11 @@ E-Mail nutzt die Relay-Adresse aus `app.relayUrl`. `"enabled": false` blendet de
 Ein Klick auf eine Einheit in der Kräfteübersicht öffnet ihre **Detailseite** (`/einsatz/kraefte/:id`) mit Stammdaten,
 Untereinheiten und dem **Personal**. Über *Personalbogen ausfüllen* werden eine oder mehrere Personen erfasst: Name,
 Geburtsdatum, Einordnung (Führer / Unterführer / Mannschaft), Funktion, Qualifikationen, Organisation, Telefon,
-Anschrift, Arbeitgeber, Notfallkontakt und Bemerkung. Weicht die daraus gezählte Stärke von der Einheit ab, lässt sie
+E-Mail, Anschrift, Arbeitgeber, Notfallkontakt und Bemerkung. Weicht die daraus gezählte Stärke von der Einheit ab, lässt sie
 sich mit einem Klick übernehmen. *An andere Einheit übergeben* verschiebt ausgewählte Personen zu einer anderen Einheit
 des Einsatzes (z. B. bei falsch zugeordnetem Bogen). Ins Einsatztagebuch kommen nur Anzahlen, keine Namen.
+Das Symbol *In Kontakte übernehmen* legt eine Person als Kontakt an (auch aus abgeschlossenen Einsätzen). Das
+Online-Formular fragt die E-Mail-Adresse noch nicht ab.
 
 **Cloud-Personalabfrage:** Im *Posteingang* erzeugt ELVIS einen Link (6–72 Stunden gültig, längstens bis zum
 Einsatzende; QR-Code und Kopieren). Einheitsführer tragen dort zuerst *Einheit / Fahrzeug* (Freitext) und dann ihr
@@ -204,6 +207,15 @@ alle 15 s ab, solange ein Link gilt. Neue Bögen markiert ein Zähler am Menüpu
 Einheit zugeordnet oder als neue Einheit angelegt (Stärke aus dem Personal); danach verschwinden sie aus dem Eingang
 und stehen beim Personal der Einheit. Nicht zugeordnete Bögen bleiben 30 Tage im Posteingang. Mit dem Ende des Links verwirft
 ELVIS den privaten Schlüssel.
+
+## Kontakte
+
+**Kontakte** (Navigation unter „Fahrzeug“) ist das Adressbuch des ELW für Personen und Einrichtungen, unabhängig vom
+Einsatz und nur in diesem ELW gespeichert. Ein Kontakt hat Name bzw. Einrichtung, Funktion, beliebig viele
+Telefonnummern mit Bezeichnung, E-Mail, Anschrift und Notizen. **Kategorien** bilden einen Baum (z. B. *Unternehmen →
+Getränkelieferanten*), ein Kontakt kann in mehreren stehen. Eine gewählte Kategorie zeigt auch die Kontakte ihrer
+Unterkategorien. Löschen lässt sich eine Kategorie nur ohne Unterkategorien, die Kontakte bleiben erhalten. Pflegen
+dürfen alle Angemeldeten, jede Änderung steht im Bedienprotokoll. Eine E-Mail-Adresse öffnet direkt eine neue Mail.
 
 ## Ausbreitungsberechnung (Karte)
 

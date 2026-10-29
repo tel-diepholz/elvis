@@ -1,5 +1,5 @@
 import { Fragment, useId, useState, type FormEvent } from 'react';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2, UserPlus } from 'lucide-react';
 import {
   MAX_SHEET_PERSONS,
   PERSON_GRADE,
@@ -22,6 +22,7 @@ export const emptyPerson = (organization = ''): PersonData => ({
   qualifications: [],
   organization,
   phone: '',
+  email: '',
   address: '',
   employer: '',
   emergencyContact: '',
@@ -97,6 +98,9 @@ export function PersonFields({ value, onChange, autoFocus }: { value: PersonData
         </Field>
         <Field label="Telefon">
           <input type="tel" value={value.phone} onChange={set('phone')} maxLength={40} />
+        </Field>
+        <Field label="E-Mail">
+          <input type="email" value={value.email} onChange={set('email')} maxLength={254} />
         </Field>
         <Field label="Anschrift">
           <input value={value.address} onChange={set('address')} maxLength={200} />
@@ -181,7 +185,19 @@ export function PersonForm({ initial, pending, onSubmit }: { initial: PersonData
 const fmtBirth = (iso: string) => (iso ? iso.split('-').reverse().join('.') : '');
 
 /** Personal als Tabelle; Kontakt und Weiteres in der zweiten Zeile */
-export function PersonnelTable({ persons, onEdit, onRemove }: { persons: (PersonData & { id?: number })[]; onEdit?: (p: Person) => void; onRemove?: (p: Person) => void }) {
+export function PersonnelTable({
+  persons,
+  onEdit,
+  onRemove,
+  onAdoptContact,
+}: {
+  persons: (PersonData & { id?: number })[];
+  onEdit?: (p: Person) => void;
+  onRemove?: (p: Person) => void;
+  /** „In Kontakte übernehmen“ */
+  onAdoptContact?: (p: Person) => void;
+}) {
+  const actions = !!(onEdit || onRemove || onAdoptContact);
   return (
     <div className="table-wrap">
       <table className="table personnel-table">
@@ -191,7 +207,7 @@ export function PersonnelTable({ persons, onEdit, onRemove }: { persons: (Person
             <th>Funktion</th>
             <th>Qualifikationen</th>
             <th>Kontakt</th>
-            {(onEdit || onRemove) && <th />}
+            {actions && <th />}
           </tr>
         </thead>
         <tbody>
@@ -212,14 +228,20 @@ export function PersonnelTable({ persons, onEdit, onRemove }: { persons: (Person
                   </span>
                 </td>
                 <td>
-                  {p.phone || '–'}
+                  {p.phone || (p.email ? '' : '–')}
+                  {p.email && <div className={p.phone ? 'cell-sub' : undefined}>{p.email}</div>}
                   {p.address && <div className="cell-sub">{p.address}</div>}
                   {p.employer && <div className="cell-sub">Arbeitgeber: {p.employer}</div>}
                   {p.emergencyContact && <div className="cell-sub">Notfall: {p.emergencyContact}</div>}
                   {p.notes && <div className="cell-sub">{p.notes}</div>}
                 </td>
-                {(onEdit || onRemove) && (
+                {actions && (
                   <td className="cell-actions">
+                    {onAdoptContact && (
+                      <button className="btn btn-ghost btn-icon" onClick={() => onAdoptContact(p as Person)} aria-label={`${personName(p)} in Kontakte übernehmen`} title="In Kontakte übernehmen">
+                        <UserPlus size={16} />
+                      </button>
+                    )}
                     {onEdit && (
                       <button className="btn btn-ghost btn-icon" onClick={() => onEdit(p as Person)} aria-label={`${personName(p)} bearbeiten`} title="Bearbeiten">
                         <Pencil size={16} />

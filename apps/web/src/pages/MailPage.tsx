@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AtSign, Download, KeyRound, Lock, LockOpen, Mail, MailOpen, Paperclip, PenSquare, Reply, ReplyAll, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
 import { MAIL_MAX_ATTACHMENT_BYTES, type MailDraft, type MailFolder, type MailRecipientKey, type MailSummary } from '@elvis/shared';
@@ -8,6 +8,7 @@ import { useAuth } from '../lib/auth';
 import { fmtBytes, fmtDateTime } from '../lib/format';
 import { useToast } from '../lib/toast';
 import { Badge, Card, EmptyState, Field, Loading, Modal, PageHeader, Segmented } from '../components/ui';
+import { AddressInput } from '../components/mail/AddressInput';
 
 const ENCRYPTION: Record<MailSummary['encryption'], { tone: 'ok' | 'warn'; label: string; title: string }> = {
   e2e: { tone: 'ok', label: 'Ende-zu-Ende verschlüsselt', title: 'Nur der ELW und die Gegenstelle können die Mail lesen' },
@@ -33,7 +34,12 @@ export function MailPage() {
   const { data: avail } = useQuery({ queryKey: ['mail', 'available'], queryFn: api.mailAvailable });
   const [folder, setFolder] = useState<MailFolder>('inbox');
   const [selected, setSelected] = useState<number | null>(null);
-  const [draft, setDraft] = useState<Partial<DraftForm> | null>(null);
+  // /mail?an=… (z. B. aus den Kontakten) öffnet gleich eine neue Mail
+  const [params, setParams] = useSearchParams();
+  const [draft, setDraft] = useState<Partial<DraftForm> | null>(() => (params.get('an') ? { to: `${params.get('an')}, ` } : null));
+  useEffect(() => {
+    if (params.has('an')) setParams({}, { replace: true });
+  }, [params, setParams]);
   const [keysOpen, setKeysOpen] = useState(false);
   const { data: list } = useQuery({ queryKey: ['mail', 'messages', folder], queryFn: () => api.mailMessages(folder), enabled: !!avail?.available });
 
@@ -300,13 +306,13 @@ function Composer({ initial, onDone }: { initial: Partial<DraftForm>; onDone: ()
     <div className="stack">
       <div className="form-grid">
         <Field label="An" hint="Mehrere Adressen durch Komma trennen">
-          <input value={form.to} onChange={(e) => change({ to: e.target.value })} autoFocus={!form.to} />
+          <AddressInput value={form.to} onChange={(to) => change({ to })} autoFocus={!form.to} />
         </Field>
         <Field label="Kopie (Cc)">
-          <input value={form.cc} onChange={(e) => change({ cc: e.target.value })} />
+          <AddressInput value={form.cc} onChange={(cc) => change({ cc })} />
         </Field>
         <Field label="Blindkopie (Bcc)">
-          <input value={form.bcc} onChange={(e) => change({ bcc: e.target.value })} />
+          <AddressInput value={form.bcc} onChange={(bcc) => change({ bcc })} />
         </Field>
         <Field label="Betreff">
           <input value={form.subject} onChange={(e) => change({ subject: e.target.value })} maxLength={998} />

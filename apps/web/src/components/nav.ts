@@ -5,6 +5,7 @@ import {
   BatteryCharging,
   BookOpenText,
   CloudSun,
+  Contact,
   FileStack,
   FileText,
   History,
@@ -66,6 +67,7 @@ export const NAV: NavGroup[] = [
       { to: '/drucken', label: 'Drucken', icon: Printer },
       { to: '/scans', label: 'Posteingang', icon: ScanLine, requiresLogin: true, badge: 'personnelSheets' },
       { to: '/mail', label: 'E-Mail', icon: AtSign, requiresLogin: true, requiresMail: true, badge: 'mail' },
+      { to: '/kontakte', label: 'Kontakte', icon: Contact, requiresLogin: true },
     ],
   },
   {

@@ -28,6 +28,7 @@ import { TemplatesPage } from './pages/TemplatesPage';
 import { SignGeneratorPage } from './pages/SignGeneratorPage';
 import { PrintPage } from './pages/PrintPage';
 import { MailPage } from './pages/MailPage';
+import { ContactsPage } from './pages/ContactsPage';
 import { ScanPage } from './pages/ScanPage';
 import { UsersPage } from './pages/UsersPage';
 import { WeatherPage } from './pages/WeatherPage';
@@ -94,6 +95,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="drucken" element={<PrintPage />} />
                 <Route path="scans" element={<RequireLogin><ScanPage /></RequireLogin>} />
                 <Route path="mail" element={<RequireLogin><MailPage /></RequireLogin>} />
+                <Route path="kontakte" element={<RequireLogin><ContactsPage /></RequireLogin>} />
                 <Route path="protokoll" element={<RequireLogin admin><AuditPage /></RequireLogin>} />
                 <Route path="einstellungen" element={<RequireLogin admin><SettingsPage /></RequireLogin>} />
                 {/* alte Adresse (Lesezeichen) */}

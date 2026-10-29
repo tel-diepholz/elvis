@@ -53,6 +53,8 @@ import { appLinkRoutes } from './routes/applinks.js';
 import { MailService, type MailFetch } from './services/mail.js';
 import type { WkdFetch } from './services/mailcrypto.js';
 import { mailRoutes } from './routes/mail.js';
+import { contactRoutes } from './routes/contacts.js';
+import { ContactService } from './services/contacts.js';
 import { TileService } from './services/tiles.js';
 import type { UbusHttp } from './services/openwrt.js';
 import { WifiService } from './services/wifi.js';
@@ -208,6 +210,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const relay = new RelayClient(db, config.app.relayUrl, opts.relayFetch);
   const appLinks = new AppLinkService(db, store, incidents, (t) => hub.invalidate(t), relay);
   const personnel = new PersonnelService(db, store, incidents, (t) => hub.invalidate(t), relay, () => settings.get().vehicle.name);
+  const contacts = new ContactService(db, store, (t) => hub.invalidate(t));
   const mail = new MailService(db, store, (t) => hub.invalidate(t), relay, {
     ...config.mail,
     dataDir: config.dataDir,
@@ -313,6 +316,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     appLinkRoutes(api, appLinks);
     personnelRoutes(api, personnel);
     mailRoutes(api, mail);
+    contactRoutes(api, { contacts, personnel });
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
       const parsed = settingsInputSchema.safeParse(req.body);
