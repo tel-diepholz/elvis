@@ -62,6 +62,8 @@ export const DEFAULT_UNIT_SIGN: TacticalSign = {
   orgLabel: '',
   label: '',
   leader: false,
+  above: 'none',
+  inside: 'none',
 };
 
 /** Vorschläge für Rollen innerhalb einer Einheit; dazu kommen alle bereits verwendeten */
