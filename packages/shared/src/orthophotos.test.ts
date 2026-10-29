@@ -4,11 +4,11 @@ import { parse as parseYaml } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import { addonManifestSchema } from './addons';
 
-const dir = fileURLToPath(new URL('../../../contrib/addons/orthophotos/', import.meta.url));
+const dir = fileURLToPath(new URL('../../../addons/orthophotos/', import.meta.url));
 const manifest = addonManifestSchema.parse(parseYaml(readFileSync(`${dir}addon.yaml`, 'utf8')));
 const catalog = JSON.parse(readFileSync(`${dir}files/catalog.json`, 'utf8')) as { states: { id: string; portal: string }[] };
 
-describe('Orthophoto-Addon (Vorlage)', () => {
+describe('Orthophoto-Addon', () => {
   it('hat ein gültiges Manifest mit Kartenquelle', () => {
     expect(manifest.provides.mapSources[0]?.url).toContain('{z}/{x}/{y}');
   });
