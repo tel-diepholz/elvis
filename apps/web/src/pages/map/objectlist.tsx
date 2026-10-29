@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Eye, EyeOff, Flag, MapPin, Pencil, PenTool, Plane, Route, Shapes, Ship, Square, Trash2, TriangleAlert, Truck, Wind as WindIcon } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Eye, EyeOff, Flag, Layers, MapPin, Pencil, PenTool, Plane, Route, Shapes, Ship, Square, Trash2, TriangleAlert, Truck, Wind as WindIcon } from 'lucide-react';
 import {
   COLORABLE_KINDS,
   DEFAULT_OBJECT_COLORS,
@@ -41,7 +41,40 @@ const readOpen = () => {
   }
 };
 
-const KIND_ICONS = { point: MapPin, sign: TriangleAlert, area: Square, line: Route, gauss: WindIcon, sector: Crosshair, aircraft: Plane, ship: Ship } as const;
+const KIND_ICONS = { point: MapPin, sign: TriangleAlert, area: Square, line: Route, gauss: WindIcon, sector: Crosshair, aircraft: Plane, ship: Ship, overlay: Layers } as const;
+
+/** Deckkraft eines Overlays; gespeichert wird nach einer kurzen Pause, solange der Regler bewegt wird */
+function OverlayEditor({ object, canEdit }: { object: Extract<MapObject, { kind: 'overlay' }>; canEdit: boolean }) {
+  const toast = useToast();
+  const [opacity, setOpacity] = useState(object.data.opacity);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => setOpacity(object.data.opacity), [object.data.opacity]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const change = (value: number) => {
+    setOpacity(value);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => api.patchMapObject(object.id, { data: { opacity: value } }).catch((e: Error) => toast('error', e.message)), 300);
+  };
+  const { documentId, filename, page, rmsM, gcps, cuts = [], outline, background, erased = 0 } = object.data;
+  return (
+    <div className="dispersion-panel">
+      <Field label={`Deckkraft ${Math.round(opacity * 100)} %`}>
+        <input type="range" min={0.1} max={1} step={0.05} value={opacity} disabled={!canEdit} onChange={(e) => change(Number(e.target.value))} />
+      </Field>
+      <p className="dispersion-note">
+        Seite {page} aus{' '}
+        <a href={api.documentUrl(documentId)} target="_blank" rel="noreferrer">
+          {filename}
+        </a>{' '}
+        · {gcps.length} Passpunkte{gcps.length > 3 ? ` · Restfehler ${rmsM.toLocaleString('de-DE')} m` : ''}
+        {cuts.length > 0 && ` · ${cuts.length === 1 ? '1 Bereich' : `${cuts.length} Bereiche`} weggeschnitten`}
+        {outline && ' · Gebäude freigestellt'}
+        {background && !outline && ' · Hintergrund entfernt'}
+        {erased > 0 && ` · ${erased} Radierer-Striche`}
+      </p>
+    </div>
+  );
+}
 
 function GaussEditor({ object, wind, now, canEdit }: { object: Extract<MapObject, { kind: 'gauss' }>; wind: Wind | undefined; now: Date; canEdit: boolean }) {
   const toast = useToast();
@@ -118,6 +151,8 @@ function summary(o: MapObject, now: Date): string {
       return `${MAP_OBJECT_LABELS.gauss}${o.data.stability === 'auto' ? '' : ` · Klasse ${o.data.stability}`}`;
     case 'sector':
       return `${MAP_OBJECT_LABELS.sector} · ${fmtDistance(o.data.sectorM)}`;
+    case 'overlay':
+      return `${MAP_OBJECT_LABELS.overlay} · S. ${o.data.page} aus ${o.data.filename}`;
     case 'aircraft':
     case 'ship': {
       const { last, lostSince, detail } = o.data;
@@ -310,7 +345,7 @@ export function ObjectList({
         </li>
         {objects.map((o) => {
           const Icon = KIND_ICONS[o.kind];
-          const settings = o.kind === 'gauss' || o.kind === 'sector';
+          const settings = o.kind === 'gauss' || o.kind === 'sector' || o.kind === 'overlay';
           const isOpen = expanded === o.id;
           const colorable = COLORABLE_KINDS.includes(o.kind);
           const color = objectColor(o);
@@ -342,7 +377,7 @@ export function ObjectList({
                 </button>
               )}
               <span className="map-object-actions">
-                {onRouteStop && (
+                {onRouteStop && o.kind !== 'overlay' && (
                   <button type="button" className="icon-btn" onClick={() => onRouteStop({ lat: o.lat, lon: o.lon, name: o.name })} aria-label={`${o.name} als Ziel der Route`} title="Als Ziel der Route">
                     <Flag size={16} />
                   </button>
@@ -380,7 +415,7 @@ export function ObjectList({
                         <PenTool size={16} />
                       </button>
                     )}
-                    {!isTracked(o.kind) && <LabelToggle object={o} value={o.label} onChange={(label) => patch.mutate({ id: o.id, label })} />}
+                    {!isTracked(o.kind) && o.kind !== 'overlay' && <LabelToggle object={o} value={o.label} onChange={(label) => patch.mutate({ id: o.id, label })} />}
                     <button type="button" className="icon-btn" onClick={() => setRenaming(renaming === o.id ? null : o.id)} aria-label={`${o.name} umbenennen`} title="Umbenennen">
                       <Pencil size={16} />
                     </button>
@@ -412,6 +447,7 @@ export function ObjectList({
                 <MapIconPicker value={o.data.icon ?? null} label={`Symbol von ${o.name}`} onPick={(icon) => (patch.mutate({ id: o.id, icon }), setColoring(null))} />
               )}
               {isOpen && o.kind === 'gauss' && <GaussEditor object={o} wind={wind} now={now} canEdit={canEdit} />}
+              {isOpen && o.kind === 'overlay' && <OverlayEditor object={o} canEdit={canEdit} />}
               {isOpen && o.kind === 'sector' && (
                 <div className="dispersion-panel">
                   {!wind && <NoWindWarning />}

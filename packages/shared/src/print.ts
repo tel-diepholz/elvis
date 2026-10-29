@@ -154,6 +154,14 @@ export interface PrintLine {
   color: string;
 }
 
+/** Overlay aus der Objektliste (georeferenzierte PDF-Seite), Kacheln liegen auf dem Server */
+export interface PrintOverlay {
+  id: number;
+  opacity: number;
+  minZoom: number;
+  maxZoom: number;
+}
+
 export interface PrintLegendItem {
   color: string;
   label: string;
@@ -170,6 +178,7 @@ export interface MapPrintRequest {
   markers: PrintMarker[];
   polygons: PrintPolygon[];
   lines?: PrintLine[];
+  overlays?: PrintOverlay[];
   legend: PrintLegendItem[];
   notes: string[];
 }

@@ -15,7 +15,7 @@ import type { Db } from '../../db/index.js';
  */
 
 /** Einträge im Datenverzeichnis neben elvis.sqlite (Dateien oder Ordner) */
-export const BACKUP_DATA_ITEMS = ['mail.secret', 'documents', 'templates', 'display-images', 'scans', 'docker-tls'];
+export const BACKUP_DATA_ITEMS = ['mail.secret', 'documents', 'templates', 'display-images', 'scans', 'docker-tls', 'overlays'];
 export const DB_FILE = 'elvis.sqlite';
 export const MANIFEST_FILE = 'manifest.json';
 export const CONFIG_ENTRY = 'config/elvis.json';

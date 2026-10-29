@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { GeoJSON, Marker, Polygon, Polyline, Popup, Tooltip } from 'react-leaflet';
+import { GeoJSON, Marker, Pane, Polygon, Polyline, Popup, TileLayer, Tooltip } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import L from 'leaflet';
 import { useQuery } from '@tanstack/react-query';
@@ -151,10 +151,11 @@ function ObjectLabel({ object }: { object: MapObject }) {
   );
 }
 
-/** Ausdehnung eines Objekts für „hinfliegen“ (Fläche: Umriss, Linie: Verlauf, sonst Punkt) */
+/** Ausdehnung eines Objekts für „hinfliegen“ (Fläche: Umriss, Linie: Verlauf, Overlay: Seite, sonst Punkt) */
 export function objectBounds(o: MapObject): L.LatLngBounds {
   if (o.kind === 'area') return L.geoJSON(o.data.outline).getBounds();
   if (o.kind === 'line') return L.geoJSON(o.data.path).getBounds();
+  if (o.kind === 'overlay') return L.latLngBounds(o.data.bounds);
   return L.latLngBounds([o.lat, o.lon], [o.lat, o.lon]);
 }
 
@@ -219,7 +220,27 @@ function TrackedLayer({ object, labels, links }: { object: Extract<MapObject, { 
   );
 }
 
-/** Sichtbare Kartenobjekte zeichnen: Flächen, Linien, Punkte und Ausbreitungen (mit aktuellem Wind) */
+/** Overlays (georeferenzierte PDF-Seiten) als Kachelebenen über der Grundkarte, unter Radar und Objekten */
+function OverlayLayers({ objects }: { objects: Extract<MapObject, { kind: 'overlay' }>[] }) {
+  if (!objects.length) return null;
+  return (
+    <Pane name="overlays" style={{ zIndex: 240 }}>
+      {objects.map((o) => (
+        <TileLayer
+          key={o.id}
+          url={api.overlayTileUrl(o.id)}
+          bounds={o.data.bounds}
+          opacity={o.data.opacity}
+          minNativeZoom={o.data.minZoom}
+          maxNativeZoom={o.data.maxZoom}
+          maxZoom={22}
+        />
+      ))}
+    </Pane>
+  );
+}
+
+/** Sichtbare Kartenobjekte zeichnen: Overlays, Flächen, Linien, Punkte und Ausbreitungen (mit aktuellem Wind) */
 export function MapObjectsLayer({
   objects,
   wind,
@@ -240,6 +261,7 @@ export function MapObjectsLayer({
   const dv102 = useDv102(objects.some((o) => o.kind === 'sign'));
   return (
     <>
+      <OverlayLayers objects={objects.filter((o): o is Extract<MapObject, { kind: 'overlay' }> => o.visible && o.kind === 'overlay')} />
       {objects
         .filter((o) => o.visible)
         .map((o) => {
@@ -288,6 +310,8 @@ export function MapObjectsLayer({
             case 'aircraft':
             case 'ship':
               return <TrackedLayer key={o.id} object={o} labels={labels} links={links} />;
+            case 'overlay':
+              return null;
           }
         })}
       {labels && objects.filter((o) => o.visible && o.label !== 'off' && ANCHORED_LABELS.includes(o.kind)).map((o) => <ObjectLabel key={o.id} object={o} />)}

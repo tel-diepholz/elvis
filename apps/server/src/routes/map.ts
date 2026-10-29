@@ -11,6 +11,7 @@ import type { OverpassService } from '../services/overpass.js';
 import type { RadarService } from '../services/radar.js';
 import type { RouterService } from '../services/router.js';
 import type { TileService } from '../services/tiles.js';
+import type { OverlayTileLoader } from '../services/print.js';
 import { operatorOf, parse } from './util.js';
 
 const latLon = z.object({ lat: z.number().min(-85).max(85), lon: z.number().min(-180).max(180) });
@@ -39,6 +40,10 @@ const printRequest: z.ZodType<MapPrintRequest> = z.object({
     )
     .max(100),
   lines: z.array(z.object({ points: z.array(z.tuple([z.number(), z.number()])).min(2).max(2000), color })).max(200).optional(),
+  overlays: z
+    .array(z.object({ id: z.number().int().positive(), opacity: z.number().min(0).max(1), minZoom: z.number().int().min(0).max(22), maxZoom: z.number().int().min(0).max(22) }))
+    .max(20)
+    .optional(),
   legend: z.array(z.object({ color, label: z.string().max(160) })).max(30),
   notes: z.array(z.string().max(400)).max(20),
 });
@@ -61,7 +66,7 @@ const searchQuery = z.object({
   lon: z.coerce.number().min(-180).max(180).optional(),
 });
 
-export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notify: (topics: Topic[]) => void, geocoder: GeocoderService, overpass: OverpassService, router: RouterService, radar: RadarService): void {
+export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notify: (topics: Topic[]) => void, geocoder: GeocoderService, overpass: OverpassService, router: RouterService, radar: RadarService, overlayTile: OverlayTileLoader): void {
   app.get('/api/map/sources', async () => tiles.list());
 
   /** Ortssuche: Straßen, Orte, Adressen sowie Koordinaten und UTMREF; lat/lon bevorzugen Treffer in der Nähe */
@@ -126,7 +131,7 @@ export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store
     if (body.zoom > source.maxZoom) throw new HttpError(400, `${source.name} unterstützt höchstens Zoomstufe ${source.maxZoom}`);
     const operator = operatorOf(req);
     const { vehicle, mapSign } = settings.get();
-    const { pdf, missingTiles } = await renderMapPdf(body, tiles, { vehicle, vehicleSign: mapSign, operator });
+    const { pdf, missingTiles } = await renderMapPdf(body, tiles, { vehicle, vehicleSign: mapSign, operator, overlayTile });
     store.addAudit({
       operator,
       target: 'karte',

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type DragEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Download, Eye, File, FileImage, FilePlus, FileSpreadsheet, FileStack, FileText, FolderPlus, Pencil, Search, SquarePen, Trash2, Upload } from 'lucide-react';
+import { Download, Eye, File, FileImage, FilePlus, FileSpreadsheet, FileStack, FileText, FolderPlus, Layers, Pencil, Search, SquarePen, Trash2, Upload, Wrench } from 'lucide-react';
 import { extensionOf, folderPath, type Incident, type IncidentDocument } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -10,6 +10,8 @@ import { useToast } from '../../lib/toast';
 import { Badge, Card, EmptyState, Loading } from '../../components/ui';
 import { FolderTree } from '../../components/documents/FolderTree';
 import { DocumentPropertiesDialog, NewDocumentDialog, NewFolderDialog, TemplatePickerDialog } from '../../components/documents/DocumentDialogs';
+import { PdfToMapDialog } from '../../components/documents/PdfToMapDialog';
+import { Dropdown } from '../map/toolbar';
 
 function DocIcon({ mime }: { mime: string }) {
   if (mime.startsWith('image/')) return <FileImage size={22} />;
@@ -18,7 +20,9 @@ function DocIcon({ mime }: { mime: string }) {
   return <File size={22} />;
 }
 
-type Dialog = 'template' | 'blank' | 'folder' | null;
+type Dialog = 'template' | 'blank' | 'folder' | 'pdf-map' | null;
+
+const isPdf = (d: IncidentDocument) => d.mimeType === 'application/pdf' || extensionOf(d.filename) === 'pdf';
 
 export function DocumentsView({ incident, readOnly }: { incident: Incident; readOnly?: boolean }) {
   const toast = useToast();
@@ -29,6 +33,8 @@ export function DocumentsView({ incident, readOnly }: { incident: Incident; read
   const [q, setQ] = useState('');
   const [dialog, setDialog] = useState<Dialog>(null);
   const [editing, setEditing] = useState<IncidentDocument | null>(null);
+  /** PDF, mit dem „PDF in Karte integrieren“ startet (null = Auswahl im Dialog) */
+  const [toMap, setToMap] = useState<IncidentDocument | null>(null);
   const [dragging, setDragging] = useState(false);
   const { data: listing, isLoading } = useQuery({ queryKey: ['documents', incident.id], queryFn: () => api.documents(incident.id) });
   const { data: office } = useQuery({ queryKey: ['office'], queryFn: api.office });
@@ -151,6 +157,22 @@ export function DocumentsView({ incident, readOnly }: { incident: Incident; read
               <button className="btn btn-sm" onClick={() => inputRef.current?.click()} disabled={upload.isPending}>
                 <Upload size={16} /> {upload.isPending ? 'Lädt hoch …' : 'Hochladen'}
               </button>
+              <Dropdown
+                small
+                align="right"
+                label="Tools"
+                button={
+                  <>
+                    <Wrench size={16} /> Tools
+                  </>
+                }
+              >
+                {(close) => (
+                  <button type="button" role="menuitem" className="map-dropdown-item" onClick={() => (close(), setToMap(null), setDialog('pdf-map'))}>
+                    <Layers size={18} /> PDF in Karte integrieren …
+                  </button>
+                )}
+              </Dropdown>
             </div>
           )
         }
@@ -223,6 +245,11 @@ export function DocumentsView({ incident, readOnly }: { incident: Incident; read
                     </a>
                     {!readOnly && (
                       <>
+                        {isPdf(d) && (
+                          <button className="btn btn-ghost btn-icon" onClick={() => (setToMap(d), setDialog('pdf-map'))} aria-label="In Karte integrieren" title="In Karte integrieren">
+                            <Layers size={18} />
+                          </button>
+                        )}
                         <button className="btn btn-ghost btn-icon" onClick={() => setEditing(d)} aria-label="Umbenennen oder verschieben">
                           <Pencil size={18} />
                         </button>
@@ -259,6 +286,7 @@ export function DocumentsView({ incident, readOnly }: { incident: Incident; read
           <NewDocumentDialog open={dialog === 'blank'} onClose={() => setDialog(null)} onCreate={(i) => blank.mutate(i)} folders={folders} initialFolder={folder} busy={blank.isPending} />
           <NewFolderDialog open={dialog === 'folder'} parentLabel={here} onClose={() => setDialog(null)} onCreate={(name) => newFolder.mutate(name)} busy={newFolder.isPending} />
           <DocumentPropertiesDialog doc={editing} onClose={() => setEditing(null)} onSave={(p) => editing && patch.mutate({ id: editing.id, ...p })} folders={folders} busy={patch.isPending} />
+          {dialog === 'pdf-map' && <PdfToMapDialog incident={incident} documents={docs} initial={toMap} onClose={() => setDialog(null)} />}
         </>
       )}
     </div>

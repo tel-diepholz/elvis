@@ -36,3 +36,4 @@ export * from './mail';
 export * from './contacts';
 export * from './backup';
 export * from './routing';
+export * from './georef';

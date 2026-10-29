@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -98,6 +98,23 @@ describe('Kartendruck', () => {
         expect(res.rawPayload.toString('latin1').match(/\/Type \/Page\b/g)?.length, `${paper} ${orientation} lat ${lat}`).toBe(1);
       }
     }
+  });
+
+  it('legt Overlays (PDF in Karte) mit Deckkraft über die Grundkarte, auch über ihrer feinsten Zoomstufe', async () => {
+    // Kachel der Kartenmitte auf Zoom 14 (Druck auf 15 vergrößert sie)
+    const n = 2 ** 14;
+    const lat = (request.center.lat * Math.PI) / 180;
+    const x = Math.floor(((request.center.lon + 180) / 360) * n);
+    const y = Math.floor(((1 - Math.log(Math.tan(lat) + 1 / Math.cos(lat)) / Math.PI) / 2) * n);
+    mkdirSync(join(dataDir, 'overlays', '7', '14', String(x)), { recursive: true });
+    writeFileSync(join(dataDir, 'overlays', '7', '14', String(x), `${y}.png`), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64'));
+    const print = async (overlays: MapPrintRequest['overlays']) =>
+      (await app.server.inject({ method: 'POST', url: '/api/print/map', payload: { ...request, overlays }, headers: { cookie } })).rawPayload.toString('latin1');
+    const images = (pdf: string) => pdf.match(/\/Subtype \/Image/g)?.length ?? 0;
+    const without = await print([]);
+    const withOverlay = await print([{ id: 7, opacity: 0.6, minZoom: 6, maxZoom: 14 }]);
+    expect(images(withOverlay)).toBe(images(without) + 1);
+    expect(withOverlay).toMatch(/\/ca 0\.6/);
   });
 
   it('nutzt den Kachel-Cache, auch wenn die Quelle offline ist', async () => {

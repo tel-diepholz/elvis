@@ -37,6 +37,10 @@ export class FakeDocker {
   archives: { volume: string; entries: string[] }[] = [];
   /** Namen angehaltener Container in Reihenfolge */
   stops: string[] = [];
+  /** Antwort auf getArchive (Werkzeug-Container wie GDAL): Tar-Archiv zum Pfad, null = gibt es nicht */
+  archiveOut: ((path: string, c: FakeContainer) => Buffer | Promise<Buffer> | null) | null = null;
+  /** Kommandos per putArchive bestückter Container (Name → hochgeladene Dateien) */
+  uploads = new Map<string, string[]>();
   private seq = 0;
 
   constructor(images: string[] = []) {
@@ -127,6 +131,14 @@ export class FakeDocker {
         if (!c) throw self.notFound();
         const bind = (c.spec.HostConfig?.Binds as string[] | undefined)?.find((b) => b.split(':')[1] === opts.path);
         self.archives.push({ volume: bind?.split(':')[0] ?? '?', entries: tarNames(data) });
+        self.uploads.set(c.name, tarNames(data));
+      },
+      async getArchive(opts: { path: string }) {
+        const c = self.find(idOrName);
+        if (!c) throw self.notFound();
+        const tar = await self.archiveOut?.(opts.path, c);
+        if (!tar) throw Object.assign(new Error(`Could not find the file ${opts.path} in container`), { statusCode: 404 });
+        return Readable.from([tar]);
       },
     });
 

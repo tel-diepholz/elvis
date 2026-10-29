@@ -56,6 +56,8 @@ const INCIDENT_FIELD_LABELS: Record<keyof IncidentPatch, string | null> = {
  * the incident is open; closed incidents remain readable as an archive. Dokumente: services/documents.ts.
  */
 export class IncidentService {
+  private readonly removedListeners: ((o: MapObject) => void)[] = [];
+
   constructor(
     private readonly store: Store,
     private readonly notify: (topics: Topic[]) => void,
@@ -181,7 +183,8 @@ export class IncidentService {
     const before = this.store.mapObject(objectId);
     if (!before) throw new HttpError(404, `Kartenobjekt ${objectId} nicht gefunden`);
     this.requireOpen(before.incidentId);
-    if (patch.data && before.kind !== 'gauss' && before.kind !== 'sector') throw new HttpError(400, 'Dieses Objekt hat keine Einstellungen');
+    if (patch.data && before.kind !== 'gauss' && before.kind !== 'sector' && before.kind !== 'overlay') throw new HttpError(400, 'Dieses Objekt hat keine Einstellungen');
+    if (patch.data && (before.kind === 'overlay') !== 'opacity' in patch.data) throw new HttpError(400, before.kind === 'overlay' ? 'Bei einem Overlay lässt sich nur die Deckkraft ändern' : 'Eine Deckkraft haben nur Overlays');
     if (patch.color && !COLORABLE_KINDS.includes(before.kind)) throw new HttpError(400, 'Die Farben einer Gauß-Fahne stehen für die Konzentrationsstufen');
     if (patch.icon !== undefined && before.kind !== 'point') throw new HttpError(400, 'Ein Symbol haben nur Punkte');
     if (patch.icon && !isMapIcon(patch.icon)) throw new HttpError(400, `Symbol „${patch.icon}“ gibt es nicht`);
@@ -192,6 +195,7 @@ export class IncidentService {
     if (patch.sign !== undefined && !isDv102Sign(patch.sign)) throw new HttpError(400, 'Dieses Zeichen gibt es nicht');
     if (patch.detail !== undefined && before.kind !== 'point' && before.kind !== 'sign' && before.kind !== 'area' && before.kind !== 'line') throw new HttpError(400, 'Dieses Objekt hat keine Beschreibung');
     if ((patch.lat !== undefined || patch.lon !== undefined) && isTracked(before.kind)) throw new HttpError(400, 'Die Position kommt live vom Empfang und lässt sich nicht verschieben');
+    if ((patch.lat !== undefined || patch.lon !== undefined) && before.kind === 'overlay') throw new HttpError(400, 'Die Lage eines Overlays legen die Passpunkte fest');
     const next = {
       ...before,
       ...(patch.name !== undefined && { name: patch.name }),
@@ -270,6 +274,12 @@ export class IncidentService {
       this.system(o.incidentId, `Kartenobjekt entfernt: ${MAP_OBJECT_LABELS[o.kind]} „${o.name}“`, operator);
     });
     this.notify(['mapObjects', 'journal']);
+    for (const fn of this.removedListeners) fn(o);
+  }
+
+  /** Aufräumen nach dem Entfernen eines Kartenobjekts (z. B. Kacheln eines Overlays) */
+  onMapObjectRemoved(fn: (o: MapObject) => void): void {
+    this.removedListeners.push(fn);
   }
 
   // --- Overpass-Abfragen der Karte ---
