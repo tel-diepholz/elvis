@@ -4,6 +4,7 @@
 
 - [Installation](installation.md) – Entwicklung, Docker auf dem Fahrzeug-Server, `compose.override.yaml`, Produktion
 - [Benutzer und Anmeldung](benutzer-und-rechte.md) – PIN-Anmeldung, Rechte, Sperren, Sitzungen
+- [Rollen im Einsatz](rollen.md) – Rollen übernehmen, Aufgaben, Meldungsweg, Beschaffungsrolle
 - [Taktische Zeichen und Einstellungen](einstellungen.md) – Zeichengenerator, Einstellungsseite, Bedienprotokoll
 - [Backup und Wiederherstellung](backup.md) – verschlüsselte Sicherung, Wiederherstellungsschlüssel, Neuinstallation
 

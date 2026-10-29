@@ -8,10 +8,10 @@ import { Loading } from '../ui';
 
 /** Rollen der Sitzung wählen (beliebig viele, auch keine) – nach der Anmeldung und über das Profilmenü. */
 export function RoleDialog({ onDone }: { onDone: () => void }) {
-  const { roles: current, refresh } = useAuth();
+  const { roles: current, roleChosen, lastRoleIds, refresh } = useAuth();
   const toast = useToast();
   const { data: roles, isLoading } = useQuery({ queryKey: ['roles'], queryFn: api.roles });
-  const [selected, setSelected] = useState(() => new Set(current.map((r) => r.id)));
+  const [selected, setSelected] = useState(() => new Set(roleChosen ? current.map((r) => r.id) : lastRoleIds));
 
   const choose = useMutation({
     mutationFn: api.chooseRoles,

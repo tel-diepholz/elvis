@@ -59,11 +59,22 @@ export class SessionStore {
   setRoles(token: string, roleIds: number[]): void {
     const h = hash(token);
     const add = this.db.prepare('INSERT OR IGNORE INTO session_roles (token_hash, role_id) VALUES (?, ?)');
+    const remember = this.db.prepare('INSERT OR IGNORE INTO user_last_roles (user_id, role_id) VALUES (?, ?)');
     this.db.transaction(() => {
       this.db.prepare('UPDATE sessions SET role_chosen = 1 WHERE token_hash = ?').run(h);
       this.db.prepare('DELETE FROM session_roles WHERE token_hash = ?').run(h);
       for (const id of roleIds) add.run(h, id);
+      // Für die Vorauswahl bei der nächsten Anmeldung merken
+      const session = this.db.prepare('SELECT user_id FROM sessions WHERE token_hash = ?').get(h) as { user_id: number } | undefined;
+      if (!session) return;
+      this.db.prepare('DELETE FROM user_last_roles WHERE user_id = ?').run(session.user_id);
+      for (const id of roleIds) remember.run(session.user_id, id);
     })();
+  }
+
+  /** Zuletzt gewählte Rollen des Benutzers (Vorauswahl nach der Anmeldung) */
+  lastRoles(userId: number): number[] {
+    return (this.db.prepare('SELECT role_id FROM user_last_roles WHERE user_id = ? ORDER BY role_id').all(userId) as { role_id: number }[]).map((r) => r.role_id);
   }
 
   /** Wer welche Rollen in einer noch gültigen Sitzung übernommen hat */

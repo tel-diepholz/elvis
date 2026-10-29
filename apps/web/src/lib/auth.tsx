@@ -9,13 +9,15 @@ interface AuthState {
   roles: Role[];
   /** false direkt nach der Anmeldung – dann wird nach den Rollen gefragt */
   roleChosen: boolean;
+  /** Zuletzt gewählte Rollen – Vorauswahl im Rollendialog nach der Anmeldung */
+  lastRoleIds: number[];
   hasUsers: boolean;
   loading: boolean;
   /** Nach Anmelden/Abmelden: Status und alle nutzerabhängigen Daten neu laden. */
   refresh: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthState>({ user: null, roles: [], roleChosen: true, hasUsers: true, loading: true, refresh: async () => {} });
+const AuthContext = createContext<AuthState>({ user: null, roles: [], roleChosen: true, lastRoleIds: [], hasUsers: true, loading: true, refresh: async () => {} });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
@@ -34,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [qc]);
 
   return (
-    <AuthContext.Provider value={{ user: data?.user ?? null, roles: data?.roles ?? [], roleChosen: data?.roleChosen ?? true, hasUsers: data?.hasUsers ?? true, loading: isLoading, refresh }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user: data?.user ?? null, roles: data?.roles ?? [], roleChosen: data?.roleChosen ?? true, lastRoleIds: data?.lastRoleIds ?? [], hasUsers: data?.hasUsers ?? true, loading: isLoading, refresh }}>{children}</AuthContext.Provider>
   );
 }
 

@@ -41,6 +41,7 @@ Befehle: [Installation](docs/installation.md).
 Die vollständige Doku steht in [`docs/`](docs/README.md):
 
 - **Einrichtung:** [Installation](docs/installation.md) · [Benutzer und Anmeldung](docs/benutzer-und-rechte.md) ·
+  [Rollen](docs/rollen.md) ·
   [Einstellungen](docs/einstellungen.md)
 - **Funktionen:** [Karte](docs/funktionen/karte.md) · [Ausbreitung](docs/funktionen/ausbreitung.md) ·
   [Flugzeuge und Schiffe](docs/funktionen/luft-und-schiffsverkehr.md) · [Wetter](docs/funktionen/wetter.md) ·

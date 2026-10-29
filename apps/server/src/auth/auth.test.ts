@@ -40,7 +40,7 @@ async function createUser(cookie: string, firstName: string, pin = '1111', isAdm
 
 describe('Ersteinrichtung und Anmeldung', () => {
   it('legt beim ersten Start den ersten Admin an – danach nicht mehr', async () => {
-    expect((await call<AuthStatus>('GET', '/api/auth/status')).body).toEqual({ hasUsers: false, user: null, roles: [], roleChosen: false });
+    expect((await call<AuthStatus>('GET', '/api/auth/status')).body).toEqual({ hasUsers: false, user: null, roles: [], roleChosen: false, lastRoleIds: [] });
     admin = await adminCookie(app);
     const status = await call<AuthStatus>('GET', '/api/auth/status', admin);
     expect(status.body.user).toMatchObject({ firstName: 'Max', lastName: 'Müller', isAdmin: true, createdBy: 'Ersteinrichtung' });

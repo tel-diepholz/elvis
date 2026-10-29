@@ -843,6 +843,14 @@ const MIGRATIONS: Migration[] = [
   ALTER TABLE messages ADD COLUMN sender_force_id INTEGER;
   ALTER TABLE messages ADD COLUMN recipient_force_id INTEGER;
   `,
+  // Zuletzt gewählte Rollen je Benutzer – Vorauswahl im Rollendialog nach der nächsten Anmeldung
+  `
+  CREATE TABLE user_last_roles (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, role_id)
+  );
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */
