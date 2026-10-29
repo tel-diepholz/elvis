@@ -35,3 +35,4 @@ export * from './mailrelay';
 export * from './mail';
 export * from './contacts';
 export * from './backup';
+export * from './routing';

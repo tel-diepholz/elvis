@@ -102,6 +102,10 @@ import {
   type MapObject,
   type MapObjectPatch,
   type MapPrintRequest,
+  type RoutePrintRequest,
+  type RouteRequest,
+  type RouteResult,
+  type RouterStatus,
   type NewMapObject,
   type MapSource,
   type MapSourceInput,
@@ -553,6 +557,12 @@ export const api = {
   /** Liefert das PDF als Blob; Fehler kommen wie bei den übrigen Aufrufen als ApiError. */
   printMap: async (req: MapPrintRequest): Promise<{ pdf: Blob; filename: string; missingTiles: number }> => {
     const { res, pdf, filename } = await fetchPdf('/api/print/map', req, 'Lagekarte.pdf');
+    return { pdf, filename, missingTiles: Number(res.headers.get('x-missing-tiles') ?? 0) };
+  },
+  routerStatus: () => request<RouterStatus>('GET', '/api/map/router'),
+  route: (req: RouteRequest) => request<RouteResult>('POST', '/api/map/route', req),
+  printRoute: async (req: RoutePrintRequest): Promise<{ pdf: Blob; filename: string; missingTiles: number }> => {
+    const { res, pdf, filename } = await fetchPdf('/api/print/route', req, 'Route.pdf');
     return { pdf, filename, missingTiles: Number(res.headers.get('x-missing-tiles') ?? 0) };
   },
   printWeather: async (pos: { lat: number; lon: number }): Promise<{ pdf: Blob; filename: string }> => {

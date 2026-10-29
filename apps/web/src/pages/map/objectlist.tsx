@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Eye, EyeOff, MapPin, Pencil, PenTool, Plane, Route, Shapes, Ship, Square, Trash2, TriangleAlert, Truck, Wind as WindIcon } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Eye, EyeOff, Flag, MapPin, Pencil, PenTool, Plane, Route, Shapes, Ship, Square, Trash2, TriangleAlert, Truck, Wind as WindIcon } from 'lucide-react';
 import {
   COLORABLE_KINDS,
   DEFAULT_OBJECT_COLORS,
@@ -173,6 +173,7 @@ export function ObjectList({
   onMoveIncident,
   onPlaceUnit,
   onEditShape,
+  onRouteStop,
 }: {
   incident: Incident;
   /** Eigenes Fahrzeug (immer erster Eintrag, nur ausblendbar); pos = null ohne GPS */
@@ -190,6 +191,8 @@ export function ObjectList({
   onPlaceUnit: (u: Unit) => void;
   /** Gezeichnete Fläche oder Linie auf der Karte bearbeiten */
   onEditShape: (o: MapObject) => void;
+  /** Routenbox offen: Objekt als nächsten Halt anhängen */
+  onRouteStop?: (stop: { lat: number; lon: number; name: string }) => void;
 }) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -339,6 +342,11 @@ export function ObjectList({
                 </button>
               )}
               <span className="map-object-actions">
+                {onRouteStop && (
+                  <button type="button" className="icon-btn" onClick={() => onRouteStop({ lat: o.lat, lon: o.lon, name: o.name })} aria-label={`${o.name} als Ziel der Route`} title="Als Ziel der Route">
+                    <Flag size={16} />
+                  </button>
+                )}
                 {settings && (
                   <button type="button" className="icon-btn" onClick={() => setExpanded(isOpen ? null : o.id)} aria-expanded={isOpen} aria-label="Einstellungen" title="Einstellungen">
                     {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}

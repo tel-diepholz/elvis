@@ -21,7 +21,23 @@ const KIND_ICONS: Record<GeocodeKind, typeof MapPin> = {
  * Suchfeld der Karte: Straßen, Orte, Adressen, Koordinaten und UTMREF. Treffer in der Nähe von focus() zuerst;
  * ↑/↓ wählen, Enter übernimmt, Esc schließt.
  */
-export function MapSearch({ focus, onSelect }: { focus: () => { lat: number; lon: number } | null; onSelect: (r: GeocodeResult) => void }) {
+export function MapSearch({
+  focus,
+  onSelect,
+  id = 'map-search-results',
+  placeholder = 'Straße, Ort, Koordinate, UTMREF',
+  label = 'In der Karte suchen',
+  clearOnSelect = false,
+}: {
+  focus: () => { lat: number; lon: number } | null;
+  onSelect: (r: GeocodeResult) => void;
+  /** Eigene Kennung der Trefferliste, wenn mehrere Suchfelder gleichzeitig zu sehen sind (Routenbox) */
+  id?: string;
+  placeholder?: string;
+  label?: string;
+  /** Feld nach der Auswahl leeren (Halte der Route nacheinander suchen) */
+  clearOnSelect?: boolean;
+}) {
   const [text, setText] = useState('');
   const [query, setQuery] = useState<{ q: string; focus: { lat: number; lon: number } | null } | null>(null);
   const [open, setOpen] = useState(false);
@@ -61,6 +77,7 @@ export function MapSearch({ focus, onSelect }: { focus: () => { lat: number; lon
     if (!r) return;
     onSelect(r);
     setOpen(false);
+    if (clearOnSelect) (setText(''), setQuery(null));
     (document.activeElement as HTMLElement | null)?.blur();
   };
 
@@ -97,10 +114,10 @@ export function MapSearch({ focus, onSelect }: { focus: () => { lat: number; lon
           onChange={(e) => (setText(e.target.value), setOpen(true), setPendingEnter(false))}
           onFocus={() => setOpen(true)}
           onKeyDown={onKey}
-          placeholder="Straße, Ort, Koordinate, UTMREF"
-          aria-label="In der Karte suchen"
+          placeholder={placeholder}
+          aria-label={label}
           aria-expanded={showList}
-          aria-controls="map-search-results"
+          aria-controls={id}
           role="combobox"
           autoComplete="off"
           spellCheck={false}
@@ -112,7 +129,7 @@ export function MapSearch({ focus, onSelect }: { focus: () => { lat: number; lon
         )}
       </div>
       {showList && (
-        <div className={`map-search-results ${fresh ? '' : 'stale'}`} id="map-search-results" role="listbox">
+        <div className={`map-search-results ${fresh ? '' : 'stale'}`} id={id} role="listbox">
           {results.map((r, i) => {
             const Icon = KIND_ICONS[r.kind];
             return (

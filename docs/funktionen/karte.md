@@ -40,7 +40,7 @@ Quellenangaben folgen den Dienstbeschreibungen. Vor dem Einsatz die Lizenz des L
 sich genauso eintragen, sofern sie EPSG:3857 unterstützen.
 
 **Bedienung:** Oben links stehen Suche, das Menü „Objekte“ (Einsatzort setzen, Gauß-Fahne oder Sektor 60°
-einfügen ([Ausbreitung](ausbreitung.md)), Flugzeug oder Schiff suchen ([Luft- und Schiffsverkehr](luft-und-schiffsverkehr.md)), OpenStreetMap abfragen) und „Drucken“, oben rechts die Wahl des Kartenstils, unten links der Wind. Rechts liegt die einklappbare
+einfügen ([Ausbreitung](ausbreitung.md)), Flugzeug oder Schiff suchen ([Luft- und Schiffsverkehr](luft-und-schiffsverkehr.md)), Route planen, OpenStreetMap abfragen) und „Drucken“, oben rechts die Wahl des Kartenstils, unten links der Wind. Rechts liegt die einklappbare
 **Objektliste** des laufenden Einsatzes: an erster Stelle das eigene Fahrzeug (nur ausblendbar), dann Einsatzort,
 Ausbreitungen und übernommene Such- und Overpass-Treffer (Punkte, Flächen, Linien). Ein Klick fliegt
 hin; Objekte lassen sich ein- und ausblenden, einstellen, einfärben (Flächen, Linien, Punkte, Sektoren – Gauß-Fahnen
@@ -85,6 +85,28 @@ Overpass-API des Addons **OSM-Daten** bereit, geht die Abfrage dorthin (offline)
 etwa weil der Job „Kartendaten bauen“ noch läuft, oder wenn sie ausfällt, fragt ELVIS den öffentlichen Server
 `overpass-api.de` (einstellbar über `"map": { "overpassUrl": "…" }`, `null` = nur lokal). Der ist oft ausgelastet:
 Er braucht dann 30–60 s oder lehnt mit HTTP 502 ab. ELVIS versucht es dann nach 2 und 5 s erneut.
+
+**Route planen:** *Objekte → Route planen …* öffnet unter der Werkzeugleiste eine Box für die Halte. Start ist
+das eigene Fahrzeug, sofern sein Standort bekannt ist. Weitere Halte kommen auf drei Wegen dazu:
+- über das Suchfeld der Box,
+- über die Auswahl „Objekt als Ziel …“ (eigenes Fahrzeug, Einsatzort, Kartenobjekte, gesetzte Kräfte),
+- über „Als Ziel“ am Popup eines Suchtreffers oder an einer Zeile der Objektliste.
+
+Neue Halte werden hinten angehängt; das bisherige Ziel wird dann Zwischenziel. Mit ↑/↓ lässt sich die Reihenfolge
+ändern. Das Fahrprofil ist PKW oder LKW; LKW nutzt Valhallas Profil `truck`, das Gewichts- und Höhenbeschränkungen
+beachtet.
+
+Ab zwei Halten berechnet ELVIS die Route und zeigt sie als Linie auf der Karte, mit nummerierten Halten (Start grün,
+Ziel rot), dazu Strecke und Fahrzeit.
+- **In Objektliste übernehmen** legt die Route als Linie im Einsatz ab, z. B. „3,1 km · 11 min · LKW“. Sie erscheint
+  damit auch auf Bildschirmen und in der Lagekarte.
+- **Route drucken** erzeugt ein A4-PDF (`POST /api/print/route`) mit Übersichtskarte und Halten. Danach folgen die
+  Fahrhinweise als Text, jeder mit einem kleinen Kartenausschnitt um die Stelle und einem Pfeil in die neue
+  Fahrtrichtung.
+
+Gerechnet wird ausschließlich lokal mit Valhalla aus dem Addon **OSM-Daten** (`POST /api/map/route`, Status unter
+`GET /api/map/router`). Ohne dieses Addon ist der Menüpunkt gesperrt; einen öffentlichen Rückfall gibt es bewusst
+nicht.
 
 **Regenradar:** Unter *Ebenen → Regenradar* liegt das Niederschlagsradar des Deutschen Wetterdienstes über der Karte
 (Open Data, 1-km-Raster, alle 5 Minuten neu). Die Leiste unten zeigt die letzten 2 Stunden und die Vorhersage für bis

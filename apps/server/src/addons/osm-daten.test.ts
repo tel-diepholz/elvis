@@ -9,6 +9,7 @@ import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
 import type { GeocodeFetch } from '../services/geocoder.js';
 import type { OverpassFetch } from '../services/overpass.js';
+import type { RouterFetch } from '../services/router.js';
 import { adminCookie } from '../test-helpers.js';
 import { FakeDocker } from './fake-docker.js';
 
@@ -34,10 +35,15 @@ const overpassFetch: OverpassFetch = async (url) => {
   return { elements: [] };
 };
 
+const routerFetch: RouterFetch = async (url) => {
+  calls.push(url);
+  return { status: 200, json: { trip: { summary: { length: 1, time: 60 }, legs: [{ shape: '_c`|@_c`|@_ibE_ibE', summary: { length: 1, time: 60 }, maneuvers: [] }] } } };
+};
+
 async function setup(builtinDir = BUILTIN) {
   dataDir = mkdtempSync(join(tmpdir(), 'elvis-osm-'));
   daemon = new FakeDocker();
-  app = await buildApp(parseConfig({ dataDir, addons: { builtinDir }, map: { outlineUrl: null } }), { logger: false, dockerFactory: () => daemon.asDocker(), geocodeFetch, overpassFetch });
+  app = await buildApp(parseConfig({ dataDir, addons: { builtinDir }, map: { outlineUrl: null } }), { logger: false, dockerFactory: () => daemon.asDocker(), geocodeFetch, overpassFetch, routerFetch });
   await app.docker!.repos.refresh();
   cookie = await adminCookie(app);
 }
@@ -77,6 +83,8 @@ describe('OSM-Daten-Addon', () => {
     expect((await req('GET', '/api/map/outline/R1461203')).status).toBe(404);
     // Overpass: öffentlich, solange das Addon nicht bereit ist
     expect((await req('GET', '/api/map/overpass/status')).body).toEqual({ source: 'online', name: 'overpass-api.de' });
+    // Routing gibt es nur lokal
+    expect((await req('GET', '/api/map/router')).body).toEqual({ available: false, name: null });
 
     const host = await addHost();
     const res = await req('POST', '/api/addons', {
@@ -130,6 +138,12 @@ describe('OSM-Daten-Addon', () => {
     const query = { name: 'Tankstellen', mode: 'simple', filters: [{ key: 'amenity', op: '=', value: 'fuel' }] };
     expect((await req('POST', '/api/map/overpass', { query, bounds: { s: 52.6, w: 8.4, n: 52.8, e: 8.6 } })).body).toMatchObject({ source: 'local', sourceName: 'Overpass (lokal)' });
     expect(calls.at(-1)).toBe('http://10.0.0.2:8089/api/interpreter');
+
+    // Routen rechnet das lokale Valhalla
+    expect((await req('GET', '/api/map/router')).body).toEqual({ available: true, name: 'Routing (lokal)' });
+    const stops = [{ lat: 52.7, lon: 8.5, name: 'A' }, { lat: 52.71, lon: 8.51, name: 'B' }];
+    expect((await req('POST', '/api/map/route', { stops })).status).toBe(200);
+    expect(calls.at(-1)).toBe('http://10.0.0.2:8002/route');
 
     const log = (await req<string>('GET', '/api/addons/osm-daten/logs?target=job:build')).body;
     expect(log).toContain('=== Schritt 5: Routing bauen ===');

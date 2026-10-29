@@ -28,6 +28,7 @@ import type { TileService } from '../services/tiles.js';
 import { JobRuns, followLogs, type JobRunRow } from './jobs.js';
 import type { GeocoderProvision, GeocoderService } from '../services/geocoder.js';
 import type { OverpassProvision, OverpassService } from '../services/overpass.js';
+import type { RouterProvision, RouterService } from '../services/router.js';
 import type { OfficeProvision, OfficeService } from '../services/office.js';
 import type { GuestPrinterProvision, PrintServerProvision, PrintService } from '../services/printing.js';
 import type { WorkstationProvision, WorkstationService } from '../services/workstations.js';
@@ -843,6 +844,14 @@ export class AddonManager {
     this.updateMapSources();
   }
 
+  private router: RouterService | null = null;
+
+  /** Routing-Dienste laufender Addons (provides.routers) an diesen Dienst melden */
+  attachRouter(router: RouterService): void {
+    this.router = router;
+    this.updateMapSources();
+  }
+
   private office: OfficeService | null = null;
 
   /** Office-Server laufender Addons (provides.office) an diesen Dienst melden */
@@ -872,6 +881,7 @@ export class AddonManager {
     const videos: VideoProvision[] = [];
     const geocoders: GeocoderProvision[] = [];
     const overpass: OverpassProvision[] = [];
+    const routers: RouterProvision[] = [];
     const offices: OfficeProvision[] = [];
     const printServers: PrintServerProvision[] = [];
     const guestPrinters: GuestPrinterProvision[] = [];
@@ -908,6 +918,9 @@ export class AddonManager {
       for (const o of manifest.provides.overpass ?? []) {
         overpass.push({ id: `${r.id}-${o.id}`, name: o.name, url: renderTemplate(o.url, ctx) });
       }
+      for (const o of manifest.provides.routers ?? []) {
+        routers.push({ id: `${r.id}-${o.id}`, name: o.name, type: o.type, url: renderTemplate(o.url, ctx) });
+      }
       for (const o of manifest.provides.office ?? []) {
         offices.push({ id: `${r.id}-${o.id}`, name: o.name, url: renderTemplate(o.url, ctx), wopiBase: renderTemplate(o.wopiBase, ctx) });
       }
@@ -925,6 +938,7 @@ export class AddonManager {
     if (this.videos?.setProvisions(videos)) this.notify(['videoSources']);
     this.geocoder?.setProvisions(geocoders);
     this.overpass?.setProvisions(overpass);
+    this.router?.setProvisions(routers);
     this.office?.setProvisions(offices);
     this.printing?.setProvisions(printServers, guestPrinters);
     this.workstations?.setProvisions(workstations);

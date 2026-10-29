@@ -3,7 +3,7 @@ import { GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents }
 import L, { type LatLngBoundsExpression, type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, History, ListPlus, MapPin, Plane, Printer, Ship, Trash2, Undo2, X } from 'lucide-react';
+import { Check, Flag, History, ListPlus, MapPin, Plane, Printer, Ship, Trash2, Undo2, X } from 'lucide-react';
 import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type OverpassFeature, type TacticalSign, type TrackedData, type TrafficHit, type Unit } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useActiveIncident, useNow, useSettings } from '../lib/hooks';
@@ -44,6 +44,7 @@ import {
   type ShapeEdit,
   type ShapeKind,
 } from './map/draw';
+import { RouteLayer, RoutePanel, RoutePrintDialog, routeObject, useRoute, type RouteCandidate, type RoutePlan } from './map/routing';
 import { OverpassLayer, OverpassPanel, featureObject, overpassResultText, useOverpassRun, type OverpassHits } from './map/overpass';
 
 const VIEW_KEY = 'elvis.map.view';
@@ -157,6 +158,23 @@ export function MapPage() {
   const [overpassOpen, setOverpassOpen] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
   const [printing, setPrinting] = useState(false);
+  /** Routenplanung (Menü „Objekte“ → Route planen): Halte und Profil, null = Box geschlossen */
+  const [routePlan, setRoutePlan] = useState<RoutePlan | null>(null);
+  const [routePrinting, setRoutePrinting] = useState(false);
+  const route = useRoute(routePlan);
+  const { data: router } = useQuery({ queryKey: ['router'], queryFn: api.routerStatus, staleTime: 60_000, enabled: !!user });
+  /** Höhe der Werkzeugleiste: die Routenbox steht direkt darunter (die Leiste bricht schmal um) */
+  const toolsRef = useRef<HTMLDivElement>(null);
+  const [toolsBottom, setToolsBottom] = useState(62);
+  useEffect(() => {
+    const el = toolsRef.current;
+    if (!el || !routePlan) return;
+    const update = () => setToolsBottom(el.offsetTop + el.offsetHeight + 8);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [!!routePlan]); // eslint-disable-line react-hooks/exhaustive-deps
   const [searchingTraffic, setSearchingTraffic] = useState(false);
   /** Auswahl eines Lagezeichens offen; das gewählte Zeichen wird danach in die Karte getippt */
   const [choosingSign, setChoosingSign] = useState(false);
@@ -251,6 +269,11 @@ export function MapPage() {
 
   const searchFocus = () => view.current ?? (vPos ? { lat: vPos[0], lon: vPos[1] } : origin);
 
+  /** Halt ans Ende der Route anhängen (das bisherige Ziel wird Zwischenziel) */
+  const addRouteStop = (stop: { lat: number; lon: number; name: string }) =>
+    setRoutePlan((p) => p && { ...p, stops: [...p.stops, { ...stop, name: stop.name.slice(0, 120) || `${stop.lat.toFixed(5)}, ${stop.lon.toFixed(5)}` }] });
+  const openRoute = () => setRoutePlan((p) => p ?? { profile: 'auto', stops: vPos ? [{ lat: vPos[0], lon: vPos[1], name: vehicleName }] : [] });
+
   // Im Einsatz lässt sich das eigene Fahrzeug in der Objektliste ausblenden
   // Im Verlauf fehlt seine Position (das GPS wird nicht mitgeschrieben)
   const showVehicle = !!vPos && !historyAt && (incident?.vehicleVisible ?? true);
@@ -263,6 +286,16 @@ export function MapPage() {
     if (target.kind === 'area' || target.kind === 'line') fly(b.getCenter(), { bounds: b, zoom: 16 });
     else fly([target.lat, target.lon], { zoom: target.kind === 'point' ? 17 : isTracked(target.kind) ? 12 : 14 });
   };
+
+  /** Auswahl „Objekt als Ziel“ in der Routenbox */
+  const routeCandidates = useMemo<RouteCandidate[]>(() => {
+    const list: RouteCandidate[] = [];
+    if (vPos) list.push({ key: 'vehicle', label: vehicleName, lat: vPos[0], lon: vPos[1] });
+    if (iPos) list.push({ key: 'incident', label: incident?.keyword ? `Einsatzort (${incident.keyword})` : 'Einsatzort', lat: iPos[0], lon: iPos[1] });
+    for (const o of liveObjects) if (o.visible) list.push({ key: `o${o.id}`, label: o.name, lat: o.lat, lon: o.lon });
+    for (const u of liveUnits) if (u.lat !== null && u.lon !== null) list.push({ key: `u${u.id}`, label: u.name, lat: u.lat, lon: u.lon });
+    return list;
+  }, [vPos?.[0], vPos?.[1], iPos?.[0], iPos?.[1], incident?.keyword, liveObjects, liveUnits, vehicleName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Suchtreffer übernehmen: mit Umriss als Fläche, sonst als Punkt */
   const addHit = async (r: GeocodeResult) => {
@@ -405,6 +438,11 @@ export function MapPage() {
                     <MapPin size={14} /> Als Einsatzort setzen
                   </button>
                 )}
+                {routePlan && (
+                  <button type="button" className="btn btn-sm" onClick={() => (addRouteStop({ lat: searchHit.lat, lon: searchHit.lon, name: searchHit.name }), setSearchHit(null))}>
+                    <Flag size={14} /> Als Ziel
+                  </button>
+                )}
                 <button type="button" className="btn btn-sm" onClick={() => setSearchHit(null)}>
                   <X size={14} /> Entfernen
                 </button>
@@ -412,6 +450,7 @@ export function MapPage() {
             </Popup>
           </Marker>
         )}
+        {routePlan && <RouteLayer stops={routePlan.stops} route={routePlan.stops.length >= 2 ? route.data : undefined} />}
         {shapeEdit && <EditLayer edit={shapeEdit} onChange={setShapeEdit} />}
         {drawing && <DrawLayer drawing={drawing} onPoint={addDrawPoint} onFinish={() => canFinish(drawing) && finishDrawing(drawing)} />}
         <FlyTo target={flyTarget} />
@@ -420,7 +459,7 @@ export function MapPage() {
         <CursorPosition />
       </MapContainer>
 
-      <div className="map-overlay map-tools">
+      <div className="map-overlay map-tools" ref={toolsRef}>
         <MapSearch focus={searchFocus} onSelect={showHit} />
         <ObjectMenu
           loggedIn={!!user}
@@ -437,6 +476,8 @@ export function MapPage() {
           onTemplate={overpass.run}
           onOverpass={() => setOverpassOpen(true)}
           onClearOverpass={() => setOverpassHits(null)}
+          routing={router?.available ? { open: !!routePlan } : null}
+          onRoute={openRoute}
         />
         {incident && (
           <button
@@ -454,6 +495,24 @@ export function MapPage() {
           </button>
         )}
       </div>
+
+      {routePlan && (
+        <RoutePanel
+          top={toolsBottom}
+          plan={routePlan}
+          onChange={setRoutePlan}
+          route={route}
+          candidates={routeCandidates}
+          focus={searchFocus}
+          adopt={
+            canEdit
+              ? { run: () => route.data && addObject.mutate(routeObject(routePlan.stops, route.data)), pending: addObject.isPending }
+              : { reason: !incident ? 'Objekte gehören zu einem Einsatz – erst einen Einsatz auflegen' : historyAt ? 'Nur in der aktuellen Lage' : 'Zum Bearbeiten anmelden' }
+          }
+          onPrint={() => setRoutePrinting(true)}
+          onClose={() => setRoutePlan(null)}
+        />
+      )}
 
       <OverpassPanel
         open={overpassOpen}
@@ -575,6 +634,7 @@ export function MapPage() {
           shiftPx={styleMenuPx}
           onFly={flyToObject}
           onMoveIncident={() => (setDrawing(null), setPlacing('incident'))}
+          onRouteStop={routePlan ? addRouteStop : undefined}
         />
       )}
 
@@ -595,6 +655,12 @@ export function MapPage() {
 
       <Modal open={searchingTraffic} title="Flugzeug oder Schiff suchen" onClose={() => setSearchingTraffic(false)}>
         {searchingTraffic && <TrafficSearch tracked={tracked} onPick={addTraffic} />}
+      </Modal>
+
+      <Modal open={routePrinting} title="Route drucken" onClose={() => setRoutePrinting(false)}>
+        {routePrinting && source && routePlan && route.data && (
+          <RoutePrintDialog sources={sources} initialSourceId={printSource(sources, source)!.id} stops={routePlan.stops} route={route.data} onDone={() => setRoutePrinting(false)} />
+        )}
       </Modal>
 
       <Modal open={printing} title="Lagekarte drucken" onClose={() => setPrinting(false)} wide>

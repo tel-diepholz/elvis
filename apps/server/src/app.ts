@@ -40,6 +40,7 @@ import { IncidentService } from './services/incidents.js';
 import { SettingsService } from './services/settings.js';
 import { GeocoderService, type GeocodeFetch } from './services/geocoder.js';
 import { OverpassService, type OverpassFetch } from './services/overpass.js';
+import { RouterService, type RouterFetch } from './services/router.js';
 import { RadarService, type RadarFetch } from './services/radar.js';
 import { WeatherAlertWatch, WeatherService, type WeatherFetch } from './services/weather.js';
 import { weatherRoutes } from './routes/weather.js';
@@ -98,12 +99,13 @@ export interface App {
   personnel: PersonnelService;
   mail: MailService;
   traffic: TrafficService;
+  router: RouterService;
   backup: BackupService;
   start(): Promise<void>;
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; restart?: () => void } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; restart?: () => void } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -180,6 +182,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     opts.geocodeFetch,
   );
   const overpass = new OverpassService({ onlineUrl: config.map.overpassUrl, userAgent: config.map.userAgent, retryDelaysMs: opts.overpassRetryDelaysMs }, db, opts.overpassFetch);
+  const router = new RouterService(opts.routerFetch);
   const radar = new RadarService({ ...config.map.radar, userAgent: config.map.userAgent }, opts.radarFetch);
   const weather = new WeatherService(
     { ...config.weather, userAgent: config.map.userAgent, cacheFile: config.dataDir === ':memory:' ? null : join(config.dataDir, 'weather-cache.json') },
@@ -258,6 +261,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     addons.attachVideos(videos);
     addons.attachGeocoder(geocoder);
     addons.attachOverpass(overpass);
+    addons.attachRouter(router);
     addons.attachOffice(office);
     addons.attachPrinting(printing);
     addons.attachWorkstations(workstations);
@@ -324,7 +328,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     wifiRoutes(api, { wifi, store, notify: (t) => hub.invalidate(t) });
     monitoringRoutes(api, { monitoring, store, notify: (t) => hub.invalidate(t) });
     bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
-    mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder, overpass, radar);
+    mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder, overpass, router, radar);
     weatherRoutes(api, weather, weatherWatch, {
       settings,
       store,
@@ -378,6 +382,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     personnel,
     mail,
     traffic,
+    router,
     backup,
     async start() {
       // Webserver zuerst: ein hängendes Gerät (z. B. ein Monitoring-Ziel, das nicht antwortet) darf
