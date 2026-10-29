@@ -35,6 +35,21 @@ describe('Taktische Zeichen', () => {
     expect(leader.primitives.filter((p) => p.kind === 'path')).toHaveLength(2);
   });
 
+  it('begrenzt den Führungsbalken bei Stellen/Einrichtungen auf den Kreis', () => {
+    const g = buildTacticalSign({ base: 'facility', function: 'fuehrung' });
+    const bar = g.primitives[1] as { d: string };
+    expect(bar.d).toMatch(/^M[\d.]+,11 A35,35 0 0,1 [\d.]+,11 Z$/);
+  });
+
+  it('setzt Dach über und Schleife in das Zeichen', () => {
+    const roof = buildTacticalSign({ base: 'facility', org: 'fuehrung', above: 'roof', text: 'LtS' });
+    expect(roof.box.y).toBeLessThan(-12);
+    expect(roof.primitives.some((p) => p.kind === 'path' && p.stroke === '#000000' && p.d.includes('L50,-12'))).toBe(true);
+    const heli = buildTacticalSign({ base: 'unit', inside: 'loop' });
+    expect(circles(heli)).toHaveLength(1);
+    expect(circles(buildTacticalSign({ base: 'unit' }))).toHaveLength(0);
+  });
+
   it('liefert gültiges SVG mit maskiertem Text', () => {
     const svg = tacticalSignSvg({ ...DEFAULT_VEHICLE_SIGN, text: 'A<B&C' }, { height: 60, title: 'Test' });
     expect(svg).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg" viewBox="[-\d. ]+" width="[\d.]+" height="60.0"/);

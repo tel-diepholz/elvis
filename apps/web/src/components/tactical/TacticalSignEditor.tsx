@@ -1,5 +1,7 @@
 import {
+  TACTICAL_ABOVE,
   TACTICAL_BASES,
+  TACTICAL_INSIDE,
   TACTICAL_FUNCTIONS,
   TACTICAL_MOBILITY,
   TACTICAL_ORGS,
@@ -54,6 +56,8 @@ export function TacticalSignEditor({
         {value.base === 'vehicle' && <Select label="Fahrzeugart" value={value.mobility} options={TACTICAL_MOBILITY} onChange={(v) => set('mobility', v)} disabled={disabled} />}
         <Select label="Organisation (Farbe)" value={value.org} options={TACTICAL_ORGS} onChange={(v) => set('org', v)} disabled={disabled} />
         <Select label="Fachaufgabe" value={value.function} options={TACTICAL_FUNCTIONS} onChange={(v) => set('function', v)} disabled={disabled} />
+        <Select label="Symbol über dem Zeichen" value={value.above} options={TACTICAL_ABOVE} onChange={(v) => set('above', v)} disabled={disabled} />
+        <Select label="Symbol im Zeichen" value={value.inside} options={TACTICAL_INSIDE} onChange={(v) => set('inside', v)} disabled={disabled} />
         <Select label="Größenordnung" value={value.size} options={TACTICAL_SIZES} onChange={(v) => set('size', v)} disabled={disabled} />
         <Field label="Text im Zeichen" hint="z. B. ELW 2, LF 20, TEL">
           <input value={value.text} maxLength={12} onChange={(e) => set('text', e.target.value)} disabled={disabled} />
