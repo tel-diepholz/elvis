@@ -2479,6 +2479,107 @@ input[type='checkbox'] {
   padding: 8px 10px;
   font-size: 13px;
 }
+/* Routenplanung: Box unter der Werkzeugleiste (top setzt die Karte nach deren Höhe) */
+.map-route {
+  z-index: 505;
+  left: 12px;
+  width: 380px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 140px);
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.map-route-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.map-route-head > strong {
+  flex: 1;
+}
+.map-route-stops {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.map-route-stops li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.map-route-num {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #1e6fd9;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+.map-route-num.start {
+  background: #2e7d32;
+}
+.map-route-num.end {
+  background: #c62828;
+}
+.map-route-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-route-name .muted {
+  font-size: 12px;
+}
+.map-route-hint {
+  margin: 0;
+  font-size: 13px;
+}
+.map-route-add {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.map-route .map-search {
+  width: 100%;
+}
+.map-route-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.map-route-summary.stale {
+  opacity: 0.6;
+}
+.map-route-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* Halte auf der Karte: Start grün, Zwischenziele blau, Ziel rot */
+.map-marker.route-stop span {
+  background: #1e6fd9;
+  border-radius: 50%;
+}
+.map-marker.route-stop.start span {
+  background: #2e7d32;
+}
+.map-marker.route-stop.end span {
+  background: #c62828;
+}
 .leaflet-container {
   font-family: var(--font);
 }

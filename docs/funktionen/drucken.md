@@ -19,6 +19,8 @@
   PDF vom Office-Server, auch mit noch nicht gespeicherten Änderungen, und druckt es unter dem Dokumentnamen
   (`POST /api/printing/office`, nur angemeldet und nur von der Adresse des laufenden Office-Servers). Ohne Drucker
   lässt sich das PDF im Browser öffnen. Export und Präsentation laufen wie bisher im Browser.
+- **Route:** Der Dialog „Route drucken“ der Routenplanung bietet dieselbe Wahl. Das PDF ist immer A4 hoch und kann
+  über mehrere Seiten gehen.
 - Gedruckte Lagekarten und Dokumente landen wie jeder Druck im eingestellten Ablageordner.
 - **Technik:** ELVIS spricht IPP direkt mit CUPS (`apps/server/src/services/ipp.ts`) und braucht dafür keine weitere
   Bibliothek. Addons melden Druckserver über `provides.printServers` (`{ id, name, url }`). Endpunkte:

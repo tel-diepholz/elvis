@@ -32,7 +32,7 @@ provides:                                 # Integration in ELVIS
 - Laufende Addons mit `provides.mapSources` erscheinen automatisch als Kartenstil auf der Karte und im Druck.
   `provides.geocoders` (`{ id, name, type: photon|nominatim, url }`) ersetzt den öffentlichen Suchdienst der
   Ortssuche; bei Nominatim auch für Umrisse. `provides.routers` (`{ id, name, type: valhalla, url }`) und
-  `provides.overpass` (`{ id, name, url }`) melden Routing (noch ohne Nutzung in der Oberfläche) und Overpass (ersetzt
+  `provides.overpass` (`{ id, name, url }`) melden Routing (Routenplanung der Karte, nur lokal) und Overpass (ersetzt
   den öffentlichen Overpass-Server der Karte).
   `provides.office` (`{ id, name, url, wopiBase }`) meldet einen
   Office-Server mit WOPI (Collabora) für die Dokumentbearbeitung. `shmSize` (z. B. `"1g"`) vergrößert `/dev/shm`, etwa für PostgreSQL.

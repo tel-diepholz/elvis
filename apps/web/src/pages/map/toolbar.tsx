@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { Check, ChevronDown, Circle, CircleDot, CloudRain, Hexagon, RectangleHorizontal, Spline, Crosshair, Database, Loader2, Minus, Plus, Search, X, Layers, MapPin, Plane, Shapes, Ship, TriangleAlert, Wind as WindIcon } from 'lucide-react';
+import { Check, ChevronDown, Circle, CircleDot, CloudRain, Hexagon, RectangleHorizontal, Spline, Crosshair, Database, Loader2, Minus, Plus, Search, X, Layers, MapPin, Plane, Route, Shapes, Ship, TriangleAlert, Wind as WindIcon } from 'lucide-react';
 import { toMgrs, type MapSource, type OverpassQuery } from '@elvis/shared';
 import { MapIcon } from '../../components/map/mapIcons';
 import { compass, fmtOpt } from '../../lib/format';
@@ -76,6 +76,8 @@ export function ObjectMenu({
   onTemplate,
   onOverpass,
   onClearOverpass,
+  routing,
+  onRoute,
 }: {
   loggedIn: boolean;
   /** Objekte des Einsatzes ändern */
@@ -96,6 +98,9 @@ export function ObjectMenu({
   onTemplate: (q: OverpassQuery) => void;
   onOverpass: () => void;
   onClearOverpass: () => void;
+  /** Routing (Addon OSM-Daten): null = nicht verfügbar, sonst ob die Routenbox offen ist */
+  routing: { open: boolean } | null;
+  onRoute: () => void;
 }) {
   const edit = { disabled: !enabled, title: enabled ? undefined : reason };
   return (
@@ -122,6 +127,16 @@ export function ObjectMenu({
           </button>
           <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onSearchTraffic())}>
             <Plane size={18} /> Flugzeug oder Schiff suchen …
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="map-dropdown-item"
+            disabled={!routing}
+            title={routing ? undefined : 'Routing braucht das Addon „OSM-Daten“'}
+            onClick={() => (close(), onRoute())}
+          >
+            <Route size={18} /> Route planen …{routing?.open && <span className="muted">offen</span>}
           </button>
           <div className="map-dropdown-heading">Zeichnen</div>
           <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onPlace('point'))}>

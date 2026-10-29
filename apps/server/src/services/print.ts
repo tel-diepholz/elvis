@@ -96,17 +96,6 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
     return [fx + (p.x - frame.origin.x) * k, fy + (p.y - frame.origin.y) * k] as [number, number];
   };
 
-  // Kacheln parallel laden (TileService begrenzt die Parallelität nach außen).
-  const tx0 = Math.floor(frame.origin.x / TILE_SIZE);
-  const ty0 = Math.floor(frame.origin.y / TILE_SIZE);
-  const tx1 = Math.floor((frame.origin.x + frame.widthPx - 1) / TILE_SIZE);
-  const ty1 = Math.floor((frame.origin.y + frame.heightPx - 1) / TILE_SIZE);
-  const jobs: Promise<{ tx: number; ty: number; tile: Awaited<ReturnType<TileService['get']>> }>[] = [];
-  for (let ty = ty0; ty <= ty1; ty++) {
-    for (let tx = tx0; tx <= tx1; tx++) jobs.push(tiles.get(source.id, req.zoom, tx, ty).then((tile) => ({ tx, ty, tile })));
-  }
-  const loaded = await Promise.all(jobs);
-
   const now = ctx.now ?? new Date();
   const doc = new PDFDocument({
     size: [mm(pageW), mm(pageH)],
@@ -123,26 +112,9 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
   });
 
   // --- Karte ---
-  let missingTiles = 0;
   doc.save();
   doc.rect(fx, fy, fw, fh).clip();
-  doc.rect(fx, fy, fw, fh).fill('#eeeeee');
-  for (const { tx, ty, tile } of loaded) {
-    const x = fx + (tx * TILE_SIZE - frame.origin.x) * k;
-    const y = fy + (ty * TILE_SIZE - frame.origin.y) * k;
-    const size = TILE_SIZE * k;
-    const supported = tile && /image\/(png|jpe?g)/.test(tile.contentType);
-    if (supported) {
-      try {
-        doc.image(tile.data, x, y, { width: size, height: size });
-        continue;
-      } catch {
-        /* defekte Kachel → wie fehlend behandeln */
-      }
-    }
-    missingTiles++;
-    doc.rect(x, y, size, size).fill('#e0e0e0');
-  }
+  const missingTiles = await drawTiles(doc, tiles, source.id, req.zoom, frame.origin, frame.widthPx, frame.heightPx, fx, fy, k);
 
   for (const poly of req.polygons) {
     if (poly.points.length < 3) continue;
@@ -292,6 +264,54 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
 
   doc.end();
   return { pdf: await done, missingTiles };
+}
+
+/**
+ * Rasterkacheln eines Kartenausschnitts zeichnen: Weltpixel `origin` (Zoomstufe `zoom`) liegt bei (x, y), ein Kartenpixel
+ * ist `k` pt groß. Der Aufrufer begrenzt die Fläche mit clip(). Liefert die Zahl fehlender Kacheln.
+ */
+export async function drawTiles(
+  doc: PDFKit.PDFDocument,
+  tiles: TileService,
+  sourceId: string,
+  zoom: number,
+  origin: { x: number; y: number },
+  widthPx: number,
+  heightPx: number,
+  x0: number,
+  y0: number,
+  k: number,
+): Promise<number> {
+  // Kacheln parallel laden (TileService begrenzt die Parallelität nach außen).
+  const tx0 = Math.floor(origin.x / TILE_SIZE);
+  const ty0 = Math.floor(origin.y / TILE_SIZE);
+  const tx1 = Math.floor((origin.x + widthPx - 1) / TILE_SIZE);
+  const ty1 = Math.floor((origin.y + heightPx - 1) / TILE_SIZE);
+  const jobs: Promise<{ tx: number; ty: number; tile: Awaited<ReturnType<TileService['get']>> }>[] = [];
+  for (let ty = ty0; ty <= ty1; ty++) {
+    for (let tx = tx0; tx <= tx1; tx++) jobs.push(tiles.get(sourceId, zoom, tx, ty).then((tile) => ({ tx, ty, tile })));
+  }
+  const loaded = await Promise.all(jobs);
+
+  let missing = 0;
+  doc.rect(x0, y0, widthPx * k, heightPx * k).fill('#eeeeee');
+  for (const { tx, ty, tile } of loaded) {
+    const x = x0 + (tx * TILE_SIZE - origin.x) * k;
+    const y = y0 + (ty * TILE_SIZE - origin.y) * k;
+    const size = TILE_SIZE * k;
+    const supported = tile && /image\/(png|jpe?g)/.test(tile.contentType);
+    if (supported) {
+      try {
+        doc.image(tile.data, x, y, { width: size, height: size });
+        continue;
+      } catch {
+        /* defekte Kachel → wie fehlend behandeln */
+      }
+    }
+    missing++;
+    doc.rect(x, y, size, size).fill('#e0e0e0');
+  }
+  return missing;
 }
 
 /** Schrift der Lagezeichen (Roboto Slab Bold) einmal je Dokument anmelden */

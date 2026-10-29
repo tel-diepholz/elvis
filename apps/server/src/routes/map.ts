@@ -1,13 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { MAX_PRINT_ZOOM, MIN_PRINT_ZOOM, formatDtg, mapSourceInputSchema, mapSourceListSchema, overpassQueryListSchema, overpassRunSchema, tacticalSignSchema, type MapPrintRequest, type Topic } from '@elvis/shared';
+import { MAX_PRINT_ZOOM, MIN_PRINT_ZOOM, formatDtg, mapSourceInputSchema, mapSourceListSchema, overpassQueryListSchema, overpassRunSchema, routePrintSchema, routeRequestSchema, tacticalSignSchema, type MapPrintRequest, type Topic } from '@elvis/shared';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
 import { renderMapPdf } from '../services/print.js';
+import { renderRoutePdf } from '../services/route-print.js';
 import type { SettingsService } from '../services/settings.js';
 import type { GeocoderService } from '../services/geocoder.js';
 import type { OverpassService } from '../services/overpass.js';
 import type { RadarService } from '../services/radar.js';
+import type { RouterService } from '../services/router.js';
 import type { TileService } from '../services/tiles.js';
 import { operatorOf, parse } from './util.js';
 
@@ -59,7 +61,7 @@ const searchQuery = z.object({
   lon: z.coerce.number().min(-180).max(180).optional(),
 });
 
-export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notify: (topics: Topic[]) => void, geocoder: GeocoderService, overpass: OverpassService, radar: RadarService): void {
+export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store, settings: SettingsService, notify: (topics: Topic[]) => void, geocoder: GeocoderService, overpass: OverpassService, router: RouterService, radar: RadarService): void {
   app.get('/api/map/sources', async () => tiles.list());
 
   /** Ortssuche: Straßen, Orte, Adressen sowie Koordinaten und UTMREF; lat/lon bevorzugen Treffer in der Nähe */
@@ -82,6 +84,12 @@ export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store
   });
 
   app.get('/api/map/overpass/status', async () => overpass.status());
+
+  /** Routing über das Addon OSM-Daten (Valhalla); ohne Addon available = false */
+  app.get('/api/map/router', async () => router.status());
+
+  /** Route über die Halte in Reihenfolge berechnen; nur angemeldet */
+  app.post('/api/map/route', async (req) => router.route(parse(routeRequestSchema, req.body)));
 
   /** Vorlagen aus den Einstellungen (Menü „Objekte“) */
   app.get('/api/map/overpass/queries', async () => overpass.settings().queries);
@@ -129,6 +137,28 @@ export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store
     });
     notify(['audit']);
     const name = `Lagekarte_${body.paper}_${formatDtg(new Date())}.pdf`;
+    return reply
+      .header('content-type', 'application/pdf')
+      .header('content-disposition', `attachment; filename="${name.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`)
+      .header('x-missing-tiles', String(missingTiles))
+      .send(pdf);
+  });
+
+  /** Routenausdruck: Übersichtskarte und Fahrhinweise mit Kartenausschnitten (A4) */
+  app.post('/api/print/route', { bodyLimit: 8 * 1024 * 1024 }, async (req, reply) => {
+    const body = parse(routePrintSchema, req.body);
+    const operator = operatorOf(req);
+    const { pdf, missingTiles } = await renderRoutePdf(body, tiles, { vehicle: settings.get().vehicle, operator });
+    store.addAudit({
+      operator,
+      target: 'karte',
+      action: 'print-route',
+      params: JSON.stringify({ stops: body.stops.length, distanceM: body.route.distanceM, source: body.sourceId }),
+      success: true,
+      message: missingTiles ? `${missingTiles} Kacheln fehlten` : '',
+    });
+    notify(['audit']);
+    const name = `Route_${formatDtg(new Date())}.pdf`;
     return reply
       .header('content-type', 'application/pdf')
       .header('content-disposition', `attachment; filename="${name.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`)
