@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as openpgp from 'openpgp';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { MAIL_SIGNATURE_HEADER, mailSignaturePayload, type MailAccountStatus, type MailList, type MailMessage, type MailRecipientKey } from '@elvis/shared';
+import { MAIL_SIGNATURE_HEADER, mailSignaturePayload, type Incident, type MailAccountStatus, type MailList, type MailMessage, type MailRecipientKey, type ForceUnit, type Message, type Role, type Unit } from '@elvis/shared';
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
 import type { MailFetch } from '../services/mail.js';
@@ -87,7 +87,7 @@ let admin = '';
 let relay: FakeRelay;
 let wkd: Map<string, Uint8Array>;
 
-type Method = 'GET' | 'POST' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 async function req<T = unknown>(method: Method, url: string, payload?: unknown) {
   const res = await app.server.inject({ method, url, payload: payload as object, headers: { cookie: admin } });
   return { status: res.statusCode, body: (res.body ? res.json() : undefined) as T };
@@ -252,5 +252,61 @@ describe('E-Mail', () => {
     relay.mailbox!.status = 'active';
     await app.mail.poll();
     expect((await req<MailAccountStatus>('GET', '/api/system/mail')).body.state).toBe('active');
+  });
+
+  it('erfasst eine Mail als Eingangsmeldung und merkt sich die Absenderadresse bei der Kraft', async () => {
+    await activate();
+    await relay.deliver(`From: THW <OV@thw.example>\r\nTo: ${ADDRESS}\r\nSubject: Pumpen\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nZwei Pumpen ab 16 Uhr.\r\n`);
+    await app.mail.poll();
+    const [mail] = (await req<MailList>('GET', '/api/mail/messages')).body.items;
+    const funk = (await req<Role>('POST', '/api/system/roles', { name: 'Fernmelder' })).body;
+    const lage = (await req<Role>('POST', '/api/system/roles', { name: 'Lage' })).body;
+    await req('PUT', '/api/system/messages', { radioRoleIds: [funk.id], dispatcherRoleIds: [] });
+    await req('PUT', '/api/auth/role', { roleIds: [funk.id] });
+    const inc = (await req<Incident>('POST', '/api/incidents', { title: 'Hochwasser' })).body;
+    const unit = (await req<Unit>('POST', `/api/incidents/${inc.id}/units`, { name: 'THW OV' })).body;
+    const incoming = (sender: object, mailId: number) =>
+      req<Message>('POST', `/api/incidents/${inc.id}/messages`, { direction: 'in', sender, recipientRoleId: lage.id, body: 'Zwei Pumpen ab 16 Uhr.', mailId });
+
+    expect((await incoming({ unitId: unit.id, text: 'THW OV' }, 9999)).status).toBe(404);
+    // Freitext: keine Kraft, nichts zu merken
+    expect((await incoming({ text: 'THW OV' }, mail!.id)).status).toBe(201);
+    expect((await req<Unit>('GET', `/api/units/${unit.id}`)).body.email).toBe('');
+
+    const m = await incoming({ unitId: unit.id, text: 'THW OV' }, mail!.id);
+    expect(m.body).toMatchObject({ direction: 'in', senderUnitId: unit.id, recipient: 'Lage' });
+    expect((await req<Unit>('GET', `/api/units/${unit.id}`)).body.email).toBe('ov@thw.example');
+  });
+
+  it('merkt sich die Adresse auch bei Systemeinheiten außerhalb des Einsatzes (Leitstelle) und gibt sie bei der Übernahme mit', async () => {
+    await activate();
+    await relay.deliver(`From: Leitstelle <leitstelle@lk.example>\r\nTo: ${ADDRESS}\r\nSubject: Lage\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nBitte Lagemeldung.\r\n`);
+    await app.mail.poll();
+    const [mail] = (await req<MailList>('GET', '/api/mail/messages')).body.items;
+    const funk = (await req<Role>('POST', '/api/system/roles', { name: 'Fernmelder' })).body;
+    const lage = (await req<Role>('POST', '/api/system/roles', { name: 'Lage' })).body;
+    await req('PUT', '/api/system/messages', { radioRoleIds: [funk.id], dispatcherRoleIds: [] });
+    await req('PUT', '/api/auth/role', { roleIds: [funk.id] });
+    const leitstelle = (await req<ForceUnit>('POST', '/api/system/forces', { name: 'Leitstelle', notes: 'RLS' })).body;
+    const inc = (await req<Incident>('POST', '/api/incidents', { title: 'Hochwasser' })).body;
+
+    const m = await req<Message>('POST', `/api/incidents/${inc.id}/messages`, {
+      direction: 'in',
+      sender: { forceUnitId: leitstelle.id, text: 'Leitstelle' },
+      recipientRoleId: lage.id,
+      body: 'Bitte Lagemeldung.',
+      mailId: mail!.id,
+    });
+    expect(m.body).toMatchObject({ senderUnitId: null, senderForceUnitId: leitstelle.id, sender: 'Leitstelle' });
+    const forces = async () => (await req<ForceUnit[]>('GET', '/api/forces')).body;
+    expect((await forces())[0]).toMatchObject({ name: 'Leitstelle', email: 'leitstelle@lk.example' });
+
+    // Bearbeiten ohne Adresse (z. B. Import) lässt sie stehen
+    await req('PUT', `/api/system/forces/${leitstelle.id}`, { name: 'Leitstelle', notes: 'RLS Diepholz' });
+    expect((await forces())[0]).toMatchObject({ notes: 'RLS Diepholz', email: 'leitstelle@lk.example' });
+
+    // Übernahme in den Einsatz: die Kopie kennt die Adresse
+    const unit = (await req<Unit>('POST', `/api/incidents/${inc.id}/units/deploy`, { tree: { forceUnitId: leitstelle.id, children: [] } })).body;
+    expect(unit.email).toBe('leitstelle@lk.example');
   });
 });

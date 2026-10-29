@@ -79,6 +79,7 @@ export const UNIT_ROLE_SUGGESTIONS = [
 
 const text = (max: number) => z.string().trim().max(max);
 const id = z.number().int().positive();
+const email = z.union([z.literal(''), z.string().trim().toLowerCase().email('Ungültige E-Mail-Adresse').max(254)]);
 const status = z.enum(UNIT_STATUSES);
 
 // --- Kräfteverwaltung (Systemeinheiten) ---
@@ -95,6 +96,8 @@ export interface ForceUnit {
   callsign: string;
   organization: string;
   notes: string;
+  /** E-Mail-Adresse (z. B. Leitstelle, aus einer eingegangenen Mail gemerkt); geht bei der Übernahme in den Einsatz mit */
+  email: string;
   sign: TacticalSign;
   /** Eigene Stärke (ohne Untereinheiten) */
   strength: Strength;
@@ -109,6 +112,8 @@ export const forceUnitInputSchema = z.object({
   callsign: text(100).default(''),
   organization: text(100).default(''),
   notes: text(1000).default(''),
+  /** Fehlt sie (z. B. beim Import), bleibt die gespeicherte Adresse */
+  email: email.optional(),
   sign: tacticalSignSchema.default(DEFAULT_UNIT_SIGN),
   strength: strengthSchema.default(ZERO_STRENGTH),
   members: z.array(z.object({ unitId: id, role: text(60).default('') })).max(200).default([]),
@@ -150,6 +155,8 @@ export interface Unit {
   callsign: string;
   organization: string;
   notes: string;
+  /** E-Mail-Adresse der Kraft (z. B. aus einer eingegangenen Mail übernommen); leer = keine */
+  email: string;
   sign: TacticalSign;
   /** Eigene Stärke (ohne Untereinheiten) */
   strength: Strength;
@@ -179,6 +186,7 @@ export const newUnitSchema = z.object({
   callsign: text(100).default(''),
   organization: text(100).default(''),
   notes: text(1000).default(''),
+  email: email.default(''),
   sign: tacticalSignSchema.default(DEFAULT_UNIT_SIGN),
   strength: strengthSchema.default(ZERO_STRENGTH),
   section: text(100).default(''),
@@ -194,6 +202,7 @@ export const unitPatchSchema = z
     callsign: text(100).optional(),
     organization: text(100).optional(),
     notes: text(1000).optional(),
+    email: email.optional(),
     sign: tacticalSignSchema.optional(),
     strength: strengthSchema.optional(),
     section: text(100).optional(),
