@@ -7,6 +7,7 @@ import {
   Cctv,
   CloudSun,
   Database,
+  DatabaseBackup,
   FolderTree,
   Laptop,
   ListTodo,
@@ -34,6 +35,7 @@ import { SettingsGroup, SettingsSection } from '../components/SettingsSection';
 import { Loading, PageHeader } from '../components/ui';
 import { AppRelayCard } from './system/AppRelayCard';
 import { MailCard } from './system/MailCard';
+import { BackupCard } from './system/BackupCard';
 import { BluetoothCard } from './system/BluetoothCard';
 import { CamerasCard } from './system/CamerasCard';
 import { DisplaysCard } from './system/DisplaysCard';
@@ -137,6 +139,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="mail" title="E-Mail" icon={<AtSign {...ICON} />} summary="Verschlüsseltes Postfach des ELW (…@einsatzleitwagen.app)">
             <MailCard />
+          </SettingsSection>
+          <SettingsSection id="backup" title="Backup" icon={<DatabaseBackup {...ICON} />} summary="Verschlüsselte Sicherung, Wiederherstellen bei Neuinstallation">
+            <BackupCard />
           </SettingsSection>
         </SettingsGroup>
 

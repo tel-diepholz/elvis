@@ -13,6 +13,9 @@ export function accessLevel(method: string, rawUrl: string): AccessLevel {
   // Anmeldung selbst und Ersteinrichtung
   if (url.startsWith('/api/auth/')) return url === '/api/auth/pin' || url === '/api/auth/role' ? 'user' : 'public';
 
+  // Wiederherstellen aus einem Backup: nur bei der Ersteinrichtung (prüft der Dienst)
+  if (url.startsWith('/api/restore/')) return 'public';
+
   // Vom Docker-Host per curl abgerufen, über den Einmal-Token geschützt
   if (url.startsWith('/api/docker/setup/')) return 'public';
   if (url.startsWith('/api/docker/') || url.startsWith('/api/addons') || url.startsWith('/api/system/')) return 'admin';
