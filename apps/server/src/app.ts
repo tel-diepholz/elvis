@@ -70,6 +70,8 @@ import { BluetoothService } from './services/bluetooth.js';
 import { MonitoringService } from './services/monitoring.js';
 import type { ProbeDeps } from './services/monitoring-probes.js';
 import { documentRoutes } from './routes/documents.js';
+import { georefRoutes } from './routes/georef.js';
+import { GeorefService } from './services/georef.js';
 import { wopiRoutes } from './routes/wopi.js';
 import { DocumentService } from './services/documents.js';
 import { OfficeService, type DiscoveryFetch } from './services/office.js';
@@ -267,6 +269,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     addons.attachWorkstations(workstations);
     docker = { hosts, repos, addons };
   }
+  const georef = new GeorefService({ dataDir: config.dataDir, documents, incidents, hosts: docker?.hosts ?? null, notify: (t) => hub.invalidate(t) });
 
   await server.register(fastifyCookie);
   await server.register(fastifyWebsocket);
@@ -318,6 +321,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     deviceRoutes(api, devices, store, (t) => hub.invalidate(t));
     incidentRoutes(api, { incidents, forces, store, notify: (t) => hub.invalidate(t) });
     documentRoutes(api, { documents, templates, office, store, notify: (t) => hub.invalidate(t) });
+    georefRoutes(api, georef);
     wopiRoutes(api, { office, documents, templates });
     printingRoutes(api, { printing, office, store, notify: (t) => hub.invalidate(t), download: opts.officeDownload });
     scanningRoutes(api, { scanning, store, notify: (t) => hub.invalidate(t) });
@@ -328,7 +332,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     wifiRoutes(api, { wifi, store, notify: (t) => hub.invalidate(t) });
     monitoringRoutes(api, { monitoring, store, notify: (t) => hub.invalidate(t) });
     bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
-    mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder, overpass, router, radar);
+    mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder, overpass, router, radar, (id, z, x, y) => georef.tile(id, z, x, y));
     weatherRoutes(api, weather, weatherWatch, {
       settings,
       store,

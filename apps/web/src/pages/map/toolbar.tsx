@@ -9,11 +9,12 @@ import { WindCompass } from '../../components/WindCompass';
 import type { TrafficLayers } from '../../components/map/traffic';
 import type { ShapeKind } from './draw';
 
-/** Knopf mit ausklappbarem Menü; Klick daneben oder Esc schließt */
-function Dropdown({
+/** Knopf mit ausklappbarem Menü; Klick daneben oder Esc schließt (auch in den Dokumenten: „Tools“) */
+export function Dropdown({
   button,
   label,
   align = 'left',
+  small,
   disabled,
   title,
   onMenuHeight,
@@ -22,6 +23,7 @@ function Dropdown({
   button: ReactNode;
   label: string;
   align?: 'left' | 'right';
+  small?: boolean;
   disabled?: boolean;
   title?: string;
   /** Höhe des offenen Menüs (0 = geschlossen), z. B. um darunterliegende Overlays zu verschieben */
@@ -42,7 +44,7 @@ function Dropdown({
   }, [open]);
   return (
     <div className="map-dropdown" ref={box}>
-      <button type="button" className={`btn ${open ? 'active' : ''}`} aria-haspopup="menu" aria-expanded={open} aria-label={label} disabled={disabled} title={title} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={`btn ${small ? 'btn-sm' : ''} ${open ? 'active' : ''}`} aria-haspopup="menu" aria-expanded={open} aria-label={label} disabled={disabled} title={title} onClick={() => setOpen((o) => !o)}>
         {button}
       </button>
       {open && (

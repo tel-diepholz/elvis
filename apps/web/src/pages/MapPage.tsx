@@ -283,7 +283,7 @@ export function MapPage() {
     if (target === 'vehicle') return vPos && fly(vPos, { zoom: 16 });
     if ('status' in target) return target.lat !== null && target.lon !== null && fly([target.lat, target.lon], { zoom: 17 });
     const b = objectBounds(target);
-    if (target.kind === 'area' || target.kind === 'line') fly(b.getCenter(), { bounds: b, zoom: 16 });
+    if (target.kind === 'area' || target.kind === 'line' || target.kind === 'overlay') fly(b.getCenter(), { bounds: b, zoom: target.kind === 'overlay' ? 18 : 16 });
     else fly([target.lat, target.lon], { zoom: target.kind === 'point' ? 17 : isTracked(target.kind) ? 12 : 14 });
   };
 

@@ -10,6 +10,7 @@ import {
   printFrame,
   project,
   type MapPrintRequest,
+  type PrintOverlay,
   type TacticalGeometry,
   type TacticalSign,
   type VehicleInfo,
@@ -48,7 +49,11 @@ export interface PrintContext {
   vehicleSign: TacticalSign;
   operator: string;
   now?: Date;
+  /** Kacheln der Overlays (georeferenzierte PDF-Seiten) */
+  overlayTile?: OverlayTileLoader;
 }
+
+export type OverlayTileLoader = (id: number, z: number, x: number, y: number) => Promise<Buffer | null>;
 
 /** Zeichnet ein taktisches Zeichen als Vektorgrafik; (x, y) ist der Bezugspunkt (Mitte des Zeichenkörpers). */
 export function drawTacticalSign(doc: PDFKit.PDFDocument, g: TacticalGeometry, x: number, y: number, scale: number): void {
@@ -115,6 +120,7 @@ export async function renderMapPdf(req: MapPrintRequest, tiles: TileService, ctx
   doc.save();
   doc.rect(fx, fy, fw, fh).clip();
   const missingTiles = await drawTiles(doc, tiles, source.id, req.zoom, frame.origin, frame.widthPx, frame.heightPx, fx, fy, k);
+  if (ctx.overlayTile) for (const o of req.overlays ?? []) await drawOverlay(doc, o, ctx.overlayTile, req.zoom, frame.origin, frame.widthPx, frame.heightPx, fx, fy, k);
 
   for (const poly of req.polygons) {
     if (poly.points.length < 3) continue;
@@ -314,6 +320,44 @@ export async function drawTiles(
     doc.rect(x, y, size, size).fill('#e0e0e0');
   }
   return missing;
+}
+
+/**
+ * Overlay über der Grundkarte (Parameter wie drawTiles). Außerhalb seiner Zoomstufen werden die Kacheln der nächsten
+ * vorhandenen Stufe vergrößert bzw. verkleinert; fehlende Kacheln bleiben einfach leer.
+ */
+async function drawOverlay(
+  doc: PDFKit.PDFDocument,
+  o: PrintOverlay,
+  load: OverlayTileLoader,
+  zoom: number,
+  origin: { x: number; y: number },
+  widthPx: number,
+  heightPx: number,
+  x0: number,
+  y0: number,
+  k: number,
+): Promise<void> {
+  const z = Math.max(o.minZoom, Math.min(o.maxZoom, zoom));
+  const scale = 2 ** (zoom - z); // Kartenpixel je Overlay-Pixel
+  const ox = origin.x / scale;
+  const oy = origin.y / scale;
+  const jobs: Promise<{ tx: number; ty: number; data: Buffer | null }>[] = [];
+  for (let ty = Math.max(0, Math.floor(oy / TILE_SIZE)); ty <= Math.min(2 ** z - 1, Math.floor((oy + heightPx / scale - 1) / TILE_SIZE)); ty++) {
+    for (let tx = Math.max(0, Math.floor(ox / TILE_SIZE)); tx <= Math.min(2 ** z - 1, Math.floor((ox + widthPx / scale - 1) / TILE_SIZE)); tx++) jobs.push(load(o.id, z, tx, ty).then((data) => ({ tx, ty, data })));
+  }
+  const size = TILE_SIZE * scale * k;
+  doc.save();
+  doc.opacity(o.opacity);
+  for (const { tx, ty, data } of await Promise.all(jobs)) {
+    if (!data) continue;
+    try {
+      doc.image(data, x0 + (tx * TILE_SIZE - ox) * scale * k, y0 + (ty * TILE_SIZE - oy) * scale * k, { width: size, height: size });
+    } catch {
+      /* defekte Kachel auslassen */
+    }
+  }
+  doc.restore();
 }
 
 /** Schrift der Lagezeichen (Roboto Slab Bold) einmal je Dokument anmelden */

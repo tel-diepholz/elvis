@@ -2003,6 +2003,10 @@ input[type='checkbox'] {
   background: var(--warn-bg);
   color: var(--warn);
 }
+.map-object-icon.overlay {
+  background: var(--bg-input);
+  color: var(--text);
+}
 .map-object-icon.unit {
   width: auto;
   min-width: 28px;
@@ -3207,6 +3211,192 @@ select.unit-status.has-children {
 .docs-hint {
   font-size: 12px;
   margin: 12px 0 0;
+}
+
+/* ---------- PDF in Karte integrieren (Dokumente → Tools) ---------- */
+.georef-docs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.georef-docs .btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+.georef-progress {
+  display: grid;
+  gap: 8px;
+  padding: 24px 0;
+}
+.georef-progress progress {
+  width: 100%;
+}
+.georef-pages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.georef-page {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.georef-page:hover {
+  border-color: var(--info);
+}
+.georef-page img {
+  max-width: 100%;
+  max-height: 200px;
+  background: #fff;
+}
+.georef-hint {
+  margin: 0 0 8px;
+}
+.georef-maps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.georef-col {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.georef-col-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+}
+.georef-col-head .map-search {
+  flex: 1;
+  width: auto;
+}
+/* Trefferliste über den Kartenebenen von Leaflet */
+.georef-col-head .map-search-results {
+  z-index: 1100;
+}
+.georef-map.tool-cut .leaflet-container,
+.georef-map.tool-building .leaflet-container {
+  cursor: cell;
+}
+.georef-map.tool-pick .leaflet-container {
+  cursor: copy;
+}
+.georef-map.tool-erase .leaflet-container {
+  cursor: cell;
+}
+/* Einstellungen des gewählten Werkzeugs (Gebäude, Radierer, Rechteck) */
+.georef-tool-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13px;
+}
+.georef-tool-options .btn.active {
+  border-color: var(--info);
+  color: var(--info);
+}
+.georef-tool-options input[type='color'] {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+}
+.georef-check,
+.georef-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.georef-range input {
+  width: 110px;
+}
+.georef-vertex {
+  border: 2px solid #fff;
+  border-radius: 2px;
+  background: #1e88e5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.georef-map {
+  height: min(52dvh, 560px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.georef-map .leaflet-container {
+  cursor: crosshair;
+}
+.georef-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+  margin-top: 12px;
+}
+.georef-form {
+  display: grid;
+  gap: 10px;
+}
+.georef-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+/* PDF-Seiten sind oft transparent: im Editor wie Papier zeigen */
+.georef-paper {
+  background: #fff;
+}
+.georef-gcps td,
+.georef-gcps th {
+  padding: 4px 8px;
+}
+.georef-gcp span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #e53935;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+.georef-gcp.pending span {
+  background: #e3a008;
+}
+.georef-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  max-width: none;
+}
+.georef-done {
+  display: grid;
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .georef-maps,
+  .georef-side {
+    grid-template-columns: 1fr;
+  }
+  .georef-map {
+    height: 42dvh;
+  }
 }
 
 /* Ordnerbaum */

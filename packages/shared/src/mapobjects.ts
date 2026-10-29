@@ -1,6 +1,6 @@
 /**
  * Kartenobjekte eines Einsatzes: übernommene Such- und Overpass-Treffer (Punkt, Fläche mit Umriss, Linie), Ausbreitungen
- * (Gauß-Fahne, Sektor 60°) und verfolgte Flugzeuge bzw. Schiffe (Position kommt live vom Server). Sie gehören zum Einsatz, alle Arbeitsplätze und Bildschirme sehen sie, und sie
+ * (Gauß-Fahne, Sektor 60°), verfolgte Flugzeuge bzw. Schiffe (Position kommt live vom Server) und Overlays (georeferenzierte PDF-Seiten). Sie gehören zum Einsatz, alle Arbeitsplätze und Bildschirme sehen sie, und sie
  * bleiben im Einsatzarchiv. Der Einsatzort selbst ist Teil des Einsatzes (lat/lon) und kein Kartenobjekt.
  */
 import { z } from 'zod';
@@ -8,11 +8,12 @@ import type { KlugManierClass, Terrain } from './dispersion';
 import type { GeoOutline } from './geocode';
 import { tacticalSignSchema, type TacticalSign } from './tactical';
 import type { Unit } from './forces';
+import type { Gcp, GeorefBackground, GeorefCut, GeorefPoint } from './georef';
 
 /** Verlauf einer Linie (Straße, Gewässer, Leitung), GeoJSON mit Koordinaten [Länge, Breite] */
 export type GeoPath = { type: 'LineString'; coordinates: number[][] } | { type: 'MultiLineString'; coordinates: number[][][] };
 
-export type MapObjectKind = 'point' | 'sign' | 'area' | 'line' | 'gauss' | 'sector' | 'aircraft' | 'ship';
+export type MapObjectKind = 'point' | 'sign' | 'area' | 'line' | 'gauss' | 'sector' | 'aircraft' | 'ship' | 'overlay';
 
 export const MAP_OBJECT_LABELS: Record<MapObjectKind, string> = {
   point: 'Punkt',
@@ -23,6 +24,7 @@ export const MAP_OBJECT_LABELS: Record<MapObjectKind, string> = {
   sector: 'Sektor 60°',
   aircraft: 'Flugzeug',
   ship: 'Schiff',
+  overlay: 'Overlay',
 };
 
 /** Beschriftung eines Kartenobjekts: keine, nur Name oder Name mit Angaben (Koordinate, Fläche, Radius, Länge) */
@@ -83,7 +85,7 @@ export const MAP_OBJECT_COLORS = [
 ] as const;
 
 /** Vorgabe je Objektart, solange keine eigene Farbe gewählt ist */
-export const DEFAULT_OBJECT_COLORS: Record<MapObjectKind, string> = { point: '#4ea1ff', sign: '#e53935', area: '#4ea1ff', line: '#4ea1ff', gauss: '#e53935', sector: '#e3a008', aircraft: '#f57c00', ship: '#00acc1' };
+export const DEFAULT_OBJECT_COLORS: Record<MapObjectKind, string> = { point: '#4ea1ff', sign: '#e53935', area: '#4ea1ff', line: '#4ea1ff', gauss: '#e53935', sector: '#e3a008', aircraft: '#f57c00', ship: '#00acc1', overlay: '#455a64' };
 
 export const COLORABLE_KINDS: MapObjectKind[] = ['point', 'area', 'line', 'sector', 'aircraft', 'ship'];
 
@@ -104,6 +106,33 @@ export interface MapObjectData {
   sector: { sectorM: number };
   aircraft: TrackedData;
   ship: TrackedData;
+  overlay: OverlayData;
+}
+
+/**
+ * Georeferenzierte PDF-Seite als Kachelebene (Dokumente → Tools → „PDF in Karte integrieren“). Die Kacheln erzeugt der
+ * Server (GDAL im Docker), deshalb legt nur er Overlays an; ändern lässt sich die Deckkraft.
+ */
+export interface OverlayData {
+  /** Quelldokument (kann inzwischen gelöscht sein) */
+  documentId: number;
+  filename: string;
+  page: number;
+  /** [[Süd, West], [Nord, Ost]] */
+  bounds: [[number, number], [number, number]];
+  minZoom: number;
+  maxZoom: number;
+  opacity: number;
+  gcps: Gcp[];
+  /** Mittlerer Restfehler der Passpunkte in Metern */
+  rmsM: number;
+  /** Weggeschnittene Bereiche der Seite (fehlt bei älteren Overlays) */
+  cuts?: GeorefCut[];
+  /** Gebäudeumriss und entfernter Hintergrund außerhalb (fehlt bei älteren Overlays) */
+  outline?: GeorefPoint[] | null;
+  background?: GeorefBackground | null;
+  /** Anzahl der Radierer-Striche */
+  erased?: number;
 }
 
 interface MapObjectBase<K extends MapObjectKind> {
@@ -170,6 +199,8 @@ const gauss = z.object({
 });
 const sector = z.object({ sectorM: z.number().int().min(50).max(20_000) });
 const detail = z.string().max(300).default('');
+/** Overlays: nur die Deckkraft ist änderbar (strict, damit die Einstellungen anderer Arten nicht greifen) */
+const overlaySettings = z.object({ opacity: z.number().min(0.1).max(1) }).strict();
 const tracked = (id: z.ZodString) =>
   z
     .object({ id, detail, category: z.string().max(4).nullable().optional(), aircraftType: z.string().max(8).nullable().optional() })
@@ -185,9 +216,9 @@ export const newMapObjectSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('aircraft'), name, lat, lon, data: tracked(z.string().regex(/^~?[0-9a-f]{6}$/, 'ICAO-Adresse ungültig')) }),
   z.object({ kind: z.literal('ship'), name, lat, lon, data: tracked(z.string().regex(/^\d{9}$/, 'MMSI ungültig')) }),
 ]);
-/** Neues Objekt (Ausbreitungen ohne Daten bekommen die Vorgaben; verfolgte Ziele brauchen nur Kennung und Beschreibung; Farbe bei Punkten, Flächen und Linien) */
+/** Neues Objekt (Ausbreitungen ohne Daten bekommen die Vorgaben; verfolgte Ziele brauchen nur Kennung und Beschreibung; Farbe bei Punkten, Flächen und Linien; Overlays legt nur der Server an) */
 export type NewMapObject = {
-  [K in MapObjectKind]: {
+  [K in Exclude<MapObjectKind, 'overlay'>]: {
     kind: K;
     name: string;
     lat: number;
@@ -195,7 +226,7 @@ export type NewMapObject = {
     color?: string | null;
     data: K extends 'gauss' | 'sector' ? MapObjectData[K] | undefined : K extends TrackedKind ? { id: string; detail?: string; category?: string | null; aircraftType?: string | null } : MapObjectData[K];
   };
-}[MapObjectKind];
+}[Exclude<MapObjectKind, 'overlay'>];
 
 /**
  * Änderungen: Name, Sichtbarkeit, Beschriftung, Lage, Farbe, Symbol (Punkte), Lagezeichen (Zeichen), Form (Umriss einer Fläche, Verlauf einer
@@ -216,6 +247,6 @@ export const mapObjectPatchSchema = z.object({
   outline: outline.optional(),
   path: geoPath.optional(),
   detail: z.string().max(300).optional(),
-  data: z.union([gauss.partial(), sector.partial()]).optional(),
+  data: z.union([overlaySettings, gauss.partial(), sector.partial()]).optional(),
 });
 export type MapObjectPatch = z.input<typeof mapObjectPatchSchema>;

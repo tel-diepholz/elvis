@@ -75,6 +75,7 @@ function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: D
   const markers: MapPrintRequest['markers'] = [];
   const polygons: MapPrintRequest['polygons'] = [];
   const lines: NonNullable<MapPrintRequest['lines']> = [];
+  const overlays: NonNullable<MapPrintRequest['overlays']> = [];
   const legend: MapPrintRequest['legend'] = [];
   const notes: string[] = [];
   for (const o of objects.filter((x) => x.visible)) {
@@ -89,7 +90,7 @@ function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: D
       markers.push(o.data.tactical ? { kind: 'unit', lat: o.lat, lon: o.lon, sign: o.data.tactical, label } : { kind: 'sign', lat: o.lat, lon: o.lon, symbol: o.data.sign, label });
     }
     // Flächen, Linien und Ausbreitungen: Beschriftung als Text an derselben Stelle wie auf der Karte
-    if (o.label !== 'off' && o.kind !== 'point' && o.kind !== 'sign' && !isTracked(o.kind)) {
+    if (o.label !== 'off' && o.kind !== 'point' && o.kind !== 'sign' && o.kind !== 'overlay' && !isTracked(o.kind)) {
       const [lat, lon] = labelPlace(o).pos;
       markers.push({ kind: 'label', lat, lon, label: printLabel(o, o.name) });
     }
@@ -97,6 +98,10 @@ function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: D
       const { last, lostSince } = o.data;
       const extra = lostSince ? `kein Signal seit ${fmtTime(lostSince)}` : last ? [o.kind === 'aircraft' ? formatAltitude(last.altFt, last.onGround) : null, `Stand ${fmtTime(last.at)}`].filter(Boolean).join(', ') : null;
       markers.push({ kind: 'point', lat: o.lat, lon: o.lon, label: extra ? `${o.name} (${extra})` : o.name, color });
+    }
+    if (o.kind === 'overlay') {
+      overlays.push({ id: o.id, opacity: o.data.opacity, minZoom: o.data.minZoom, maxZoom: o.data.maxZoom });
+      notes.push(`${o.name}: Seite ${o.data.page} aus „${o.data.filename}“, georeferenziert mit ${o.data.gcps.length} Passpunkten`);
     }
     if (o.kind === 'area') {
       const outers = o.data.outline.type === 'Polygon' ? [o.data.outline.coordinates[0]!] : o.data.outline.coordinates.map((p) => p[0]!);
@@ -128,7 +133,7 @@ function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: D
       );
     }
   }
-  return { markers, polygons, lines, legend, notes };
+  return { markers, polygons, lines, overlays, legend, notes };
 }
 
 /** Hält den Druckmittelpunkt in der Mitte der Vorschaukarte – der Rahmen bleibt stehen, die Karte wird verschoben. */
@@ -233,6 +238,7 @@ export function PrintDialog(props: PrintDialogProps) {
 
     const polygons: MapPrintRequest['polygons'] = [];
     const lines: NonNullable<MapPrintRequest['lines']> = [];
+    const overlays: NonNullable<MapPrintRequest['overlays']> = [];
     const legend: MapPrintRequest['legend'] = [];
     const notes: string[] = [];
     if (withUnits) for (const u of mapUnits) markers.push({ kind: 'unit', lat: u.lat!, lon: u.lon!, label: u.name, sign: u.sign });
@@ -241,6 +247,7 @@ export function PrintDialog(props: PrintDialogProps) {
       markers.push(...o.markers);
       polygons.push(...o.polygons);
       lines.push(...o.lines);
+      overlays.push(...o.overlays);
       legend.push(...o.legend);
       notes.push(...o.notes);
     }
@@ -260,6 +267,7 @@ export function PrintDialog(props: PrintDialogProps) {
       markers,
       polygons,
       lines,
+      overlays,
       legend,
       notes,
     };
