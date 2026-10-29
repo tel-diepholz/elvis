@@ -6552,12 +6552,6 @@ fieldset.field {
 }
 
 /* E-Mail */
-.mail-layout {
-  display: grid;
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-}
 .mail-list-card .card-body {
   display: flex;
   flex-direction: column;
@@ -6569,13 +6563,14 @@ fieldset.field {
   padding: 0;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 260px);
-  overflow-y: auto;
 }
+/* Eine Zeile je Mail: Absender | Betreff | Vorschau | Datum; schmal untereinander */
 .mail-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: minmax(140px, 240px) minmax(0, auto) minmax(0, 1fr) auto;
+  grid-template-areas: 'from subject snippet date';
+  align-items: baseline;
+  gap: 2px 16px;
   width: 100%;
   text-align: left;
   padding: 10px 8px;
@@ -6596,29 +6591,48 @@ fieldset.field {
 .mail-item.unread .mail-item-subject {
   font-weight: 650;
 }
-.mail-item-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
 .mail-item-from,
-.mail-item-subject,
+.mail-item-subject > span,
 .mail-item-snippet {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.mail-item-from {
+  grid-area: from;
+}
 .mail-item-date {
-  flex: none;
+  grid-area: date;
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 .mail-item-subject {
+  grid-area: subject;
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+}
+.mail-item-subject svg {
+  flex: none;
 }
 .mail-item-snippet {
+  grid-area: snippet;
   font-size: 0.85rem;
+}
+/* Lesefenster: Kopfzeilen links, Aktionen rechts daneben */
+.mail-reader-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+}
+.mail-reader-head .kv dd {
+  text-align: left;
+}
+.mail-reader-actions {
+  margin-top: -6px;
 }
 .mail-badges {
   display: flex;
@@ -6658,6 +6672,17 @@ fieldset.field {
   align-items: center;
   gap: 4px;
 }
+/* Neue Mail: Cc/Bcc-Knöpfe rechts auf Höhe der Beschriftung „An“ */
+.mail-to {
+  position: relative;
+}
+.mail-to-toggles {
+  position: absolute;
+  top: -8px;
+  right: 0;
+  display: flex;
+  gap: 2px;
+}
 .mail-warning {
   border: 1px solid var(--warn);
   background: var(--warn-bg);
@@ -6677,11 +6702,9 @@ fieldset.field {
   min-width: 0;
 }
 @media (max-width: 900px) {
-  .mail-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .mail-list {
-    max-height: 45vh;
+  .mail-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'from date' 'subject subject' 'snippet snippet';
   }
 }
 

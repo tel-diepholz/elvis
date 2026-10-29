@@ -94,6 +94,7 @@ export function UnitForm({
     organization: initial?.organization ?? '',
     section: initial?.section ?? '',
     notes: initial?.notes ?? '',
+    email: initial?.email ?? '',
     role: initial?.role ?? '',
   });
   const [parentId, setParentId] = useState<number | null>(initial ? initial.parentId : defaultParentId);
@@ -119,6 +120,9 @@ export function UnitForm({
         </Field>
         <Field label="Organisation">
           <input value={f.organization} onChange={set('organization')} placeholder="FF Musterstadt" maxLength={100} />
+        </Field>
+        <Field label="E-Mail" hint="Für Ausgangsmeldungen per E-Mail">
+          <input type="email" value={f.email} onChange={set('email')} placeholder="wird aus eingehenden Mails übernommen" maxLength={254} />
         </Field>
         <Field label="Einsatzabschnitt">
           <SectionInput value={f.section} onChange={(section) => setF((x) => ({ ...x, section }))} sections={sections} />

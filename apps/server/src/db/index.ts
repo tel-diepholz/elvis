@@ -834,6 +834,15 @@ const MIGRATIONS: Migration[] = [
   CREATE INDEX contact_category_members_category ON contact_category_members(category_id);
   ALTER TABLE personnel ADD COLUMN email TEXT NOT NULL DEFAULT '';
   `,
+  // E-Mail-Adresse der Kraft im Einsatz (aus einer eingegangenen Mail gemerkt), für Ausgangsmeldungen per Mail
+  `ALTER TABLE units ADD COLUMN email TEXT NOT NULL DEFAULT ''`,
+  // Systemeinheiten ohne Einsatzteilnahme (z. B. Leitstelle) als Gegenstelle von Meldungen, mit gemerkter E-Mail-Adresse.
+  // Ohne Fremdschlüssel: gelöschte Systemeinheiten bleiben als Name (sender_text/recipient_text) stehen
+  `
+  ALTER TABLE force_units ADD COLUMN email TEXT NOT NULL DEFAULT '';
+  ALTER TABLE messages ADD COLUMN sender_force_id INTEGER;
+  ALTER TABLE messages ADD COLUMN recipient_force_id INTEGER;
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

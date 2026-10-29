@@ -14,9 +14,10 @@ export const MESSAGE_REMIND_MINUTES = 2;
 
 export type MessageDirection = 'out' | 'in';
 
-/** Kraft aus dem Einsatz (unitId) oder Freitext; text ist immer der Anzeigename */
+/** Kraft aus dem Einsatz (unitId), Systemeinheit aus dem Katalog (forceUnitId, z. B. Leitstelle) oder Freitext; text ist immer der Anzeigename */
 export const messagePartySchema = z.object({
   unitId: z.number().int().positive().nullable().default(null),
+  forceUnitId: z.number().int().positive().nullable().default(null),
   text: z.string().trim().min(1, 'Angabe fehlt').max(MESSAGE_PARTY_MAX),
 });
 export type MessagePartyInput = z.input<typeof messagePartySchema>;
@@ -41,6 +42,8 @@ export const messageInputSchema = z.discriminatedUnion('direction', [
     /** Pflicht, solange kein Dispatcher angemeldet ist; sonst verteilt der Dispatcher */
     recipientRoleId: id.nullable().default(null),
     body,
+    /** Aus einer E-Mail im Posteingang erfasst: die Kraft bzw. Systemeinheit (sender) merkt sich die Absenderadresse */
+    mailId: id.nullable().default(null),
   }),
 ]);
 export type MessageInput = z.input<typeof messageInputSchema>;
@@ -73,10 +76,13 @@ export interface Message {
   body: string;
   senderRoleId: number | null;
   senderUnitId: number | null;
+  /** Systemeinheit aus dem Katalog, die nicht im Einsatz ist */
+  senderForceUnitId: number | null;
   /** Anzeigename: Rolle (Ausgang) bzw. Kraft/Freitext (Eingang) */
   sender: string;
   recipientRoleId: number | null;
   recipientUnitId: number | null;
+  recipientForceUnitId: number | null;
   /** Anzeigename; null = Eingang wartet auf Verteilung */
   recipient: string | null;
   claimedByUserId: number | null;

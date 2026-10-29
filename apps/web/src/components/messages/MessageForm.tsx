@@ -10,6 +10,12 @@ import { UnitSearchInput } from './UnitSearchInput';
 
 /** Vorbelegung, z. B. für die Antwort der Zielrolle auf eine Eingangsmeldung */
 export interface MessagePrefill {
+  /** Vorgabe: Ausgang; Eingang nur für Fernmelder (z. B. aus einer E-Mail) */
+  direction?: MessageDirection;
+  /** Absender einer Eingangsmeldung */
+  sender?: MessagePartyInput;
+  /** Eingang aus einer E-Mail: die Absenderadresse merkt sich die gewählte Kraft */
+  mail?: { id: number; from: string };
   senderRoleId?: number | null;
   recipient?: MessagePartyInput;
   replyToId?: number;
@@ -28,12 +34,12 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
   const { data: allRoles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.roles });
 
   // Fernmelder erfassen nur Eingangsmeldungen; Antworten der Zielrolle sind immer Ausgang
-  const direction: MessageDirection = !prefill && ctx?.radio ? 'in' : 'out';
+  const direction: MessageDirection = prefill?.direction ?? (!prefill && ctx?.radio ? 'in' : 'out');
   const [senderRoleId, setSenderRoleId] = useState<number | null>(() => {
     const wanted = prefill?.senderRoleId;
     return wanted && myRoles.some((r) => r.id === wanted) ? wanted : (myRoles[0]?.id ?? null);
   });
-  const [party, setParty] = useState<MessagePartyInput>(prefill?.recipient ?? { text: '', unitId: null });
+  const [party, setParty] = useState<MessagePartyInput>(prefill?.recipient ?? prefill?.sender ?? { text: '', unitId: null });
   const [recipientRoleId, setRecipientRoleId] = useState<number | null>(null);
   const [body, setBody] = useState(prefill?.body ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +49,7 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
 
   const input = (): MessageInput =>
     incoming
-      ? { direction: 'in', sender: party, recipientRoleId: dispatcherRoutes ? null : recipientRoleId, body }
+      ? { direction: 'in', sender: party, recipientRoleId: dispatcherRoutes ? null : recipientRoleId, body, mailId: prefill?.mail?.id ?? null }
       : { direction: 'out', senderRoleId: senderRoleId ?? 0, recipient: party, body, replyToId: prefill?.replyToId ?? null, requestId: prefill?.requestId ?? null };
 
   const submit = (e: FormEvent) => {
@@ -76,8 +82,15 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
 
       {incoming ? (
         <>
-          <Field label="Absender *" hint="Kraft aus der Kräfteverwaltung oder Freitext">
-            <UnitSearchInput incidentId={incidentId} value={party} onChange={setParty} placeholder="z. B. ELW 1" autoFocus />
+          <Field
+            label="Absender *"
+            hint={
+              prefill?.mail
+                ? `Kraft im Einsatz oder aus dem Katalog (z. B. Leitstelle) wählen – sie merkt sich ${prefill.mail.from}, Ausgangsmeldungen lassen sich dann per E-Mail senden`
+                : 'Kraft aus der Kräfteverwaltung oder Freitext'
+            }
+          >
+            <UnitSearchInput incidentId={incidentId} value={party} onChange={setParty} placeholder="z. B. ELW 1" autoFocus={party.unitId == null && party.forceUnitId == null} />
           </Field>
           <Field label="Empfänger *" hint={dispatcherRoutes ? 'Ein Dispatcher ist angemeldet und verteilt die Meldung' : undefined}>
             <select value={dispatcherRoutes ? '' : (recipientRoleId ?? '')} onChange={(e) => setRecipientRoleId(e.target.value ? Number(e.target.value) : null)} disabled={dispatcherRoutes}>
@@ -119,7 +132,7 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
         <span className="field-label">
           Meldung * ({body.length}/{MESSAGE_BODY_MAX})
         </span>
-        <MarkdownEditor value={body} onChange={setBody} maxLength={MESSAGE_BODY_MAX} placeholder={'Text der Meldung\n- Aufzählung mit „- “'} autoFocus={!!prefill} />
+        <MarkdownEditor value={body} onChange={setBody} maxLength={MESSAGE_BODY_MAX} placeholder={'Text der Meldung\n- Aufzählung mit „- “'} autoFocus={!!prefill && !prefill.mail} />
       </div>
 
       {!ctx?.radioConfigured && !incoming && <p className="hint tone-warn">Noch keine Fernmelder-Rolle eingestellt – niemand wird benachrichtigt (Einstellungen → Meldungen).</p>}

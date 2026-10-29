@@ -27,6 +27,7 @@ function ForceUnitForm({ initial, all, pending, onSubmit }: { initial?: ForceUni
     callsign: initial?.callsign ?? '',
     organization: initial?.organization ?? '',
     notes: initial?.notes ?? '',
+    email: initial?.email ?? '',
   });
   const [sign, setSign] = useState<TacticalSign>(initial?.sign ?? DEFAULT_UNIT_SIGN);
   const [strength, setStrength] = useState(initial?.strength ?? ZERO_STRENGTH);
@@ -71,6 +72,9 @@ function ForceUnitForm({ initial, all, pending, onSubmit }: { initial?: ForceUni
         </Field>
         <Field label="Bemerkung">
           <input value={f.notes} onChange={set('notes')} maxLength={1000} />
+        </Field>
+        <Field label="E-Mail" hint="Für Meldungen per E-Mail, geht bei der Übernahme in den Einsatz mit">
+          <input type="email" value={f.email} onChange={set('email')} placeholder="wird aus eingehenden Mails übernommen" maxLength={254} />
         </Field>
       </div>
       <StrengthFields value={strength} onChange={setStrength} legend="Eigene Stärke (ohne Untereinheiten)" />

@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AtSign, Download, KeyRound, Lock, LockOpen, Mail, MailOpen, Paperclip, PenSquare, Reply, ReplyAll, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
-import { MAIL_MAX_ATTACHMENT_BYTES, type MailDraft, type MailFolder, type MailRecipientKey, type MailSummary } from '@elvis/shared';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { AtSign, Download, KeyRound, Lock, LockOpen, Mail, MailOpen, MessageSquarePlus, Paperclip, PenSquare, Reply, ReplyAll, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
+import { MESSAGE_BODY_MAX, MESSAGE_PARTY_MAX, type Incident, type MailFolder, type MailMessage, type MailRecipientKey, type MailSummary, type MessageInput } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { fmtBytes, fmtDateTime } from '../lib/format';
+import { useActiveIncident } from '../lib/hooks';
 import { useToast } from '../lib/toast';
 import { Badge, Card, EmptyState, Field, Loading, Modal, PageHeader, Segmented } from '../components/ui';
-import { AddressInput } from '../components/mail/AddressInput';
+import { MailComposer, type DraftForm } from '../components/mail/MailComposer';
+import { MessageForm } from '../components/messages/MessageForm';
+import { useMessageContext } from '../components/messages/messageHooks';
 
 const ENCRYPTION: Record<MailSummary['encryption'], { tone: 'ok' | 'warn'; label: string; title: string }> = {
   e2e: { tone: 'ok', label: 'Ende-zu-Ende verschlüsselt', title: 'Nur der ELW und die Gegenstelle können die Mail lesen' },
@@ -21,11 +24,6 @@ const SIGNATURE: Record<Exclude<MailSummary['signature'], 'none'>, { tone: 'ok' 
   'unknown-key': { tone: 'muted', label: 'Signiert, Schlüssel unbekannt' },
 };
 
-const splitAddresses = (v: string) =>
-  v
-    .split(/[,;\s]+/)
-    .map((a) => a.trim())
-    .filter(Boolean);
 const bareAddress = (v: string) => (/<([^>]+)>/.exec(v)?.[1] ?? v).trim().toLowerCase();
 
 /** E-Mail: Postfach des ELW (…@einsatzleitwagen.app) für alle Bediener */
@@ -41,6 +39,8 @@ export function MailPage() {
     if (params.has('an')) setParams({}, { replace: true });
   }, [params, setParams]);
   const [keysOpen, setKeysOpen] = useState(false);
+  const { data: incident } = useActiveIncident();
+  const [asMessage, setAsMessage] = useState<MailMessage | null>(null);
   const { data: list } = useQuery({ queryKey: ['mail', 'messages', folder], queryFn: () => api.mailMessages(folder), enabled: !!avail?.available });
 
   if (!avail) return <Loading />;
@@ -76,52 +76,56 @@ export function MailPage() {
           </>
         }
       />
-      <div className="mail-layout">
-        <Card className="mail-list-card">
-          <Segmented
-            label="Ordner"
-            value={folder}
-            onChange={(f) => (setFolder(f), setSelected(null))}
-            options={[
-              { value: 'inbox', label: `Eingang${list && list.unread ? ` (${list.unread})` : ''}` },
-              { value: 'sent', label: 'Gesendet' },
-            ]}
+      <Card className="mail-list-card">
+        <Segmented
+          label="Ordner"
+          value={folder}
+          onChange={(f) => (setFolder(f), setSelected(null))}
+          options={[
+            { value: 'inbox', label: `Eingang${list && list.unread ? ` (${list.unread})` : ''}` },
+            { value: 'sent', label: 'Gesendet' },
+          ]}
+        />
+        {!list ? (
+          <Loading />
+        ) : list.items.length === 0 ? (
+          <EmptyState icon={<Mail size={32} />} title={folder === 'inbox' ? 'Keine Mails' : 'Noch nichts gesendet'} />
+        ) : (
+          <ul className="mail-list">
+            {list.items.map((m) => (
+              <li key={m.id}>
+                <button className={`mail-item ${m.id === selected ? 'active' : ''} ${m.seen ? '' : 'unread'}`} onClick={() => setSelected(m.id)}>
+                  <span className="mail-item-from">{folder === 'inbox' ? m.from : `An ${m.to.join(', ')}`}</span>
+                  <span className="mail-item-subject">
+                    {m.encryption === 'e2e' ? <Lock size={14} aria-label="verschlüsselt" className="tone-ok" /> : <LockOpen size={14} aria-label="unverschlüsselt" className="muted" />}
+                    {m.attachments > 0 && <Paperclip size={14} aria-label={`${m.attachments} Anhänge`} />}
+                    <span>{m.subject || '(ohne Betreff)'}</span>
+                  </span>
+                  <span className="mail-item-snippet muted">{m.snippet}</span>
+                  <span className="mail-item-date muted">{fmtDateTime(m.date)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      <Modal open={selected !== null} title={list?.items.find((m) => m.id === selected)?.subject || '(ohne Betreff)'} onClose={() => setSelected(null)} wide>
+        {selected !== null && (
+          <Reader
+            id={selected}
+            // Antworten öffnet den Editor statt eines zweiten Dialogs darüber; das Zitat steht im Entwurf
+            onReply={(d) => (setSelected(null), setDraft(d))}
+            onClose={() => setSelected(null)}
+            onMessage={incident ? (mail) => (setSelected(null), setAsMessage(mail)) : undefined}
+            ownAddress={avail.address ?? ''}
           />
-          {!list ? (
-            <Loading />
-          ) : list.items.length === 0 ? (
-            <p className="muted">{folder === 'inbox' ? 'Keine Mails.' : 'Noch nichts gesendet.'}</p>
-          ) : (
-            <ul className="mail-list">
-              {list.items.map((m) => (
-                <li key={m.id}>
-                  <button className={`mail-item ${m.id === selected ? 'active' : ''} ${m.seen ? '' : 'unread'}`} onClick={() => setSelected(m.id)}>
-                    <span className="mail-item-top">
-                      <span className="mail-item-from">{folder === 'inbox' ? m.from : `An ${m.to.join(', ')}`}</span>
-                      <span className="mail-item-date muted">{fmtDateTime(m.date)}</span>
-                    </span>
-                    <span className="mail-item-subject">
-                      {m.encryption === 'e2e' ? <Lock size={14} aria-label="verschlüsselt" className="tone-ok" /> : <LockOpen size={14} aria-label="unverschlüsselt" className="muted" />}
-                      {m.attachments > 0 && <Paperclip size={14} aria-label={`${m.attachments} Anhänge`} />}
-                      {m.subject || '(ohne Betreff)'}
-                    </span>
-                    <span className="mail-item-snippet muted">{m.snippet}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-        <div className="mail-reader-pane">
-          {selected ? (
-            <Reader id={selected} onReply={setDraft} onDeleted={() => setSelected(null)} ownAddress={avail.address ?? ''} />
-          ) : (
-            <EmptyState icon={<Mail size={32} />} title="Keine Mail ausgewählt" />
-          )}
-        </div>
-      </div>
+        )}
+      </Modal>
       <Modal open={draft !== null} title="Neue Mail" onClose={() => setDraft(null)} wide>
-        {draft && <Composer initial={draft} onDone={() => setDraft(null)} />}
+        {draft && <MailComposer initial={draft} onDone={() => setDraft(null)} />}
+      </Modal>
+      <Modal open={asMessage !== null && !!incident} title="Eingangsmeldung aus E-Mail" onClose={() => setAsMessage(null)} wide>
+        {asMessage && incident && <MailToMessage incident={incident} mail={asMessage} onDone={() => setAsMessage(null)} />}
       </Modal>
       <Modal open={keysOpen} title="Schlüssel der Gegenstellen" onClose={() => setKeysOpen(false)} wide>
         <Keys />
@@ -130,12 +134,27 @@ export function MailPage() {
   );
 }
 
-function Reader({ id, onReply, onDeleted, ownAddress }: { id: number; onReply: (d: Partial<DraftForm>) => void; onDeleted: () => void; ownAddress: string }) {
+function Reader({
+  id,
+  onReply,
+  onClose,
+  onMessage,
+  ownAddress,
+}: {
+  id: number;
+  onReply: (d: Partial<DraftForm>) => void;
+  onClose: () => void;
+  /** Nur mit laufendem Einsatz */
+  onMessage?: (m: MailMessage) => void;
+  ownAddress: string;
+}) {
   const toast = useToast();
+  const { data: ctx } = useMessageContext();
   const { data: m } = useQuery({ queryKey: ['mail', 'message', id], queryFn: () => api.mailMessage(id) });
   const [showHtml, setShowHtml] = useState(false);
-  const seen = useMutation({ mutationFn: (v: boolean) => api.setMailSeen(id, v) });
-  const remove = useMutation({ mutationFn: () => api.removeMail(id), onSuccess: onDeleted, onError: (e) => toast('error', e.message) });
+  // Als ungelesen markieren schließt das Lesefenster – offen gälte die Mail ja als gelesen
+  const seen = useMutation({ mutationFn: (v: boolean) => api.setMailSeen(id, v), onSuccess: (_, v) => !v && onClose() });
+  const remove = useMutation({ mutationFn: () => api.removeMail(id), onSuccess: onClose, onError: (e) => toast('error', e.message) });
 
   useEffect(() => {
     setShowHtml(false);
@@ -165,10 +184,28 @@ function Reader({ id, onReply, onDeleted, ownAddress }: { id: number; onReply: (
   };
 
   return (
-    <Card
-      title={m.subject || '(ohne Betreff)'}
-      actions={
-        <span className="btn-row">
+    <div className="mail-reader">
+      <div className="mail-reader-head">
+        <dl className="kv">
+          <dt>Von</dt>
+          <dd>{m.from}</dd>
+          <dt>An</dt>
+          <dd>{m.to.join(', ')}</dd>
+          {m.cc.length > 0 && (
+            <>
+              <dt>Kopie</dt>
+              <dd>{m.cc.join(', ')}</dd>
+            </>
+          )}
+          <dt>Datum</dt>
+          <dd>{fmtDateTime(m.date)}</dd>
+        </dl>
+        <div className="mail-reader-actions btn-row">
+        {onMessage && m.folder === 'inbox' && (
+          <button className="btn btn-sm" disabled={!ctx?.radio} title={ctx?.radio ? 'Als Eingangsmeldung im Einsatz erfassen' : 'Eingangsmeldungen erfassen nur Fernmelder'} onClick={() => onMessage(m)}>
+            <MessageSquarePlus size={16} /> Meldung erstellen
+          </button>
+        )}
           <button className="btn btn-ghost btn-icon" title="Antworten" aria-label="Antworten" onClick={() => reply(false)}>
             <Reply size={18} />
           </button>
@@ -186,23 +223,8 @@ function Reader({ id, onReply, onDeleted, ownAddress }: { id: number; onReply: (
           <button className="btn btn-ghost btn-icon" title="Löschen" aria-label="Löschen" onClick={() => window.confirm('Mail löschen?') && remove.mutate()}>
             <Trash2 size={18} />
           </button>
-        </span>
-      }
-    >
-      <dl className="kv">
-        <dt>Von</dt>
-        <dd>{m.from}</dd>
-        <dt>An</dt>
-        <dd>{m.to.join(', ')}</dd>
-        {m.cc.length > 0 && (
-          <>
-            <dt>Kopie</dt>
-            <dd>{m.cc.join(', ')}</dd>
-          </>
-        )}
-        <dt>Datum</dt>
-        <dd>{fmtDateTime(m.date)}</dd>
-      </dl>
+        </div>
+      </div>
       <p className="mail-badges">
         <span title={enc.title}>
           <Badge tone={enc.tone}>
@@ -239,7 +261,40 @@ function Reader({ id, onReply, onDeleted, ownAddress }: { id: number; onReply: (
           ))}
         </ul>
       )}
-    </Card>
+    </div>
+  );
+}
+
+/** Mail als Eingangsmeldung: Absender ist die Kraft im Einsatz bzw. Systemeinheit, die diese Adresse schon kennt – sonst wählt der Fernmelder */
+function MailToMessage({ incident, mail, onDone }: { incident: Incident; mail: MailMessage; onDone: () => void }) {
+  const toast = useToast();
+  const { data: units } = useQuery({ queryKey: ['units', incident.id], queryFn: () => api.units(incident.id) });
+  const { data: catalog } = useQuery({ queryKey: ['forces'], queryFn: api.forces });
+  const create = useMutation({
+    mutationFn: (input: MessageInput) => api.createMessage(incident.id, input),
+    onSuccess: () => (toast('success', 'Eingangsmeldung erstellt'), onDone()),
+    onError: (e) => toast('error', e.message),
+  });
+  if (!units || !catalog) return <Loading />;
+  const unit = units.find((u) => u.email === mail.fromAddress && u.status !== 'entlassen');
+  // Systemeinheit nur, solange sie nicht im Einsatz ist – sonst gilt die Kraft im Einsatz
+  const deployed = new Set(units.filter((u) => u.status !== 'entlassen').map((u) => u.sourceId));
+  const force = unit ? undefined : catalog.find((f) => f.email === mail.fromAddress && !deployed.has(f.id));
+  // Ohne bekannte Kraft: Anzeigename aus „Name <adresse>“ als Freitext, bis der Fernmelder eine Kraft wählt
+  const name = mail.from.replace(/\s*<[^>]*>\s*$/, '').replace(/^"(.*)"$/, '$1').trim() || mail.fromAddress;
+  const body = [mail.subject && `**${mail.subject}**`, mail.text.trim()].filter(Boolean).join('\n\n').slice(0, MESSAGE_BODY_MAX);
+  return (
+    <MessageForm
+      incidentId={incident.id}
+      prefill={{
+        direction: 'in',
+        sender: unit ? { unitId: unit.id, text: unit.name } : force ? { forceUnitId: force.id, text: force.name } : { text: name.slice(0, MESSAGE_PARTY_MAX) },
+        mail: { id: mail.id, from: mail.fromAddress },
+        body,
+      }}
+      pending={create.isPending}
+      onSubmit={(input) => create.mutate(input)}
+    />
   );
 }
 
@@ -247,125 +302,6 @@ function Reader({ id, onReply, onDeleted, ownAddress }: { id: number; onReply: (
 function HtmlBody({ html }: { html: string }) {
   const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'"><base target="_blank"><style>body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:8px;background:#fff;color:#111}</style></head><body>${html}</body></html>`;
   return <iframe className="mail-html" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} title="HTML-Inhalt der Mail" />;
-}
-
-interface DraftForm {
-  to: string;
-  cc: string;
-  bcc: string;
-  subject: string;
-  text: string;
-  replyToId?: number;
-}
-
-function Composer({ initial, onDone }: { initial: Partial<DraftForm>; onDone: () => void }) {
-  const toast = useToast();
-  const qc = useQueryClient();
-  const [form, setForm] = useState<DraftForm>({ to: '', cc: '', bcc: '', subject: '', text: '', ...initial });
-  const [files, setFiles] = useState<File[]>([]);
-  const [allowUnencrypted, setAllowUnencrypted] = useState(false);
-  const all = useMemo(() => [...new Set([form.to, form.cc, form.bcc].flatMap(splitAddresses).map((a) => a.toLowerCase()))], [form.to, form.cc, form.bcc]);
-  const [debounced, setDebounced] = useState(all);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(all), 600);
-    return () => clearTimeout(t);
-  }, [all]);
-  const valid = debounced.filter((a) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a));
-  const { data: keys } = useQuery({ queryKey: ['mail', 'recipients', valid.join(',')], queryFn: () => api.mailRecipients(valid), enabled: valid.length > 0 });
-  const missing = (keys ?? []).filter((k) => !k.encrypt);
-  const size = files.reduce((n, f) => n + f.size, 0);
-
-  const send = useMutation({
-    mutationFn: async () => {
-      const attachments = await Promise.all(
-        files.map(async (f) => ({ filename: f.name, contentType: f.type || 'application/octet-stream', data: await toBase64(f) })),
-      );
-      const draft: MailDraft = {
-        to: splitAddresses(form.to),
-        cc: splitAddresses(form.cc),
-        bcc: splitAddresses(form.bcc),
-        subject: form.subject,
-        text: form.text,
-        attachments,
-        replyToId: form.replyToId,
-        allowUnencrypted,
-      };
-      return api.sendMail(draft);
-    },
-    onSuccess: (r) => {
-      toast('success', r.encrypted ? 'Verschlüsselt gesendet' : 'Unverschlüsselt gesendet');
-      void qc.invalidateQueries({ queryKey: ['mail'] });
-      onDone();
-    },
-    onError: (e) => toast('error', e.message),
-  });
-  const change = (patch: Partial<DraftForm>) => setForm({ ...form, ...patch });
-  const ready = splitAddresses(form.to).length > 0 && size <= MAIL_MAX_ATTACHMENT_BYTES && (missing.length === 0 || allowUnencrypted) && !!keys;
-
-  return (
-    <div className="stack">
-      <div className="form-grid">
-        <Field label="An" hint="Mehrere Adressen durch Komma trennen">
-          <AddressInput value={form.to} onChange={(to) => change({ to })} autoFocus={!form.to} />
-        </Field>
-        <Field label="Kopie (Cc)">
-          <AddressInput value={form.cc} onChange={(cc) => change({ cc })} />
-        </Field>
-        <Field label="Blindkopie (Bcc)">
-          <AddressInput value={form.bcc} onChange={(bcc) => change({ bcc })} />
-        </Field>
-        <Field label="Betreff">
-          <input value={form.subject} onChange={(e) => change({ subject: e.target.value })} maxLength={998} />
-        </Field>
-      </div>
-      {keys && keys.length > 0 && (
-        <p className="mail-badges">
-          {keys.map((k) => (
-            <span key={k.address} title={k.encrypt ? `Schlüssel ${k.fingerprint ?? ''} (${k.source ?? 'eigen'})` : 'Kein Schlüssel gefunden'}>
-              <Badge tone={k.encrypt ? 'ok' : 'warn'}>
-                {k.encrypt ? <Lock size={12} /> : <LockOpen size={12} />} {k.address}
-              </Badge>
-            </span>
-          ))}
-        </p>
-      )}
-      {missing.length > 0 && (
-        <div className="mail-warning">
-          <p>
-            <strong>Nicht verschlüsselt:</strong> Für {missing.map((k) => k.address).join(', ')} ist kein Schlüssel bekannt (weder per Autocrypt noch im Web Key Directory). Die
-            Mail ginge dann an alle Empfänger unverschlüsselt (nur signiert).
-          </p>
-          <label className="checkbox">
-            <input type="checkbox" checked={allowUnencrypted} onChange={(e) => setAllowUnencrypted(e.target.checked)} /> Trotzdem unverschlüsselt senden
-          </label>
-        </div>
-      )}
-      <Field label="Nachricht">
-        <textarea rows={12} value={form.text} onChange={(e) => change({ text: e.target.value })} autoFocus={!!form.to} />
-      </Field>
-      <Field label="Anhänge" hint={`Zusammen höchstens ${fmtBytes(MAIL_MAX_ATTACHMENT_BYTES)}`}>
-        <input type="file" multiple onChange={(e) => setFiles([...(e.target.files ?? [])])} />
-      </Field>
-      {size > MAIL_MAX_ATTACHMENT_BYTES && <p className="tone-alarm">Anhänge zu groß ({fmtBytes(size)}).</p>}
-      <div className="form-actions">
-        <button className="btn" onClick={onDone}>
-          Verwerfen
-        </button>
-        <button className="btn btn-primary" disabled={!ready || send.isPending} onClick={() => send.mutate()}>
-          {missing.length === 0 ? <Lock size={16} /> : <LockOpen size={16} />} {send.isPending ? 'Sende …' : missing.length === 0 ? 'Verschlüsselt senden' : 'Unverschlüsselt senden'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function toBase64(f: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
-    r.onerror = () => reject(new Error(`${f.name} nicht lesbar`));
-    r.readAsDataURL(f);
-  });
 }
 
 function Keys() {

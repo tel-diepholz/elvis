@@ -185,6 +185,8 @@ export function UnitDetailPage() {
                   <dd>{fmtDateTime(unit.releasedAt)}</dd>
                 </>
               )}
+              <dt>E-Mail</dt>
+              <dd>{unit.email ? <Link to={`/mail?an=${encodeURIComponent(unit.email)}`}>{unit.email}</Link> : '–'}</dd>
               {unit.notes && (
                 <>
                   <dt>Bemerkung</dt>

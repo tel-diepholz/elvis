@@ -35,6 +35,8 @@ describe('Migrationen', () => {
       const legacy = new Database(join(dir, 'elvis.sqlite'));
       legacy.exec('ALTER TABLE addons DROP COLUMN manifest');
       // v19: Rollen und Aufgaben (Spalten mit Fremdschlüssel lassen sich nicht einzeln entfernen)
+      legacy.exec('ALTER TABLE force_units DROP COLUMN email; ALTER TABLE messages DROP COLUMN sender_force_id; ALTER TABLE messages DROP COLUMN recipient_force_id'); // v41
+      legacy.exec('ALTER TABLE units DROP COLUMN email'); // v40
       legacy.exec(UNDO_CONTACTS); // v39
       legacy.exec(UNDO_MAIL); // v38
       legacy.exec(UNDO_REQUESTS); // v37

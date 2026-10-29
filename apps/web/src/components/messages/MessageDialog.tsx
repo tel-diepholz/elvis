@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { AlarmClock, ArrowRight, Check, CheckCheck, ListPlus, PackagePlus, Paperclip, Reply, Send, Undo2, UserCheck } from 'lucide-react';
+import { AlarmClock, ArrowRight, AtSign, Check, CheckCheck, ListPlus, PackagePlus, Paperclip, Reply, Send, Undo2, UserCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MESSAGE_BODY_MAX, MESSAGE_REMIND_MINUTES, TASK_SUMMARY_MAX, REQUEST_STATUS_LABELS, requestLabel, requestOpen, type Incident, type Message, type MessageInput, type RequestInput, type TaskInput } from '@elvis/shared';
 import { api } from '../../lib/api';
@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtTime } from '../../lib/format';
 import { useToast } from '../../lib/toast';
 import { Badge, Field, Modal } from '../ui';
+import { MailComposer } from '../mail/MailComposer';
 import { TaskForm } from '../tasks/TaskForm';
 import { RequestForm } from '../requests/RequestForm';
 import { REQUESTS_PATH, useRequests } from '../requests/requestParts';
@@ -37,12 +38,23 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
   const toast = useToast();
   const { data: ctx } = useMessageContext();
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.roles });
-  const [mode, setMode] = useState<'view' | 'reply' | 'answer' | 'task' | 'request' | 'attach'>('view');
+  const [mode, setMode] = useState<'view' | 'reply' | 'answer' | 'task' | 'request' | 'attach' | 'mail'>('view');
   const navigate = useNavigate();
   const [reply, setReply] = useState('');
   const [routeTo, setRouteTo] = useState<number | null>(null);
 
   const handler = canHandle(m, ctx);
+  // Empfänger (Kraft im Einsatz oder Systemeinheit wie die Leitstelle) mit bekannter E-Mail-Adresse: Übermitteln per Mail anbieten
+  const toUnit = m.direction === 'out' && m.recipientUnitId !== null;
+  const toForce = m.direction === 'out' && m.recipientForceUnitId !== null;
+  const { data: units = [] } = useQuery({ queryKey: ['units', incident.id], queryFn: () => api.units(incident.id), enabled: toUnit });
+  const { data: catalog = [] } = useQuery({ queryKey: ['forces'], queryFn: api.forces, enabled: toForce });
+  const { data: mailbox } = useQuery({ queryKey: ['mail', 'available'], queryFn: api.mailAvailable, enabled: toUnit || toForce });
+  const recipientEmail = !mailbox?.available
+    ? ''
+    : toUnit
+      ? (units.find((u) => u.id === m.recipientUnitId)?.email ?? '')
+      : (catalog.find((f) => f.id === m.recipientForceUnitId)?.email ?? '');
   const mine = m.claimedByUserId === user?.id;
   // Andere aktive Übernahme: der Server meldet dann für mich nichts zu tun
   const claimedByOther = handler && !mine && m.claimedBy !== null && m.pending === null;
@@ -110,7 +122,7 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
   if (mode === 'attach') return <AttachToRequest incident={incident} message={m} onBack={() => setMode('view')} onClose={onClose} />;
 
   if (mode === 'request') {
-    const unit = m.direction === 'in' ? { text: m.sender, unitId: m.senderUnitId } : { text: m.recipient ?? '', unitId: m.recipientUnitId };
+    const unit = m.direction === 'in' ? { text: m.sender, unitId: m.senderUnitId, forceUnitId: m.senderForceUnitId } : { text: m.recipient ?? '', unitId: m.recipientUnitId, forceUnitId: m.recipientForceUnitId };
     return (
       <>
         <RequestForm incidentId={incident.id} prefill={{ unit, material: m.body, sourceMessageId: m.id }} pending={createRequest.isPending} onSubmit={(input) => createRequest.mutate(input)} />
@@ -121,11 +133,22 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
     );
   }
 
+  // Per E-Mail übermitteln: gesendet gilt die Meldung als erledigt
+  if (mode === 'mail') {
+    return (
+      <MailComposer
+        initial={{ to: recipientEmail, subject: `Meldung von ${m.sender} – ${[incident.keyword, incident.title].filter(Boolean).join(' ')}`, text: m.body }}
+        onSent={() => done.mutate()}
+        onDone={() => setMode('view')}
+      />
+    );
+  }
+
   if (mode === 'answer') {
     return (
       <MessageForm
         incidentId={incident.id}
-        prefill={{ senderRoleId: m.recipientRoleId, recipient: { text: m.sender, unitId: m.senderUnitId }, replyToId: m.id }}
+        prefill={{ senderRoleId: m.recipientRoleId, recipient: { text: m.sender, unitId: m.senderUnitId, forceUnitId: m.senderForceUnitId }, replyToId: m.id }}
         pending={respond.isPending}
         onSubmit={(input) => respond.mutate(input)}
       />
@@ -185,6 +208,11 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
             <button className="btn" disabled={busy} onClick={() => done.mutate()} title="Ohne Antwort abschließen, z. B. per Funk übermittelt">
               <Check size={16} /> Erledigt
             </button>
+            {recipientEmail && (
+              <button className="btn" disabled={busy} onClick={() => setMode('mail')} title={`An ${recipientEmail} senden und als erledigt markieren`}>
+                <AtSign size={16} /> Per E-Mail senden
+              </button>
+            )}
           </>
         )}
         {mode === 'reply' && (

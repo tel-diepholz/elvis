@@ -309,7 +309,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     });
     authRoutes(api, { users, sessions, limiter, store, roles, notify: (t) => hub.invalidate(t) });
     taskRoutes(api, { tasks, roles, store, notify: (t) => hub.invalidate(t) });
-    messageRoutes(api, { messages, store, notify: (t) => hub.invalidate(t) });
+    messageRoutes(api, { messages, store, incidents, forces, mail, notify: (t) => hub.invalidate(t) });
     requestRoutes(api, { requests, store, notify: (t) => hub.invalidate(t) });
     deviceRoutes(api, devices, store, (t) => hub.invalidate(t));
     incidentRoutes(api, { incidents, forces, store, notify: (t) => hub.invalidate(t) });

@@ -5,8 +5,10 @@ import { api } from '../../lib/api';
 
 interface Suggestion {
   key: string;
-  /** Kraft im Einsatz – Katalogeinträge werden nur als Text übernommen */
+  /** Kraft im Einsatz */
   unitId: number | null;
+  /** Systemeinheit aus dem Katalog, die nicht im Einsatz ist (z. B. Leitstelle) */
+  forceUnitId: number | null;
   name: string;
   sub: string;
   search: string;
@@ -43,9 +45,10 @@ export function UnitSearchInput({
 
   const all = useMemo<Suggestion[]>(() => {
     const deployed = new Set(units.map((u) => u.sourceId).filter((s) => s !== null));
-    const entry = (key: string, unitId: number | null, f: { name: string; callsign: string; organization: string }, extra?: string): Suggestion => ({
+    const entry = (key: string, unitId: number | null, forceUnitId: number | null, f: { name: string; callsign: string; organization: string }, extra?: string): Suggestion => ({
       key,
       unitId,
+      forceUnitId,
       name: f.name,
       sub: [f.callsign, f.organization, extra].filter(Boolean).join(' · '),
       search: [f.name, f.callsign, f.organization].join(' ').toLowerCase(),
@@ -58,9 +61,9 @@ export function UnitSearchInput({
       if (text && !known.has(norm(text)) && !freeTexts.has(norm(text))) freeTexts.set(norm(text), text);
     }
     return [
-      ...units.filter((u) => u.status !== 'entlassen').map((u) => entry(`u${u.id}`, u.id, u, 'im Einsatz')),
-      ...[...freeTexts.values()].map((text) => entry(`t${norm(text)}`, null, { name: text, callsign: '', organization: '' }, 'bereits verwendet')),
-      ...catalog.filter((f) => !deployed.has(f.id)).map((f) => entry(`f${f.id}`, null, f)),
+      ...units.filter((u) => u.status !== 'entlassen').map((u) => entry(`u${u.id}`, u.id, null, u, 'im Einsatz')),
+      ...[...freeTexts.values()].map((text) => entry(`t${norm(text)}`, null, null, { name: text, callsign: '', organization: '' }, 'bereits verwendet')),
+      ...catalog.filter((f) => !deployed.has(f.id)).map((f) => entry(`f${f.id}`, null, f.id, f, 'Katalog')),
     ];
   }, [units, catalog, messages]);
 
@@ -68,15 +71,15 @@ export function UnitSearchInput({
   const matches = (q ? all.filter((s) => s.search.includes(q)) : all).slice(0, 8);
 
   const type = (text: string) => {
-    // Genau getippter Name einer Kraft im Einsatz verknüpft auch ohne Auswahl
-    const exact = all.find((s) => s.unitId !== null && norm(s.name) === norm(text));
-    onChange({ text, unitId: exact?.unitId ?? null });
+    // Genau getippter Name einer Kraft im Einsatz bzw. Systemeinheit verknüpft auch ohne Auswahl
+    const exact = all.find((s) => (s.unitId !== null || s.forceUnitId !== null) && norm(s.name) === norm(text));
+    onChange({ text, unitId: exact?.unitId ?? null, forceUnitId: exact?.forceUnitId ?? null });
     setOpen(true);
     setActive(0);
   };
 
   const pick = (s: Suggestion) => {
-    onChange({ text: s.name, unitId: s.unitId });
+    onChange({ text: s.name, unitId: s.unitId, forceUnitId: s.forceUnitId });
     setOpen(false);
   };
 
@@ -118,7 +121,9 @@ export function UnitSearchInput({
         aria-controls={listId}
         aria-autocomplete="list"
       />
-      {value.text.trim() && <span className={`combo-tag ${value.unitId ? 'tone-ok' : ''}`}>{value.unitId ? 'Kraft im Einsatz' : 'Freitext'}</span>}
+      {value.text.trim() && (
+        <span className={`combo-tag ${value.unitId || value.forceUnitId ? 'tone-ok' : ''}`}>{value.unitId ? 'Kraft im Einsatz' : value.forceUnitId ? 'Katalog' : 'Freitext'}</span>
+      )}
       {showList && (
         <ul className="combo-list" id={listId} role="listbox">
           {matches.map((s, i) => (

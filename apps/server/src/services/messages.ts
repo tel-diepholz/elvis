@@ -28,9 +28,11 @@ interface MessageRow {
   body: string;
   sender_role_id: number | null;
   sender_unit_id: number | null;
+  sender_force_id: number | null;
   sender_text: string;
   recipient_role_id: number | null;
   recipient_unit_id: number | null;
+  recipient_force_id: number | null;
   recipient_text: string | null;
   claimed_by_user_id: number | null;
   claimed_by: string | null;
@@ -207,9 +209,11 @@ export class MessageService {
       body: r.body,
       senderRoleId: r.sender_role_id,
       senderUnitId: r.sender_unit_id,
+      senderForceUnitId: r.sender_force_id,
       sender: r.sender_role_name ?? r.sender_text,
       recipientRoleId: r.recipient_role_id,
       recipientUnitId: r.recipient_unit_id,
+      recipientForceUnitId: r.recipient_force_id,
       recipient: r.recipient_role_name ?? r.recipient_text,
       claimedByUserId: r.claimed_by_user_id,
       claimedBy: r.claimed_by,
@@ -249,10 +253,12 @@ export class MessageService {
     return incident;
   }
 
-  /** Kraft nur, wenn sie zu diesem Einsatz gehört – sonst bleibt es beim Freitext */
-  private party(incidentId: number, p: MessagePartyInput): [number | null, string] {
+  /** Kraft nur, wenn sie zu diesem Einsatz gehört; sonst eine vorhandene Systemeinheit – oder Freitext */
+  private party(incidentId: number, p: MessagePartyInput): [number | null, number | null, string] {
     const unit = p.unitId ? this.deps.store.unit(p.unitId) : null;
-    return [unit && unit.incidentId === incidentId ? unit.id : null, p.text.trim()];
+    if (unit && unit.incidentId === incidentId) return [unit.id, null, p.text.trim()];
+    const force = p.forceUnitId ? (this.db.prepare('SELECT id FROM force_units WHERE id = ?').get(p.forceUnitId) as { id: number } | undefined) : undefined;
+    return [null, force?.id ?? null, p.text.trim()];
   }
 
   private roleName(id: number): string {
@@ -278,12 +284,23 @@ export class MessageService {
     const input = messageInputSchema.parse(raw);
     const c = this.ctx();
     const ts = iso(this.now());
-    let cols: { senderRoleId: number | null; senderUnitId: number | null; senderText: string; recipientRoleId: number | null; recipientUnitId: number | null; recipientText: string | null; replyToId: number | null; requestId: number | null };
+    let cols: {
+      senderRoleId: number | null;
+      senderUnitId: number | null;
+      senderForceId: number | null;
+      senderText: string;
+      recipientRoleId: number | null;
+      recipientUnitId: number | null;
+      recipientForceId: number | null;
+      recipientText: string | null;
+      replyToId: number | null;
+      requestId: number | null;
+    };
 
     if (input.direction === 'out') {
       if (!viewer.roleIds.includes(input.senderRoleId)) throw new HttpError(403, 'Meldungen nur im Namen einer eigenen Rolle');
       if (some(c.settings.radioRoleIds, viewer.roleIds)) throw new HttpError(403, 'Fernmelder erfassen nur Eingangsmeldungen');
-      const [unitId, text] = this.party(incidentId, input.recipient);
+      const [unitId, forceId, text] = this.party(incidentId, input.recipient);
       let replyToId: number | null = null;
       if (input.replyToId !== null) {
         const original = this.row(input.replyToId);
@@ -294,24 +311,64 @@ export class MessageService {
         const request = this.db.prepare('SELECT incident_id FROM requests WHERE id = ?').get(input.requestId) as { incident_id: number } | undefined;
         if (request?.incident_id !== incidentId) throw new HttpError(400, 'Anforderung nicht gefunden');
       }
-      cols = { senderRoleId: input.senderRoleId, senderUnitId: null, senderText: this.roleName(input.senderRoleId), recipientRoleId: null, recipientUnitId: unitId, recipientText: text, replyToId, requestId: input.requestId };
+      cols = {
+        senderRoleId: input.senderRoleId,
+        senderUnitId: null,
+        senderForceId: null,
+        senderText: this.roleName(input.senderRoleId),
+        recipientRoleId: null,
+        recipientUnitId: unitId,
+        recipientForceId: forceId,
+        recipientText: text,
+        replyToId,
+        requestId: input.requestId,
+      };
     } else {
       if (!some(c.settings.radioRoleIds, viewer.roleIds)) throw new HttpError(403, 'Eingangsmeldungen erfassen nur Fernmelder');
-      const [unitId, text] = this.party(incidentId, input.sender);
+      const [unitId, forceId, text] = this.party(incidentId, input.sender);
       // Mit angemeldetem Dispatcher verteilt er – eine Auswahl des Fernmelders zählt dann nicht
       const roleId = c.dispatcherUsers.size ? null : input.recipientRoleId;
       if (!c.dispatcherUsers.size && roleId === null) throw new HttpError(400, 'Empfänger fehlt');
-      cols = { senderRoleId: null, senderUnitId: unitId, senderText: text, recipientRoleId: roleId, recipientUnitId: null, recipientText: roleId === null ? null : this.roleName(roleId), replyToId: null, requestId: null };
+      cols = {
+        senderRoleId: null,
+        senderUnitId: unitId,
+        senderForceId: forceId,
+        senderText: text,
+        recipientRoleId: roleId,
+        recipientUnitId: null,
+        recipientForceId: null,
+        recipientText: roleId === null ? null : this.roleName(roleId),
+        replyToId: null,
+        requestId: null,
+      };
     }
 
     const info = this.deps.store.transaction(() => {
       const res = this.db
         .prepare(
-          `INSERT INTO messages (incident_id, direction, body, sender_role_id, sender_unit_id, sender_text, recipient_role_id, recipient_unit_id, recipient_text,
+          `INSERT INTO messages (incident_id, direction, body, sender_role_id, sender_unit_id, sender_force_id, sender_text, recipient_role_id, recipient_unit_id, recipient_force_id, recipient_text,
              reply_to_id, request_id, created_at, created_by, created_by_user_id, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(incidentId, input.direction, input.body, cols.senderRoleId, cols.senderUnitId, cols.senderText, cols.recipientRoleId, cols.recipientUnitId, cols.recipientText, cols.replyToId, cols.requestId, ts, actor.name, actor.id, ts);
+        .run(
+          incidentId,
+          input.direction,
+          input.body,
+          cols.senderRoleId,
+          cols.senderUnitId,
+          cols.senderForceId,
+          cols.senderText,
+          cols.recipientRoleId,
+          cols.recipientUnitId,
+          cols.recipientForceId,
+          cols.recipientText,
+          cols.replyToId,
+          cols.requestId,
+          ts,
+          actor.name,
+          actor.id,
+          ts,
+        );
       // Kopien an die eingestellten Rollen – nicht an Absender- oder Zielrolle selbst
       const messageId = Number(res.lastInsertRowid);
       const copyTo = input.direction === 'out' ? c.settings.copyOutRoleIds : c.settings.copyInRoleIds;

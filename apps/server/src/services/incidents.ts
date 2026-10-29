@@ -452,6 +452,7 @@ export class IncidentService {
         ...(patch.callsign !== undefined && { callsign: patch.callsign }),
         ...(patch.organization !== undefined && { organization: patch.organization }),
         ...(patch.notes !== undefined && { notes: patch.notes }),
+        ...(patch.email !== undefined && { email: patch.email }),
         ...(patch.sign !== undefined && { sign: patch.sign }),
         ...(patch.strength !== undefined && { strength: patch.strength }),
         ...(patch.section !== undefined && { section: patch.section }),
@@ -483,6 +484,7 @@ export class IncidentService {
     if (statusChanged) changes.push(`Status ${UNIT_STATUS[next.status]}${followers.length && statusChanged ? ` (mit ${followers.length} Untereinheit${followers.length === 1 ? '' : 'en'})` : ''}`);
     if (sectionChanged) changes.push(next.section ? `Abschnitt → ${next.section}` : 'aus Abschnitt gelöst');
     if (formatStrength(next.strength) !== formatStrength(before.strength)) changes.push(`Stärke ${formatStrength(next.strength)}`);
+    if (next.email !== before.email) changes.push(next.email ? `E-Mail ${next.email}` : 'E-Mail-Adresse entfernt');
     if (next.parentId !== before.parentId) changes.push(parent ? `unterstellt: ${parent.name}${next.role ? ` als ${next.role}` : ''}` : 'als eigenständige Einheit geführt');
     else if (next.role !== before.role && next.parentId !== null) changes.push(next.role ? `Rolle ${next.role}` : 'ohne Rolle');
     if (next.lat !== before.lat || next.lon !== before.lon) changes.push(next.lat === null ? 'von der Karte entfernt' : before.lat === null ? 'auf der Karte gesetzt' : 'auf der Karte verschoben');
