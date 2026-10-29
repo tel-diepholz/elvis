@@ -850,6 +850,8 @@ Voraussetzung: Docker und Node auf dem Entwicklungsrechner.
   durchreichen“). Drucker richtet man auf zwei Wegen ein:
   - in der CUPS-Verwaltung unter `http://<Docker-Host>:631/admin` (Benutzer `admin`, Passwort aus den Addon-Optionen), auch mit Treiber
   - über die Option **Drucker** (`Name=ipp://192.168.1.50/ipp/print, …`). Fehlende Drucker legt das Addon beim Start als IPP-Everywhere-Drucker an.
+    Mit `;` angehängte Optionen (`Plotter=ipp://…/ipp/print;cupsFinishingTemplate=trim-after-sheets`) setzt es bei jedem
+    Start per `lpadmin -o` als Vorgabe, auch bei bestehenden Druckern. Mögliche Optionen zeigt `lpoptions -p <Name> -l` im Container.
 
   Drucker und PPDs liegen im Volume `elvis-addon-druckserver-config`. Die `cupsd.conf` schreibt das Addon bei jedem Start neu.
 - **Drucken** (*Fahrzeug → Drucken*, auch ohne Anmeldung): PDF hochladen (max. 50 MB) und in der Vorschau prüfen. Dann
