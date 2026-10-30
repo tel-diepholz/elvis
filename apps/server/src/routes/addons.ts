@@ -26,6 +26,7 @@ const newHost = z.discriminatedUnion('certMode', [
 
 const optionValues = z.record(z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]));
 const addonParam = z.object({ id: z.string().regex(/^[a-z0-9-]+$/) });
+const UI_TIMEOUT_MS = 30_000;
 
 /** Basis-URL, unter der der Host ELVIS erreicht (für Setup-Befehl und Rückmeldung). */
 const baseUrl = (req: FastifyRequest) => `${req.protocol}://${req.headers.host}`;
@@ -141,6 +142,34 @@ export function addonRoutes(
   app.post('/api/addons/:id/jobs/:job', async (req, reply) => {
     const { id } = parse(addonParam, req.params);
     return reply.code(202).send(await addons.runJob(id, (req.params as { job: string }).job, operatorOf(req)));
+  });
+
+  // Eigene Bedienseite des Addons (provides.ui): Weiterleitung an den Container, damit Browser den Docker-Host nicht
+  // direkt erreichen müssen. Sitzungscookie und Authorization bleiben bei ELVIS.
+  app.get('/api/addons/:id/ui', async (req, reply) => reply.redirect(`/api/addons/${parse(addonParam, req.params).id}/ui/`));
+  app.all('/api/addons/:id/ui/*', async (req, reply) => {
+    const { id } = parse(addonParam, req.params);
+    const rest = (req.params as { '*': string })['*'];
+    const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    const target = addons.uiBase(id) + rest.replace(/^\/+/, '') + query;
+    const hasBody = req.method !== 'GET' && req.method !== 'HEAD' && req.body !== undefined;
+    let res: Response;
+    try {
+      res = await fetch(target, {
+        method: req.method,
+        headers: hasBody ? { 'content-type': 'application/json' } : {},
+        body: hasBody ? JSON.stringify(req.body) : undefined,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(UI_TIMEOUT_MS),
+      });
+    } catch (err) {
+      throw new HttpError(502, `Oberfläche des Addons nicht erreichbar: ${(err as Error).message}`);
+    }
+    for (const h of ['content-type', 'cache-control', 'last-modified', 'etag']) {
+      const v = res.headers.get(h);
+      if (v) reply.header(h, v);
+    }
+    return reply.code(res.status).send(Buffer.from(await res.arrayBuffer()));
   });
 
   app.get('/api/addons/:id/logs', async (req, reply) => {

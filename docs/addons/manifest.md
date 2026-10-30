@@ -36,6 +36,11 @@ provides:                                 # Integration in ELVIS
   den öffentlichen Overpass-Server der Karte).
   `provides.office` (`{ id, name, url, wopiBase }`) meldet einen
   Office-Server mit WOPI (Collabora) für die Dokumentbearbeitung. `shmSize` (z. B. `"1g"`) vergrößert `/dev/shm`, etwa für PostgreSQL.
+- `provides.ui` (`{ name, url }`) meldet eine eigene Bedienseite des Addons, z. B. eine Kartenauswahl.
+  `url` ist die Basisadresse aus Sicht von ELVIS (`http://{{host.address}}:{{options.port}}/`). ELVIS leitet
+  `/api/addons/<id>/ui/…` nur für Admins dorthin weiter (ohne Sitzungscookie, Anfragen mit JSON-Body) und bettet die
+  Seite auf der Addon-Seite ein. Die Seite sollte relative Pfade nutzen. Sie läuft im Ursprung von ELVIS und darf
+  dessen APIs aufrufen, etwa den Kachelproxy `/api/map/tiles/<quelle>/{z}/{x}/{y}` für eine Grundkarte.
 - Ein Job-Schritt mit `stopContainers: [<name>]` hält diese Container des Addons für die Dauer des Schritts an, etwa
   wenn Job und Dienst dieselbe Datenbank nutzen. Danach (auch nach einem Fehler) laufen sie wieder.
 
