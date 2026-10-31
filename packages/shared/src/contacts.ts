@@ -82,3 +82,22 @@ export function contactName(c: Pick<ContactData, 'kind' | 'lastName' | 'firstNam
   const name = [c.lastName, c.firstName].filter(Boolean).join(', ');
   return c.organization ? `${name} (${c.organization})` : name;
 }
+
+/** Telefonbuch für DECT-Basen (Yealink W70B): Abruf per URL mit geheimem Token, ohne Anmeldung */
+export interface PhonebookStatus {
+  token: string;
+  /** Kontakte mit mindestens einer Telefonnummer */
+  contacts: number;
+  /** Einträge im Telefonbuch (je Telefonnummer einer) */
+  entries: number;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+/** Wählbare Nummer: nur Ziffern, *, # und ein führendes +; „+49 (0)5441“ → „+495441“ */
+export function dialableNumber(number: string): string {
+  const n = number.trim().replace(/^(\+\d+)\s*\(0\)/, '$1');
+  const plus = n.startsWith('+') || n.startsWith('00') ? '+' : '';
+  const digits = n.replace(/[^\d*#]/g, '');
+  return plus === '+' && n.startsWith('00') ? `+${digits.slice(2)}` : plus + digits;
+}

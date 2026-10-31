@@ -56,6 +56,8 @@ import type { WkdFetch } from './services/mailcrypto.js';
 import { mailRoutes } from './routes/mail.js';
 import { contactRoutes } from './routes/contacts.js';
 import { ContactService } from './services/contacts.js';
+import { phonebookRoutes } from './routes/phonebook.js';
+import { PhonebookService } from './services/phonebook.js';
 import { backupRoutes } from './routes/backup.js';
 import { BackupService, type DriverFactory } from './services/backup/service.js';
 import { ElwCloudDriver, type BackupFetch } from './services/backup/elwCloud.js';
@@ -221,6 +223,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const appLinks = new AppLinkService(db, store, incidents, (t) => hub.invalidate(t), relay);
   const personnel = new PersonnelService(db, store, incidents, (t) => hub.invalidate(t), relay, () => settings.get().vehicle.name);
   const contacts = new ContactService(db, store, (t) => hub.invalidate(t));
+  const phonebook = new PhonebookService(db, contacts);
   const backupDrivers: DriverFactory = (_driver, keys) =>
     new ElwCloudDriver(config.app.relayUrl, keys.vaultId, keys.vaultToken, async () => (await relay.ensureCredentials()).token, opts.backupFetch);
   const backup = new BackupService(db, {
@@ -345,6 +348,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     personnelRoutes(api, personnel);
     mailRoutes(api, mail);
     contactRoutes(api, { contacts, personnel });
+    phonebookRoutes(api, { phonebook, store, notify: (t) => hub.invalidate(t) });
     backupRoutes(api, { backup, restore });
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {

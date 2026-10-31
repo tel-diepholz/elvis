@@ -26,6 +26,7 @@ import {
   UserRoundCog,
   Users,
   PackagePlus,
+  Phone,
   Wifi,
 } from 'lucide-react';
 import type { DeviceId } from '@elvis/shared';
@@ -47,6 +48,7 @@ import { RequestSettingsCard } from './system/RequestSettingsCard';
 import { OverpassQueriesCard } from './system/OverpassQueriesCard';
 import { ModuleSection } from './system/ModuleSection';
 import { MonitoringCard } from './system/MonitoringCard';
+import { PhonebookCard } from './system/PhonebookCard';
 import { PrintSettingsCard } from './system/PrintSettingsCard';
 import { RolesCard } from './system/RolesCard';
 import { ScanSettingsCard } from './system/ScanSettingsCard';
@@ -139,6 +141,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="mail" title="E-Mail" icon={<AtSign {...ICON} />} summary="Verschlüsseltes Postfach des ELW (…@einsatzleitwagen.app)">
             <MailCard />
+          </SettingsSection>
+          <SettingsSection id="telefonbuch" title="Telefonbuch (DECT)" icon={<Phone {...ICON} />} summary="Kontakte als Remote-Telefonbuch für die DECT-Basis">
+            <PhonebookCard />
           </SettingsSection>
           <SettingsSection id="backup" title="Backup" icon={<DatabaseBackup {...ICON} />} summary="Verschlüsselte Sicherung, Wiederherstellen bei Neuinstallation">
             <BackupCard />
