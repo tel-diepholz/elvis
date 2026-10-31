@@ -191,12 +191,12 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
       'reichert-zbe': {
         label: 'Reichert ZBE',
         description:
-          'Funkgeräte an einer Reichert ZBE (Zentrale Bedieneinheit). ELVIS meldet sich per TCP als Client an und zeigt eingehende SDS, Status und Positionsmeldungen in der Timeline des Funkverkehrs. Nur lesend. Zum Testen ohne Anlage: „npm run zbe:sim -w @elvis/server“.',
+          'Funkgeräte an einer Reichert ZBE (Zentrale Bedieneinheit, bis zu 20 Anschlüsse). ELVIS meldet sich per TCP als Client an und zeigt Sprache mit Sprecher, SDS, Status und Positionsmeldungen je Anschluss in der Timeline des Funkverkehrs. Nur lesend. Zum Testen ohne Anlage: „npm run zbe:sim -w @elvis/server“.',
         options: {
           host: { type: 'string', label: 'Adresse der ZBE', required: true, default: '127.0.0.1', help: 'IP-Adresse oder Hostname des Reichert-Servers im Fahrzeugnetz.' },
           port: { type: 'int', label: 'Port', required: false, default: ZBE_PORT, min: 1, max: 65535 },
-          username: { type: 'string', label: 'Benutzer', required: true, default: 'demo' },
-          password: { type: 'password', label: 'Passwort', required: true },
+          username: { type: 'string', label: 'Benutzer', required: false, default: '', help: 'Leer = Standardzugang der ZBE („api“).' },
+          password: { type: 'password', label: 'Passwort', required: false, help: 'Leer = Standardzugang der ZBE.' },
           clientNumber: { type: 'int', label: 'Clientnummer', required: false, default: 1, min: 0, max: 999, help: 'Nummer, unter der sich ELVIS an der ZBE anmeldet („context client“).' },
           radios: {
             type: 'string',
@@ -205,7 +205,18 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
             default: '1:MRT:MRT Fahrzeug; 2:FRT:Funkplatz 1; 3:FRT:Funkplatz 2',
             maxLength: 1000,
             pattern: RADIOS_PATTERN,
-            help: 'Je Gerät „FuG-Nummer:Typ:Name[:ISSI]“, getrennt durch Semikolon; Typ MRT, FRT oder HRT. Meldet die ZBE eine andere Nummer, legt ELVIS das Gerät als „FuG <Nummer>“ an.',
+            help: 'Je Gerät „Anschluss:Typ:Name[:ISSI]“ mit dem Anschluss wie in den Einstellungen der ZBE (1–20), getrennt durch Semikolon; Typ MRT, FRT oder HRT. Meldet die ZBE einen anderen Anschluss, legt ELVIS ihn als „Anschluss <Nummer>“ an.',
+          },
+          style: {
+            type: 'select',
+            label: 'Schreibweise der Telegramme',
+            required: false,
+            default: 'comma',
+            choices: [
+              { value: 'comma', label: 'Komma-getrennt (Standard)' },
+              { value: 'space', label: 'Leerzeichen-getrennt' },
+            ],
+            help: 'Gilt für die Anmeldung. Nur umstellen, wenn die ZBE nach dem Verbinden keine Ereignisse schickt. Empfangen werden beide Schreibweisen.',
           },
           reconnectSeconds: { type: 'int', label: 'Neuer Verbindungsversuch nach (Sekunden)', required: false, default: 10, min: 2, max: 300 },
         },
@@ -216,6 +227,7 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
             username: String(o.username ?? ''),
             password: String(o.password ?? ''),
             clientNumber: Number(o.clientNumber ?? 1),
+            style: o.style === 'space' ? 'space' : 'comma',
             radios: parseRadios(String(o.radios ?? '')),
             reconnectMs: Number(o.reconnectSeconds || 10) * 1000,
           }),

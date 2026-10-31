@@ -83,6 +83,8 @@ function group(entries: RadioActivity[]): TimelineItem[] {
 
 function duration(item: TimelineItem, now: number): string | null {
   if (item.kind !== 'rx' && item.kind !== 'tx') return null;
+  // Zeitpunkt ohne Dauer (z. B. Sprache von der Reichert ZBE)
+  if (item.end !== null && item.end === item.start) return null;
   const ms = (item.end ? new Date(item.end).getTime() : now) - new Date(item.start).getTime();
   const s = Math.max(1, Math.round(ms / 1000));
   return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
@@ -158,7 +160,8 @@ export function RadioTimeline({ devices, live }: { devices: RadioDevice[]; live:
           {items.slice(0, limit).map((item) => {
             const known = item.peer ? byIssi.get(item.peer) : undefined;
             const own = item.peer ? ownByIssi.get(item.peer) : undefined;
-            const canMessage = MESSAGE_KINDS.includes(item.kind) && !!item.peer && !own;
+            // Sprache auch ohne erkannten Sprecher – der Fernmelder trägt den Absender dann selbst ein
+            const canMessage = MESSAGE_KINDS.includes(item.kind) && (!!item.peer || item.kind === 'rx') && !own;
             const dur = duration(item, now);
             return (
               <li key={item.id} className={`timeline-item ${item.end === null ? 'live' : ''}`}>
@@ -228,7 +231,8 @@ export function RadioTimeline({ devices, live }: { devices: RadioDevice[]; live:
 }
 
 function Sender({ item, known, own }: { item: TimelineItem; known?: RadioIdentity; own?: RadioDevice }) {
-  if (item.kind === 'tx' || !item.peer) return <strong>Eigenes Funkgerät</strong>;
+  if (item.kind === 'tx') return <strong>Eigenes Funkgerät</strong>;
+  if (!item.peer) return item.kind === 'rx' ? <strong className="muted">Sprecher unbekannt</strong> : <strong>Eigenes Funkgerät</strong>;
   if (own) return <strong>{own.name} (eigenes Gerät)</strong>;
   if (known)
     return (
@@ -260,7 +264,7 @@ function RadioToMessage({ incident, item, known, onDone }: { incident: Incident;
       : known?.forceUnitId
         ? { forceUnitId: known.forceUnitId, text: known.name }
         : { text: '' },
-    radio: { issi: item.peer! },
+    radio: item.peer ? { issi: item.peer } : undefined,
     body: item.kind === 'rx' ? '' : (item.text ?? ''),
   };
   return <MessageForm incidentId={incident.id} prefill={prefill} pending={create.isPending} onSubmit={(input) => create.mutate(input)} />;
