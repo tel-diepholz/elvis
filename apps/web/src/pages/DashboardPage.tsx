@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, BookOpenText, Network, Siren, Wind } from 'lucide-react';
+import { Bell, BookOpenText, Network, Radio, Siren, Wind } from 'lucide-react';
 import { JOURNAL_CATEGORY_LABELS, formatStrength, sumStrength, type Incident } from '@elvis/shared';
 import { api } from '../lib/api';
 import { compass, fmtDuration, fmtOpt, fmtTime } from '../lib/format';
@@ -131,13 +131,24 @@ export function DashboardPage() {
         </Link>
       )}
 
-      {(radio || network || router) && (
+      {radio && (
+        <Link to="/funk" className="card card-link">
+          <h2 className="card-title">
+            <Radio size={18} /> Funk
+          </h2>
+          <div className="grid-2">
+            <Stat label="Funkgeräte" value={radiosOnline} unit={`/ ${radio.state.devices.length}`} tone={radiosOnline === radio.state.devices.length ? 'ok' : 'warn'} />
+          </div>
+          <div className="muted">{radioActive.length ? `Aktiv: ${radioActive.map((d) => `${d.name} (${d.transmitting ? 'TX' : 'RX'})`).join(', ')}` : 'Kein Funkverkehr'}</div>
+        </Link>
+      )}
+
+      {(network || router) && (
         <Link to="/netzwerk" className="card card-link">
           <h2 className="card-title">
             <Network size={18} /> Netzwerk
           </h2>
           <div className="grid-2">
-            {radio && <Stat label="Funkgeräte" value={radiosOnline} unit={`/ ${radio.state.devices.length}`} tone={radiosOnline === radio.state.devices.length ? 'ok' : 'warn'} />}
             {router ? (
               <Stat
                 label="Internet"
@@ -156,7 +167,6 @@ export function DashboardPage() {
               )
             )}
           </div>
-          {radio && <div className="muted">{radioActive.length ? `Aktiv: ${radioActive.map((d) => `${d.name} (${d.transmitting ? 'TX' : 'RX'})`).join(', ')}` : 'Kein Funkverkehr'}</div>}
         </Link>
       )}
     </div>

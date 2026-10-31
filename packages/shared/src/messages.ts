@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { issiSchema } from './forces';
 
 /**
  * Meldungen zwischen Stab und Fernmeldern im Einsatz.
@@ -44,6 +45,8 @@ export const messageInputSchema = z.discriminatedUnion('direction', [
     body,
     /** Aus einer E-Mail im Posteingang erfasst: die Kraft bzw. Systemeinheit (sender) merkt sich die Absenderadresse */
     mailId: id.nullable().default(null),
+    /** Aus einem Funkspruch erfasst: die Kraft bzw. Systemeinheit (sender) merkt sich im Einsatz die ISSI des Funkgeräts */
+    issi: issiSchema.nullable().default(null),
   }),
 ]);
 export type MessageInput = z.input<typeof messageInputSchema>;

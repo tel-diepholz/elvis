@@ -1,4 +1,5 @@
 import type {
+  RadioIdentity,
   AuditEntry,
   DocumentFolder,
   Incident,
@@ -364,6 +365,31 @@ export class Store {
         requestId: entry.requestId ?? null,
       });
     return this.journalEntry(Number(info.lastInsertRowid))!;
+  }
+
+  // --- Funk: ISSI → Kraft je Einsatz ---
+
+  radioIds(incidentId: number): RadioIdentity[] {
+    const rows = this.db
+      .prepare(
+        `SELECT r.issi, r.unit_id, r.force_unit_id, r.updated_at, COALESCE(u.name, f.name, '') AS name, COALESCE(u.callsign, f.callsign, '') AS callsign
+         FROM radio_ids r LEFT JOIN units u ON u.id = r.unit_id LEFT JOIN force_units f ON f.id = r.force_unit_id
+         WHERE r.incident_id = ? ORDER BY r.issi`,
+      )
+      .all(incidentId) as { issi: string; unit_id: number | null; force_unit_id: number | null; updated_at: string; name: string; callsign: string }[];
+    return rows
+      .filter((r) => r.name)
+      .map((r) => ({ issi: r.issi, unitId: r.unit_id, forceUnitId: r.force_unit_id, name: r.name, callsign: r.callsign, updatedAt: r.updated_at }));
+  }
+
+  /** Merkt sich die ISSI für eine Kraft im Einsatz bzw. Systemeinheit; eine frühere Zuordnung der ISSI wird ersetzt. */
+  setRadioId(incidentId: number, issi: string, unitId: number | null, forceUnitId: number | null, at: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO radio_ids (incident_id, issi, unit_id, force_unit_id, updated_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (incident_id, issi) DO UPDATE SET unit_id = excluded.unit_id, force_unit_id = excluded.force_unit_id, updated_at = excluded.updated_at`,
+      )
+      .run(incidentId, issi, unitId, forceUnitId, at);
   }
 
   // --- Kräfte ---

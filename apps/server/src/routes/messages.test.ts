@@ -235,3 +235,38 @@ describe('Eingangsmeldungen', () => {
     expect((await act(m.id, 'route', fm1.cookie, { roleId: lage.id })).body.recipient).toBe('Lage');
   });
 });
+
+describe('Eingangsmeldung aus einem Funkspruch', () => {
+  const incoming = (sender: object, issi: string | null) =>
+    req<Message>('POST', `/api/incidents/${inc.id}/messages`, { direction: 'in', sender, recipientRoleId: lage.id, body: 'Lage unverändert', issi }, fm1.cookie);
+  const radioIds = () => req<{ issi: string; unitId: number | null; forceUnitId: number | null; name: string }[]>('GET', `/api/incidents/${inc.id}/radio-ids`);
+
+  it('merkt sich die ISSI zur gewählten Kraft im Einsatz, nicht bei Freitext', async () => {
+    expect((await radioIds()).body).toEqual([]);
+    expect((await incoming({ text: 'Unbekannt' }, '6122101')).status).toBe(201);
+    expect((await radioIds()).body).toEqual([]);
+
+    const hlf = (await req<Unit>('POST', `/api/incidents/${inc.id}/units`, { name: 'HLF 1', callsign: 'Florian 1/46-1' })).body;
+    expect((await incoming({ unitId: hlf.id, text: 'HLF 1' }, '6122101')).status).toBe(201);
+    expect((await radioIds()).body).toMatchObject([{ issi: '6122101', unitId: hlf.id, forceUnitId: null, name: 'HLF 1', callsign: 'Florian 1/46-1' }]);
+
+    // Eine Kraft kann mehrere Funkgeräte haben; eine ISSI gehört zu genau einer Kraft (neue Zuordnung ersetzt die alte)
+    const elw = (await req<Unit>('POST', `/api/incidents/${inc.id}/units`, { name: 'ELW 1' })).body;
+    await incoming({ unitId: hlf.id, text: 'HLF 1' }, '6122102');
+    await incoming({ unitId: elw.id, text: 'ELW 1' }, '6122101');
+    expect((await radioIds()).body.map((r) => [r.issi, r.name])).toEqual([
+      ['6122101', 'ELW 1'],
+      ['6122102', 'HLF 1'],
+    ]);
+  });
+
+  it('gilt nur im Einsatz und prüft die ISSI', async () => {
+    const hlf = (await req<Unit>('POST', `/api/incidents/${inc.id}/units`, { name: 'HLF 1' })).body;
+    expect((await incoming({ unitId: hlf.id, text: 'HLF 1' }, 'abc')).status).toBe(400);
+    await incoming({ unitId: hlf.id, text: 'HLF 1' }, '6122101');
+    expect((await req('POST', `/api/incidents/${inc.id}/close`, {})).status).toBe(200);
+    const next = (await req<Incident>('POST', '/api/incidents', { title: 'Zweiter Einsatz' })).body;
+    expect((await req('GET', `/api/incidents/${next.id}/radio-ids`)).body).toEqual([]);
+    expect((await radioIds()).body).toHaveLength(1);
+  });
+});

@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc -p .",
     "test": "vitest run",
-    "n2k:monitor": "tsx src/tools/n2k-monitor.ts"
+    "n2k:monitor": "tsx src/tools/n2k-monitor.ts",
+    "zbe:sim": "tsx src/tools/zbe-sim.ts"
   },
   "dependencies": {
     "@elvis/shared": "*",

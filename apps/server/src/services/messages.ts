@@ -343,6 +343,7 @@ export class MessageService {
       };
     }
 
+    let rememberedIssi = false;
     const info = this.deps.store.transaction(() => {
       const res = this.db
         .prepare(
@@ -376,9 +377,14 @@ export class MessageService {
       for (const roleId of copyTo) if (roleId !== cols.senderRoleId && roleId !== cols.recipientRoleId) insertCopy.run(messageId, roleId, this.roleName(roleId));
       // Wer auf eine Eingangsmeldung antwortet, hat sie zur Kenntnis genommen
       if (cols.replyToId !== null) this.acknowledge(this.row(cols.replyToId), actor, viewer, ts);
+      // Aus einem Funkspruch erfasst: Kraft bzw. Systemeinheit merkt sich im Einsatz die ISSI (Freitext-Absender nicht)
+      if (input.direction === 'in' && input.issi && (cols.senderUnitId !== null || cols.senderForceId !== null)) {
+        this.deps.store.setRadioId(incidentId, input.issi, cols.senderUnitId, cols.senderForceId, ts);
+        rememberedIssi = true;
+      }
       return res;
     });
-    this.deps.notify(['messages']);
+    this.deps.notify(rememberedIssi ? ['messages', 'radioIds'] : ['messages']);
     return this.get(Number(info.lastInsertRowid), viewer);
   }
 

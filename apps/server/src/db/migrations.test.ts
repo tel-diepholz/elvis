@@ -37,7 +37,7 @@ describe('Migrationen', () => {
       // v19: Rollen und Aufgaben (Spalten mit Fremdschlüssel lassen sich nicht einzeln entfernen)
       legacy.exec('ALTER TABLE force_units DROP COLUMN email; ALTER TABLE messages DROP COLUMN sender_force_id; ALTER TABLE messages DROP COLUMN recipient_force_id'); // v41
       legacy.exec('ALTER TABLE units DROP COLUMN email'); // v40
-      legacy.exec('DROP TABLE user_last_roles'); // v44
+      legacy.exec('DROP TABLE radio_ids; DROP TABLE user_last_roles'); // v44
       legacy.exec(UNDO_CONTACTS); // v39
       legacy.exec(UNDO_MAIL); // v38
       legacy.exec(UNDO_REQUESTS); // v37
@@ -82,7 +82,7 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
-      legacy.exec('DROP TABLE user_last_roles');
+      legacy.exec('DROP TABLE radio_ids; DROP TABLE user_last_roles');
       legacy.exec(UNDO_CONTACTS);
       legacy.exec(UNDO_MAIL);
       legacy.exec(UNDO_REQUESTS);

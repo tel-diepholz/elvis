@@ -6,6 +6,8 @@ import { BluetoothAdapter, SimScanner, type BluetoothSource } from './drivers/bl
 import { CamerasAdapter, type CameraSource } from './drivers/cameras.js';
 import { MonitoringAdapter, type MonitoringSource } from './drivers/monitoring.js';
 import { OpenWrtWifiAdapter, type WifiSource } from './drivers/openwrt.js';
+import { RADIOS_PATTERN, ReichertZbeAdapter, parseRadios } from './drivers/reichert/adapter.js';
+import { DEFAULT_PORT as ZBE_PORT } from './drivers/reichert/protocol.js';
 import { TeltonikaAdapter } from './drivers/teltonika.js';
 import { MediaSim } from './sim/media.js';
 import { NetworkSim } from './sim/network.js';
@@ -181,7 +183,45 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
       },
     },
   },
-  radio: { name: 'Digitalfunk', system: 'comms', drivers: { sim: sim(() => new RadioSim()) } },
+  radio: {
+    name: 'Funk',
+    system: 'comms',
+    drivers: {
+      sim: sim(() => new RadioSim()),
+      'reichert-zbe': {
+        label: 'Reichert ZBE',
+        description:
+          'Funkgeräte an einer Reichert ZBE (Zentrale Bedieneinheit). ELVIS meldet sich per TCP als Client an und zeigt eingehende SDS, Status und Positionsmeldungen in der Timeline des Funkverkehrs. Nur lesend. Zum Testen ohne Anlage: „npm run zbe:sim -w @elvis/server“.',
+        options: {
+          host: { type: 'string', label: 'Adresse der ZBE', required: true, default: '127.0.0.1', help: 'IP-Adresse oder Hostname des Reichert-Servers im Fahrzeugnetz.' },
+          port: { type: 'int', label: 'Port', required: false, default: ZBE_PORT, min: 1, max: 65535 },
+          username: { type: 'string', label: 'Benutzer', required: true, default: 'demo' },
+          password: { type: 'password', label: 'Passwort', required: true },
+          clientNumber: { type: 'int', label: 'Clientnummer', required: false, default: 1, min: 0, max: 999, help: 'Nummer, unter der sich ELVIS an der ZBE anmeldet („context client“).' },
+          radios: {
+            type: 'string',
+            label: 'Funkgeräte',
+            required: false,
+            default: '1:MRT:MRT Fahrzeug; 2:FRT:Funkplatz 1; 3:FRT:Funkplatz 2',
+            maxLength: 1000,
+            pattern: RADIOS_PATTERN,
+            help: 'Je Gerät „FuG-Nummer:Typ:Name[:ISSI]“, getrennt durch Semikolon; Typ MRT, FRT oder HRT. Meldet die ZBE eine andere Nummer, legt ELVIS das Gerät als „FuG <Nummer>“ an.',
+          },
+          reconnectSeconds: { type: 'int', label: 'Neuer Verbindungsversuch nach (Sekunden)', required: false, default: 10, min: 2, max: 300 },
+        },
+        create: (o) =>
+          new ReichertZbeAdapter({
+            host: String(o.host || '127.0.0.1'),
+            port: Number(o.port || ZBE_PORT),
+            username: String(o.username ?? ''),
+            password: String(o.password ?? ''),
+            clientNumber: Number(o.clientNumber ?? 1),
+            radios: parseRadios(String(o.radios ?? '')),
+            reconnectMs: Number(o.reconnectSeconds || 10) * 1000,
+          }),
+      },
+    },
+  },
   network: { name: 'Netzwerk & Datenfunk', system: 'comms', drivers: { sim: sim(() => new NetworkSim()) } },
   media: { name: 'Videomatrix & Kameras', system: 'media', drivers: { sim: sim(() => new MediaSim()) } },
   weather: {

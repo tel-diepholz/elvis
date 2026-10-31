@@ -851,6 +851,18 @@ const MIGRATIONS: Migration[] = [
     PRIMARY KEY (user_id, role_id)
   );
   `,
+  // ISSI → Kraft im Einsatz bzw. Systemeinheit (z. B. Leitstelle), gemerkt beim Erfassen einer Meldung aus einem
+  // Funkspruch. Je Einsatz eine Zuordnung pro ISSI; eine Kraft kann mehrere Funkgeräte haben.
+  `
+  CREATE TABLE radio_ids (
+    incident_id INTEGER NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+    issi TEXT NOT NULL,
+    unit_id INTEGER REFERENCES units(id) ON DELETE CASCADE,
+    force_unit_id INTEGER,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (incident_id, issi)
+  );
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

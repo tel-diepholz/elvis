@@ -123,7 +123,9 @@ export function evaluateAlerts(get: StateGetter, offline: DeviceId[], limits: El
   const radio = get('radio');
   if (radio) {
     const fixed = radio.devices.filter((d) => d.type !== 'HRT' && !d.online);
-    if (fixed.length > 0) {
+    // Ohne Verbindung zur Funkvermittlung meldet schon „Funk nicht erreichbar“ – nicht zusätzlich je Gerät
+    const linkDown = !!radio.link && !radio.link.connected;
+    if (!linkDown && fixed.length > 0) {
       add({ id: 'radio:fixed', severity: 'alarm', system: 'comms', title: 'Funkgerät gestört', detail: fixed.map((d) => d.name).join(', ') });
     }
   }

@@ -41,7 +41,7 @@ nichts liegen.
 
 Unter *Einstellungen → Einsatz → Meldungen* (nur Admins) ordnen Admins den Rollen ihre Aufgaben im Meldungsweg zu:
 
-- **Fernmelder** übermitteln Ausgangsmeldungen und erfassen Eingangsmeldungen (Funk, E-Mail).
+- **Fernmelder** übermitteln Ausgangsmeldungen und erfassen Eingangsmeldungen (Funk, E-Mail). Aus der Timeline auf der Seite Funk geht das mit „Meldung erstellen“. Die gewählte Kraft merkt sich dabei die ISSI für den Einsatz (siehe [Funk](fahrzeugmodule/funk-reichert-zbe.md)).
 - **Dispatcher** (optional) verteilen Eingangsmeldungen an die Zielrolle. Eine Rolle kann nicht zugleich Fernmelder
   und Dispatcher sein.
 - **Alle Eingangs-/Ausgangsmeldungen in Kopie**, z. B. für die S2 und ihr vollständiges Lagebild. Liest die

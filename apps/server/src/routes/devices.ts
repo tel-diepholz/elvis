@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { DEVICE_IDS, type CommandResponse, type DeviceId, type Topic } from '@elvis/shared';
 import type { Store } from '../db/store.js';
 import type { DeviceManager } from '../devices/manager.js';
+import { RadioHistory } from '../devices/radio/history.js';
 import { listSerialPorts } from '../devices/serialports.js';
 import { HttpError } from '../errors.js';
 import { operatorOf, parse } from './util.js';
@@ -20,6 +21,11 @@ const moduleBody = z.object({
 
 export function deviceRoutes(app: FastifyInstance, devices: DeviceManager, store: Store, notify: (topics: Topic[]) => void): void {
   app.get('/api/devices', async () => devices.snapshots());
+
+  // Verlauf der Funkaktivität (Timeline der Funk-Seite); live kommen neue Einträge mit dem Gerätezustand
+  const radioHistory = new RadioHistory(devices);
+  app.addHook('onClose', async () => radioHistory.stop());
+  app.get('/api/devices/radio/activity', async (req) => radioHistory.list(parse(z.object({ since: z.string().datetime().optional() }), req.query).since));
 
   app.get<{ Params: { id: string } }>('/api/devices/:id', async (req) => {
     if (!devices.has(req.params.id)) throw new HttpError(404, `Unbekanntes Gerät ${req.params.id}`);

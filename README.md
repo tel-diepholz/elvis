@@ -11,7 +11,7 @@ Projekthomepage mit Bildern und Funktionsübersicht: **<https://einsatzleitwagen
 
 | Bereich | Verfügbarkeit | Inhalt |
 | --- | --- | --- |
-| **Fahrzeug** | immer | Übersicht, Karte, Wetter, Netzwerk, E-Mail (mit Postfach), Kontakte |
+| **Fahrzeug** | immer | Übersicht, Karte, Wetter, Funk, Netzwerk, E-Mail (mit Postfach), Kontakte |
 | **Einsatz** | Unterseiten erst mit aufgelegtem Einsatz | Einsatztagebuch, Kräfteübersicht, Dokumente |
 | **Verwaltung** | immer | Einsatzarchiv (schreibgeschützt); nur Admins: Bedienprotokoll, Einstellungen |
 
@@ -49,7 +49,7 @@ Die vollständige Doku steht in [`docs/`](docs/README.md):
   [E-Mail](docs/funktionen/email.md) · [Dokumente](docs/funktionen/dokumente.md) ·
   [Drucken](docs/funktionen/drucken.md) · [Scannen](docs/funktionen/scannen.md) ·
   [Bildschirme](docs/funktionen/bildschirme.md)
-- **Fahrzeugmodule:** [Überblick](docs/fahrzeugmodule/README.md) · [Router](docs/fahrzeugmodule/router-teltonika.md) ·
+- **Fahrzeugmodule:** [Überblick](docs/fahrzeugmodule/README.md) · [Funk](docs/fahrzeugmodule/funk-reichert-zbe.md) · [Router](docs/fahrzeugmodule/router-teltonika.md) ·
   [Wetterstation](docs/fahrzeugmodule/wetterstation-airmar.md) · [Bluetooth](docs/fahrzeugmodule/bluetooth-victron.md) ·
   [Kameras](docs/fahrzeugmodule/kameras-axis.md) · [WLAN](docs/fahrzeugmodule/wlan-openwrt.md) ·
   [Monitoring](docs/fahrzeugmodule/monitoring.md)

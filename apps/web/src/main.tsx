@@ -13,6 +13,7 @@ import { AddonDetailPage } from './pages/AddonDetailPage';
 import { AddonsPage } from './pages/AddonsPage';
 import { ArchivedIncidentPage, ArchivePage } from './pages/ArchivePage';
 import { CommsPage } from './pages/CommsPage';
+import { FunkPage } from './pages/FunkPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { DockerHostsPage } from './pages/DockerHostsPage';
 import { DocumentsPage, JournalPage, MessagesPage, RequestsPage, TasksPage, UnitsPage } from './pages/IncidentAreaPages';
@@ -65,6 +66,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="energie" element={<EnergyPage />} />
                 <Route path="monitoring" element={<MonitoringPage />} />
                 <Route path="netzwerk" element={<ViewOnlyUnlessLoggedIn><CommsPage /></ViewOnlyUnlessLoggedIn>} />
+                <Route path="funk" element={<ViewOnlyUnlessLoggedIn><FunkPage /></ViewOnlyUnlessLoggedIn>} />
                 {/* alte Adresse (Lesezeichen) */}
                 <Route path="kommunikation" element={<Navigate to="/netzwerk" replace />} />
                 <Route path="fahrzeug" element={<Navigate to="/" replace />} />
