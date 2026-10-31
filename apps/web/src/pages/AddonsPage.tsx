@@ -150,7 +150,8 @@ export function AddonsPage() {
   const refresh = useMutation({
     mutationFn: api.refreshAddonStore,
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['addons', 'store'] });
+      // auch installierte Addons: deren „Update auf …“ hängt am Repo-Stand
+      void qc.invalidateQueries({ queryKey: ['addons'] });
       toast('success', 'Repositories aktualisiert');
     },
     onError: (e) => toast('error', e.message),
