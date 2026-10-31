@@ -144,6 +144,20 @@ export function forceTotalStrength(units: ForceUnit[], rootId: number): Strength
 
 // --- Kräfte im Einsatz ---
 
+/** Funkgerät (ISSI) einer Kraft im Einsatz bzw. einer Systemeinheit, gemerkt beim Erfassen einer Meldung aus einem Funkspruch */
+export interface RadioIdentity {
+  issi: string;
+  unitId: number | null;
+  forceUnitId: number | null;
+  name: string;
+  callsign: string;
+  updatedAt: string;
+}
+
+/** ISSI aus dem BOS-Digitalfunk (bis 8 Ziffern) */
+export const issiSchema = z.string().trim().regex(/^\d{1,8}$/, 'ISSI: bis zu 8 Ziffern');
+
+
 export interface Unit {
   id: number;
   incidentId: number;

@@ -3730,7 +3730,7 @@ select.unit-status.has-children {
 }
 .logs {
   margin: 0;
-  max-height: 420px;
+  max-height: 360px;
   overflow: auto;
   padding: 12px;
   border-radius: var(--radius-sm);
@@ -7032,4 +7032,170 @@ fieldset.field {
   font-size: 1.15rem;
   letter-spacing: 0.05em;
   user-select: all;
+}
+
+/* ---------- Funk: Timeline des Funkverkehrs ---------- */
+.radio-timeline-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.radio-timeline-toolbar select {
+  width: auto;
+  min-width: 180px;
+}
+.timeline-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 76px 14px minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: start;
+  padding: 10px 0;
+}
+/* senkrechte Linie durch die Punkte */
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: 94px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+.timeline-time {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-muted);
+  padding-top: 2px;
+  text-align: right;
+}
+.timeline-dot {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  border-radius: 50%;
+  border: 3px solid var(--bg-card);
+}
+.timeline-item.live .timeline-dot {
+  animation: timeline-pulse 1.2s ease-in-out infinite;
+}
+@keyframes timeline-pulse {
+  50% {
+    transform: scale(1.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .timeline-item.live .timeline-dot {
+    animation: none;
+  }
+}
+.timeline-body {
+  min-width: 0;
+}
+.timeline-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+.timeline-kind {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tone-kind-tx {
+  color: var(--alarm);
+}
+.tone-kind-rx {
+  color: var(--ok);
+}
+.tone-kind-sds {
+  color: var(--info);
+}
+.tone-kind-status {
+  color: var(--warn);
+}
+.tone-kind-gps,
+.tone-kind-event {
+  color: var(--text-muted);
+}
+.timeline-live {
+  font-size: 13px;
+  color: var(--ok);
+  font-weight: 600;
+}
+.timeline-text {
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  overflow-wrap: anywhere;
+}
+.timeline-actions {
+  align-self: center;
+}
+.timeline-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.timeline-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.kind-tx {
+  background: var(--alarm);
+}
+.kind-rx {
+  background: var(--ok);
+}
+.kind-sds {
+  background: var(--info);
+}
+.kind-status {
+  background: var(--warn);
+}
+.kind-gps {
+  background: var(--text-muted);
+}
+.kind-event {
+  background: var(--border-strong);
+}
+/* Schmal: Uhrzeit über dem Inhalt, Button unter dem Text */
+@media (max-width: 640px) {
+  .timeline-item {
+    grid-template-columns: 14px minmax(0, 1fr);
+  }
+  .timeline-item::before {
+    left: 6px;
+  }
+  .timeline-time {
+    grid-column: 2;
+    text-align: left;
+    padding-top: 0;
+  }
+  .timeline-dot {
+    grid-row: 1 / span 2;
+    grid-column: 1;
+  }
+  .timeline-body,
+  .timeline-actions {
+    grid-column: 2;
+  }
 }

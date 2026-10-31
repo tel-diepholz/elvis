@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/tools/n2k-monitor.ts'],
+  entry: ['src/index.ts', 'src/tools/n2k-monitor.ts', 'src/tools/zbe-sim.ts'],
   format: ['esm'],
   target: 'node20',
   platform: 'node',

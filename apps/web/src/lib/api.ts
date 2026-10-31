@@ -133,6 +133,8 @@ import {
   type ForceImportInput,
   type ForceImportPreview,
   type ForceImportResult,
+  type RadioActivity,
+  type RadioIdentity,
   type Unit,
   type UnitPatch,
   type WifiAp,
@@ -224,6 +226,8 @@ export const api = {
   journalCsvUrl: (id: number) => `/api/incidents/${id}/journal.csv`,
 
   units: (id: number) => request<Unit[]>('GET', `/api/incidents/${id}/units`),
+  radioIds: (id: number) => request<RadioIdentity[]>('GET', `/api/incidents/${id}/radio-ids`),
+  radioActivity: (since?: string) => request<RadioActivity[]>('GET', `/api/devices/radio/activity${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   addUnit: (id: number, unit: NewUnit) => request<Unit>('POST', `/api/incidents/${id}/units`, unit),
   patchUnit: (unitId: number, patch: UnitPatch) => request<Unit>('PATCH', `/api/units/${unitId}`, patch),
   deployUnit: (id: number, input: DeployUnitInput) => request<Unit>('POST', `/api/incidents/${id}/units/deploy`, input),

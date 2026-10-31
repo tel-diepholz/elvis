@@ -51,9 +51,36 @@ export interface RadioDevice {
   lastActivity: string | null;
 }
 
+/**
+ * Funkaktivität für die Timeline: Sprechen (tx), Hören (rx) als Zeitspanne, SDS, Status, Positionsmeldungen und
+ * sonstige Ereignisse der Funkvermittlung als Zeitpunkt (end === start).
+ */
+export type RadioActivityKind = 'tx' | 'rx' | 'sds' | 'status' | 'gps' | 'event';
+
+export interface RadioActivity {
+  id: string;
+  deviceId: string;
+  kind: RadioActivityKind;
+  start: string;
+  /** null = läuft noch */
+  end: string | null;
+  /** Gegenstelle (ISSI): bei Empfang und eingehenden SDS/Status der Absender */
+  peer: string | null;
+  /** Rufgruppe des Gesprächs, falls bekannt */
+  talkgroup?: string | null;
+  /** SDS-Text, Statusbezeichnung oder Ereignisname */
+  text: string | null;
+}
+
 export interface RadioState {
   talkgroups: Talkgroup[];
   devices: RadioDevice[];
+  /** Aktivität der letzten Minuten, älteste zuerst (begrenzt) */
+  activity: RadioActivity[];
+  /** Was der Treiber kann – die Oberfläche blendet nicht unterstützte Bedienelemente aus. */
+  capabilities: { talkgroupSwitch: boolean; statusSet: boolean };
+  /** Verbindung zur Funkvermittlung (z. B. Reichert ZBE); null beim Simulator */
+  link: { connected: boolean; target: string; error: string | null; lastTelegramAt: string | null } | null;
 }
 
 export type UplinkKind = 'lte' | '5g' | 'sat' | 'wan';

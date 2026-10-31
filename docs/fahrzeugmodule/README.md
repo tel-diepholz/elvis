@@ -24,6 +24,7 @@ Läuft ELVIS im Container, muss das USB-Gerät durchgereicht werden (`devices:` 
 | Modul | Seite |
 | --- | --- |
 | ELW-Router Teltonika RUTM59 | [router-teltonika.md](router-teltonika.md) |
+| Funk (Simulation, Reichert ZBE) | [funk-reichert-zbe.md](funk-reichert-zbe.md) |
 | Wetterstation Airmar 150WX | [wetterstation-airmar.md](wetterstation-airmar.md) |
 | Bluetooth: Victron-Akkus und weitere Geräte | [bluetooth-victron.md](bluetooth-victron.md) |
 | Kameras (Axis über VAPIX) | [kameras-axis.md](kameras-axis.md) |

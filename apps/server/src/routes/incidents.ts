@@ -144,6 +144,9 @@ export function incidentRoutes(
   // Kräfte
   app.get('/api/incidents/:id/units', async (req) => incidents.units(parse(idParam, req.params).id));
 
+  // Funkgeräte (ISSI) der Kräfte – gemerkt beim Erfassen von Meldungen aus Funksprüchen
+  app.get('/api/incidents/:id/radio-ids', async (req) => incidents.radioIds(parse(idParam, req.params).id));
+
   app.post('/api/incidents/:id/units', async (req, reply) => {
     const { id } = parse(idParam, req.params);
     return reply.code(201).send(incidents.addUnit(id, parse(newUnitSchema, req.body), operatorOf(req)));

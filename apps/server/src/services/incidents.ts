@@ -25,6 +25,7 @@ import {
   type NewIncident,
   type NewJournalEntry,
   type Topic,
+  type RadioIdentity,
   type Unit,
   type UnitStatus,
   type deployUnitSchema,
@@ -324,6 +325,11 @@ export class IncidentService {
   units(id: number): Unit[] {
     this.get(id);
     return this.store.units(id);
+  }
+
+  radioIds(id: number): RadioIdentity[] {
+    this.get(id);
+    return this.store.radioIds(id);
   }
 
   /** Übergeordnete Einheit prüfen: im selben Einsatz, nicht entlassen, nicht die Einheit selbst oder eine ihrer Untereinheiten */
