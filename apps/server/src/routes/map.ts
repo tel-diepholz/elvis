@@ -121,7 +121,9 @@ export function mapRoutes(app: FastifyInstance, tiles: TileService, store: Store
     const { source, z: zoom, x, y } = parse(tileParams, req.params);
     const tile = await tiles.get(source, zoom, x, y);
     if (!tile) return reply.code(404).send({ error: 'Kachel nicht verfügbar' });
-    return reply.header('content-type', tile.contentType).header('cache-control', 'public, max-age=86400').send(tile.data);
+    // Lokale Addon-Kacheln ändern sich (z. B. neu umgewandelte Luftbilder) – nur kurz im Browser halten
+    const maxAge = tiles.source(source).cache ? 86_400 : 60;
+    return reply.header('content-type', tile.contentType).header('cache-control', `public, max-age=${maxAge}`).send(tile.data);
   });
 
   // Flächen aus der Objektliste bringen viele Punkte mit

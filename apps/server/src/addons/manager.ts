@@ -148,6 +148,15 @@ export class AddonManager {
     return this.toDto(this.row(id));
   }
 
+  /** Basisadresse der eigenen Bedienseite (provides.ui) mit abschließendem „/“. */
+  uiBase(id: string): string {
+    const r = this.row(id);
+    const manifest = JSON.parse(r.manifest) as AddonManifest;
+    const ui = manifest.provides?.ui;
+    if (!ui) throw new HttpError(404, `${manifest.name} hat keine eigene Oberfläche`);
+    return renderTemplate(ui.url, this.ctx(manifest, JSON.parse(r.options) as OptionValues, r.host_id)).replace(/\/*$/, '/');
+  }
+
   private liveKey = (addonId: string, jobId: string) => `${addonId}/${jobId}`;
 
   private jobRunning(id: string): boolean {

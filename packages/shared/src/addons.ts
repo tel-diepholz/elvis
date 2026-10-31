@@ -254,6 +254,16 @@ const workstationProvision = z.object({
   aptProxy: templated.optional(),
 });
 
+/**
+ * Eigene Bedienseite des Addons: ELVIS leitet /api/addons/<id>/ui/… (nur Admins) an diese Basisadresse weiter
+ * und bettet die Seite auf der Addon-Seite ein.
+ */
+const uiProvision = z.object({
+  name: z.string().min(1).max(80).default('Oberfläche'),
+  /** Basisadresse aus Sicht von ELVIS, z. B. http://{{host.address}}:{{options.port}}/ */
+  url: templated,
+});
+
 export const addonManifestSchema = z
   .object({
     id: slug,
@@ -277,6 +287,7 @@ export const addonManifestSchema = z
         printServers: z.array(printServerProvision).default([]),
         guestPrinters: z.array(guestPrinterProvision).default([]),
         workstations: z.array(workstationProvision).default([]),
+        ui: uiProvision.optional(),
       })
       .default({}),
     /**

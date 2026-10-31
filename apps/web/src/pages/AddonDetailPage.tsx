@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Boxes, FileText, Map as MapIcon, Play, Power, RotateCw, Settings2, Square, Trash2, Wrench } from 'lucide-react';
+import { AppWindow, ArrowLeft, Boxes, ExternalLink, FileText, Map as MapIcon, Play, Power, RotateCw, Settings2, Square, Trash2, Wrench } from 'lucide-react';
 import type { InstalledAddon, OptionValues } from '@elvis/shared';
 import { api } from '../lib/api';
 import { fmtDateTime } from '../lib/format';
@@ -193,6 +193,23 @@ export function AddonDetailPage() {
         {addon.operation && (
           <Card title="Letzter Vorgang" icon={<Wrench size={18} />} className="span-3">
             <OperationSteps op={addon.operation} />
+          </Card>
+        )}
+
+        {addon.manifest?.provides.ui && (
+          <Card
+            title={addon.manifest.provides.ui.name}
+            icon={<AppWindow size={18} />}
+            className="span-3"
+            actions={
+              running && (
+                <a className="btn btn-sm" href={`/api/addons/${addon.id}/ui/`} target="_blank" rel="noreferrer">
+                  <ExternalLink size={14} /> In neuem Tab öffnen
+                </a>
+              )
+            }
+          >
+            {running ? <iframe className="addon-ui" src={`/api/addons/${addon.id}/ui/`} title={addon.manifest.provides.ui.name} /> : <p className="muted">Die Oberfläche ist verfügbar, sobald das Addon läuft.</p>}
           </Card>
         )}
 
