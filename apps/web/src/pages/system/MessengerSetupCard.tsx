@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Copy, KeyRound, LogIn, LogOut, QrCode as QrIcon, Smartphone, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, Copy, KeyRound, LogIn, LogOut, QrCode as QrIcon, Smartphone, X } from 'lucide-react';
 import { copyText } from '../DockerHostsPage';
 import { CHAT_CHANNEL_LABEL, type MessengerId, type MessengerSetupInput, type MessengerState } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { useDevice } from '../../lib/live';
 import { useToast } from '../../lib/toast';
-import { Card, Field } from '../../components/ui';
+import { Card, Field, Modal } from '../../components/ui';
+import { DocView } from '../../components/docs/DocView';
+import { MESSENGER_DOCS } from '../../components/docs/messengerDocs';
 import { QrCode } from '../../components/WifiQr';
 import { ChannelIcon } from '../../components/chat/ChannelIcon';
 
@@ -61,6 +63,7 @@ export function MessengerSetupCard({ id }: { id: MessengerId }) {
   const [password, setPassword] = useState('');
   /** Signal: gewählte Variante beim Einrichten (null = Auswahl zeigen) */
   const [variant, setVariant] = useState<'register' | null>(null);
+  const [docsOpen, setDocsOpen] = useState(false);
 
   if (!device || !state || device.driver === 'sim') return null;
   const label = CHAT_CHANNEL_LABEL[id];
@@ -75,7 +78,31 @@ export function MessengerSetupCard({ id }: { id: MessengerId }) {
   );
 
   return (
-    <Card title={`${label}-Konto`} icon={<ChannelIcon channel={id} size={18} />} className="span-3">
+    <Card
+      title={`${label}-Konto`}
+      icon={<ChannelIcon channel={id} size={18} />}
+      className="span-3"
+      actions={
+        <button type="button" className="btn btn-sm" onClick={() => setDocsOpen(true)}>
+          <BookOpen size={14} /> Anleitung
+        </button>
+      }
+    >
+      {/* Solange die Einrichtung nicht abgeschlossen ist: deutlicher Hinweis auf die Anleitung */}
+      {state.status !== 'connected' && (
+        <div className="banner banner-info setup-docs-hint">
+          <BookOpen size={16} />
+          <span>
+            Noch nicht eingerichtet? Die <strong>Schritt-für-Schritt-Anleitung</strong> zeigt, was bei {label} anzulegen und hier einzutragen ist.
+          </span>
+          <button type="button" className="btn btn-sm" onClick={() => setDocsOpen(true)}>
+            Anleitung öffnen
+          </button>
+        </div>
+      )}
+      <Modal open={docsOpen} title={`Anleitung: ${label}`} onClose={() => setDocsOpen(false)} wide>
+        <DocView markdown={MESSENGER_DOCS[id].markdown} page={MESSENGER_DOCS[id].page} />
+      </Modal>
       <dl className="kv">
         <dt>Zustand</dt>
         <dd className={state.status === 'connected' ? 'tone-ok' : state.status === 'error' ? 'tone-alarm' : undefined}>{STATUS_LABEL[state.status]}</dd>

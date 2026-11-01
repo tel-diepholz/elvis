@@ -7804,3 +7804,47 @@ fieldset.field {
     opacity: 1;
   }
 }
+
+/* Hinweis auf die Anleitung in der Kontokarte eines Messengers */
+.setup-docs-hint {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.setup-docs-hint > span {
+  flex: 1;
+  min-width: 200px;
+}
+/* Eingebettete Doku-Seite */
+.doc-view {
+  max-width: 900px;
+  overflow-wrap: anywhere;
+}
+.doc-view h1 {
+  font-size: 1.3rem;
+}
+.doc-view h2 {
+  font-size: 1.1rem;
+  margin-top: 1.4em;
+  scroll-margin-top: 12px;
+}
+.doc-view table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.doc-view th,
+.doc-view td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.doc-view blockquote {
+  margin: 8px 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+}
