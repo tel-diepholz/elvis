@@ -7978,3 +7978,275 @@ fieldset.field {
     display: none;
   }
 }
+
+/* ---------- Übersicht: eigenes Raster je Benutzer ---------- */
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dash-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: -8px;
+}
+.dash-toolbar.editing {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  justify-content: flex-start;
+  margin-top: 0;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--info) 50%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--info) 8%, var(--bg-card));
+}
+.dash-toolbar-hint {
+  order: 10;
+  flex-basis: 100%;
+  font-size: 13px;
+}
+.dash-toolbar-spacer {
+  flex: 1;
+}
+.dash-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--dash-gap, 12px);
+}
+.dash-grid.editing {
+  touch-action: none;
+  user-select: none;
+  border-radius: var(--radius);
+}
+.dash-grid.stacked {
+  grid-template-columns: 1fr;
+}
+.dash-tile {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+}
+.dash-tile.display-tile-image {
+  border: 0;
+  background: transparent;
+}
+.dash-tile-head {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 14px 0;
+}
+.dash-tile-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+a.dash-tile-title:hover {
+  color: var(--info);
+}
+.dash-tile-more {
+  color: var(--text-muted);
+}
+.dash-tile-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  overflow: hidden;
+}
+.dash-tile-body > .tile-scroll,
+.dash-tile-body > .dash-list,
+.dash-tile-body > .dash-status,
+.dash-tile-body > .dash-status-list {
+  height: 100%;
+  overflow: auto;
+}
+/* Bildschirmkacheln sind für große Schrift gebaut – auf der Übersicht etwas zurückhaltender */
+.dash-tile .tile-scroll {
+  font-size: 14px;
+  padding: 8px 14px;
+}
+.dash-tile .tile-empty {
+  font-size: 14px;
+}
+.dash-tile .tile-tasks,
+.dash-tile .tile-forces,
+.dash-tile .tile-network {
+  font-size: clamp(12px, 5cqmin, 18px);
+}
+.dash-list {
+  margin: 0;
+  padding: 8px 14px 12px;
+}
+.dash-empty-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.dash-incident {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  height: 100%;
+  padding: 8px 18px 14px;
+  overflow: auto;
+}
+.dash-incident-main {
+  min-width: 0;
+}
+.dash-incident-stats {
+  display: flex;
+  gap: 24px;
+}
+.dash-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 14px 12px;
+}
+.dash-status-head {
+  font-weight: 650;
+}
+.dash-status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.dash-tile-body > .dash-status-list {
+  padding: 8px 14px 12px;
+}
+.dash-status-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Bearbeiten */
+.dash-grid.editing .dash-tile {
+  cursor: grab;
+  outline: 1px dashed color-mix(in srgb, var(--info) 60%, transparent);
+  outline-offset: -1px;
+}
+.dash-grid.editing .dash-tile:focus-visible {
+  outline: 2px solid var(--info);
+}
+.dash-grid.editing .dash-tile-body,
+.dash-grid.editing .dash-tile-head {
+  pointer-events: none;
+  opacity: 0.55;
+}
+.dash-tile.dragging {
+  cursor: grabbing;
+  z-index: 5;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.dash-placeholder {
+  border: 2px dashed var(--info);
+  border-radius: var(--radius);
+  background: var(--info-bg);
+}
+.dash-tile-edit {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.dash-tile-edit-bar {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: auto;
+}
+.dash-tile-edit-bar > .ellipsis {
+  flex: 1;
+  min-width: 0;
+}
+.dash-tile-size {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+.dash-tile-resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 24px;
+  height: 24px;
+  cursor: nwse-resize;
+  pointer-events: auto;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, var(--text-muted) 50%, var(--text-muted) 60%, transparent 60%, transparent 70%, var(--text-muted) 70%, var(--text-muted) 80%, transparent 80%);
+}
+.dash-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+.dash-catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
+.dash-catalog-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  text-align: left;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  cursor: pointer;
+}
+.dash-catalog-item:hover {
+  border-color: var(--info);
+}
+.dash-catalog-item > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--info);
+}
+.dash-catalog-item .cell-sub {
+  display: block;
+  margin-top: 2px;
+}

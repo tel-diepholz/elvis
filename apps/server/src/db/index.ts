@@ -983,6 +983,14 @@ const MIGRATIONS: Migration[] = [
   );
   CREATE INDEX phone_key_overrides_incident ON phone_key_overrides(incident_id);
   `,
+  // Übersicht: Kachelanordnung je Benutzer (unabhängig vom Einsatz)
+  `
+  CREATE TABLE user_dashboards (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    layout_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

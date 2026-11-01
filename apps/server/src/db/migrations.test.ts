@@ -17,7 +17,7 @@ const BEFORE_FORCES = `
   CREATE INDEX units_incident ON units(incident_id);
 `;
 
-const UNDO_TELEPHONY = 'DROP TABLE phone_key_overrides; DROP TABLE phones; DROP TABLE chat_reachability; DROP TABLE chat_messages; DROP TABLE chat_files; DROP TABLE calls; ALTER TABLE force_units DROP COLUMN mobile; ALTER TABLE units DROP COLUMN mobile';
+const UNDO_TELEPHONY = 'DROP TABLE user_dashboards; DROP TABLE phone_key_overrides; DROP TABLE phones; DROP TABLE chat_reachability; DROP TABLE chat_messages; DROP TABLE chat_files; DROP TABLE calls; ALTER TABLE force_units DROP COLUMN mobile; ALTER TABLE units DROP COLUMN mobile';
 const UNDO_CONTACTS = 'DROP TABLE contact_category_members; DROP TABLE contacts; DROP TABLE contact_categories; ALTER TABLE personnel DROP COLUMN email';
 /** v37 zurückdrehen: Anforderungen samt Verweisen */
 const UNDO_MAIL = 'DROP TABLE mail_attachments; DROP TABLE mail_messages; DROP TABLE mail_keys';
@@ -115,13 +115,13 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
-      legacy.exec('DROP TABLE phone_key_overrides; DROP TABLE phones; DROP TABLE chat_reachability; DROP TABLE chat_messages; DROP TABLE chat_files');
+      legacy.exec('DROP TABLE user_dashboards; DROP TABLE phone_key_overrides; DROP TABLE phones; DROP TABLE chat_reachability; DROP TABLE chat_messages; DROP TABLE chat_files');
       legacy.exec(`CREATE TABLE sms_messages (id INTEGER PRIMARY KEY, folder TEXT NOT NULL, port INTEGER, number TEXT NOT NULL, text TEXT NOT NULL,
         status TEXT NOT NULL, error TEXT, seen INTEGER NOT NULL DEFAULT 0, date TEXT NOT NULL, created_by TEXT NOT NULL)`);
       legacy.exec(`INSERT INTO sms_messages VALUES (7, 'inbox', 1, '+491711234567', 'Hallo', 'received', NULL, 0, 't1', 'Gateway'),
         (9, 'sent', 2, '+491609999999', 'Rückruf', 'failed', 'Netz', 1, 't2', 'Max Müller')`);
       // Stand vor der SMS-Migration (danach: Signal-Kennungen neu prüfen)
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 3}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 4}`);
       legacy.close();
 
       const db = openDb(dir);
@@ -141,10 +141,10 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
-      legacy.exec('DROP TABLE phone_key_overrides; DROP TABLE phones');
+      legacy.exec('DROP TABLE user_dashboards; DROP TABLE phone_key_overrides; DROP TABLE phones');
       legacy.exec(`INSERT INTO chat_reachability VALUES ('signal', '+491711234567', 1, '+491711234567', '2099-01-01'),
         ('signal', '+491609999999', 1, 'uuid-x', '2099-01-01'), ('threema', '+491711234567', 1, 'ABCD1234', '2099-01-01')`);
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 2}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 3}`);
       legacy.close();
 
       const db = openDb(dir);

@@ -78,6 +78,8 @@ import {
   type DisplayImage,
   type DisplayScene,
   type DisplayLayout,
+  type DashboardLayout,
+  type DashboardResponse,
   type DisplaySelf,
   type DisplayTheme,
   type Workstation,
@@ -230,6 +232,9 @@ export const api = {
   command: (device: DeviceId, action: string, params?: Record<string, unknown>) =>
     request<CommandResponse>('POST', `/api/devices/${device}/commands`, { action, params }),
 
+  dashboard: () => request<DashboardResponse>('GET', '/api/me/dashboard'),
+  saveDashboard: (layout: DashboardLayout) => request<DashboardResponse>('PUT', '/api/me/dashboard', layout),
+  resetDashboard: () => request<DashboardResponse>('DELETE', '/api/me/dashboard'),
   incidents: () => request<Incident[]>('GET', '/api/incidents'),
   activeIncident: () => request<Incident | null>('GET', '/api/incidents/active'),
   incident: (id: number) => request<Incident>('GET', `/api/incidents/${id}`),
