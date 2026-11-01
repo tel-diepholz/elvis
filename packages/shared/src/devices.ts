@@ -6,6 +6,8 @@
 import type { AddonOption, OptionValues } from './addons';
 import type { BluetoothState } from './bluetooth';
 import type { MonitoringState } from './monitoring';
+import type { TelephonyState } from './telephony';
+import type { MessengerState } from './chat';
 
 export type SystemId = 'energy' | 'vehicle' | 'comms' | 'media' | 'weather';
 
@@ -415,11 +417,16 @@ export interface DeviceStateMap {
   weather: WeatherState;
   monitoring: MonitoringState;
   bluetooth: BluetoothState;
+  telephony: TelephonyState;
+  signal: MessengerState;
+  threema: MessengerState;
+  whatsapp: MessengerState;
+  telegram: MessengerState;
 }
 
 export type DeviceId = keyof DeviceStateMap;
 
-export const DEVICE_IDS: readonly DeviceId[] = ['router', 'wifi', 'cameras', 'radio', 'network', 'media', 'weather', 'monitoring', 'bluetooth'];
+export const DEVICE_IDS: readonly DeviceId[] = ['router', 'wifi', 'cameras', 'radio', 'network', 'media', 'weather', 'monitoring', 'bluetooth', 'telephony', 'signal', 'threema', 'whatsapp', 'telegram'];
 
 export interface DeviceSnapshot<K extends DeviceId = DeviceId> {
   id: K;

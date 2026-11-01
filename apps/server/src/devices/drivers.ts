@@ -1,4 +1,4 @@
-import type { AddonOption, DeviceId, OptionValues, SystemId } from '@elvis/shared';
+import { phoneKey, type AddonOption, type DeviceId, type OptionValues, type SystemId } from '@elvis/shared';
 import type { DeviceAdapter } from './adapter.js';
 import { BluezScanner } from './bluetooth/bluez.js';
 import { AirmarAdapter } from './drivers/airmar.js';
@@ -9,10 +9,21 @@ import { OpenWrtWifiAdapter, type WifiSource } from './drivers/openwrt.js';
 import { RADIOS_PATTERN, ReichertZbeAdapter, parseRadios } from './drivers/reichert/adapter.js';
 import { DEFAULT_PORT as ZBE_PORT } from './drivers/reichert/protocol.js';
 import { TeltonikaAdapter } from './drivers/teltonika.js';
+import { TRUNKS_PATTERN, YeastarTgAdapter, parseTrunks } from './drivers/yeastar/adapter.js';
+import { DEFAULT_PORT as TG_PORT } from './drivers/yeastar/protocol.js';
 import { MediaSim } from './sim/media.js';
 import { NetworkSim } from './sim/network.js';
 import { RadioSim } from './sim/radio.js';
 import { RouterSim } from './sim/router.js';
+import { TelephonySim } from './sim/telephony.js';
+import { MessengerSim } from './sim/messenger.js';
+import { SignalCliAdapter } from './drivers/signal/adapter.js';
+import { TelegramAdapter } from './drivers/telegram/adapter.js';
+import { WhatsAppCloudAdapter } from './drivers/whatsapp/cloud.js';
+import { ThreemaGatewayAdapter } from './drivers/threema/gateway.js';
+import type { DriverVault, HookSource, MessengerBus } from './messaging/bus.js';
+import type { MessengerProvisions } from './messaging/provisions.js';
+import type { TelephonyBus } from './telephony/bus.js';
 import { WeatherSim } from './sim/weather.js';
 
 export interface DriverDefinition<K extends DeviceId> {
@@ -32,6 +43,16 @@ export interface DriverDeps {
   monitoring: MonitoringSource;
   /** Bluetooth-Geräte aus den Einstellungen */
   bluetooth: BluetoothSource;
+  /** Eingehende SMS und beendete Gespräche an SMS-Postfach und Anrufliste */
+  telephony: TelephonyBus;
+  /** Eingehende Nachrichten und Zustellbestätigungen der Messenger an die Nachrichten */
+  messenger: MessengerBus;
+  /** Ablage für Treiber (Sitzungen, Schlüssel) */
+  vault: DriverVault;
+  /** Webhooks über das Cloud-Relay */
+  hooks: HookSource;
+  /** Hilfsdienste der Messenger aus Addons (signal-cli) */
+  messengerServices: MessengerProvisions;
 }
 
 export interface DeviceDefinition<K extends DeviceId> {
@@ -54,6 +75,12 @@ const sim = <K extends DeviceId>(create: (options: OptionValues) => DeviceAdapte
   description: 'Simulierte Werte zum Testen und Vorführen.',
   options: {},
   create,
+});
+
+const messengerSim = (name: string) => ({
+  label: 'Simulation',
+  description: `Simuliertes ${name}-Konto: Senden klappt nach einer Sekunde, danach „zugestellt“ und „gelesen“. Gelegentlich kommt eine Nachricht. Eine Nachricht mit „#fehler“ im Text schlägt fehl.`,
+  options: {},
 });
 
 /**
@@ -231,6 +258,167 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
             radios: parseRadios(String(o.radios ?? '')),
             reconnectMs: Number(o.reconnectSeconds || 10) * 1000,
           }),
+      },
+    },
+  },
+  telephony: {
+    name: 'Telefonie (GSM-Gateway)',
+    system: 'comms',
+    drivers: {
+      sim: {
+        label: 'Simulation',
+        description: 'Zwei GSM-Trunks mit gelegentlichen Anrufen und SMS. Eine SMS mit „#fehler“ im Text schlägt fehl.',
+        options: {},
+        create: (_o, deps) => new TelephonySim(deps.telephony),
+      },
+      'yeastar-tg': {
+        label: 'Yeastar NeoGate TG (TG200 u. a.)',
+        description:
+          'GSM-Gateway über die TG-API (TCP 5038): Zustand der GSM-Trunks, SMS senden und empfangen, Anrufe ins Einsatztagebuch. Die API muss im Gateway freigeschaltet sein (eigener API-Benutzer). Den SIP-Zustand meldet die API nicht – ELVIS prüft, ob der SIP-Dienst des Gateways antwortet.',
+        options: {
+          host: { type: 'string', label: 'Adresse des Gateways', required: true, default: '192.168.128.150', help: 'IP-Adresse oder Hostname im Fahrzeugnetz.' },
+          port: { type: 'int', label: 'API-Port', required: false, default: TG_PORT, min: 1, max: 65535 },
+          username: { type: 'string', label: 'API-Benutzer', required: true, default: 'apiuser', help: 'Im Gateway unter „API“ eingerichtet – nicht der Benutzer der Weboberfläche.' },
+          password: { type: 'password', label: 'API-Passwort', required: true },
+          trunks: {
+            type: 'string',
+            label: 'Bezeichnung der Trunks',
+            required: false,
+            default: '1:GSM 1; 2:GSM 2',
+            maxLength: 300,
+            pattern: TRUNKS_PATTERN,
+            help: 'Je Port „Nummer:Name“, getrennt durch Semikolon, z. B. „1:Telekom D1; 2:Vodafone“.',
+          },
+          smsPort: { type: 'int', label: 'Port für ausgehende SMS', required: false, default: 1, min: 0, max: 32, help: '0 = erster verbundener Trunk.' },
+          sipCheck: { type: 'bool', label: 'SIP-Dienst prüfen', required: false, default: true, help: 'Fragt den SIP-Dienst des Gateways per SIP OPTIONS (UDP) ab.' },
+          sipPort: { type: 'int', label: 'SIP-Port des Gateways', required: false, default: 5060, min: 1, max: 65535 },
+          pollSeconds: { type: 'int', label: 'Abfrageintervall (Sekunden)', required: false, default: 30, min: 5, max: 600 },
+          reconnectSeconds: { type: 'int', label: 'Neuer Verbindungsversuch nach (Sekunden)', required: false, default: 10, min: 2, max: 300 },
+        },
+        create: (o, deps) =>
+          new YeastarTgAdapter(
+            {
+              host: String(o.host || '192.168.128.150'),
+              port: Number(o.port || TG_PORT),
+              username: String(o.username ?? ''),
+              password: String(o.password ?? ''),
+              trunks: parseTrunks(String(o.trunks ?? '')),
+              smsPort: Number(o.smsPort ?? 1) > 0 ? Number(o.smsPort ?? 1) : null,
+              sipPort: o.sipCheck === false ? null : Number(o.sipPort || 5060),
+              pollMs: Number(o.pollSeconds || 30) * 1000,
+              reconnectMs: Number(o.reconnectSeconds || 10) * 1000,
+            },
+            deps.telephony,
+          ),
+      },
+    },
+  },
+  signal: {
+    name: 'Signal',
+    system: 'comms',
+    drivers: {
+      sim: { ...messengerSim('Signal'), create: (_o, deps) => new MessengerSim('signal', deps.messenger) },
+      'signal-cli': {
+        label: 'signal-cli (Addon)',
+        description:
+          'Signal über signal-cli aus dem Addon „Signal (signal-cli)“ – das Addon zuerst auf einem Docker-Host installieren, ELVIS findet es von selbst. Einrichten unter dem Modul: als verknüpftes Gerät per QR-Code oder mit eigener Nummer (Captcha und Bestätigungscode). Text und Bilder; Standorte gehen als Kartenlink.',
+        options: {
+          account: { type: 'string', label: 'Rufnummer des Kontos', required: false, default: '', maxLength: 40, help: 'Nur nötig, wenn in signal-cli mehrere Konten liegen; leer = das erste. Eine neue Nummer richtet die Karte „Signal-Konto“ ein.' },
+          deviceName: { type: 'string', label: 'Gerätename beim Koppeln', required: false, default: 'ELVIS', maxLength: 50, help: 'So erscheint ELVIS in der Signal-App unter „Verknüpfte Geräte“.' },
+          reconnectSeconds: { type: 'int', label: 'Neuer Verbindungsversuch nach (Sekunden)', required: false, default: 15, min: 2, max: 600 },
+        },
+        create: (o, deps) =>
+          new SignalCliAdapter(
+            {
+              // Immer signal-cli aus dem Addon (Adresse und Token meldet das Addon über provides.messengers)
+              endpoint: () => {
+                const addon = deps.messengerServices.first('signal-cli');
+                return addon ? { url: addon.url, token: addon.token } : null;
+              },
+              account: String(o.account ?? '').trim() || null,
+              deviceName: String(o.deviceName || 'ELVIS'),
+              reconnectMs: Number(o.reconnectSeconds || 15) * 1000,
+            },
+            deps.messenger,
+          ),
+      },
+    },
+  },
+  threema: {
+    name: 'Threema',
+    system: 'comms',
+    drivers: {
+      sim: { ...messengerSim('Threema'), create: (_o, deps) => new MessengerSim('threema', deps.messenger) },
+      'gateway-e2e': {
+        label: 'Threema Gateway (E2E)',
+        description:
+          'Threema Gateway im Ende-zu-Ende-Modus (gateway.threema.ch): ELVIS verschlüsselt selbst, der private Schlüssel bleibt im Fahrzeug. Jede Nachricht kostet Credits. Empfang über das Cloud-Relay – die Rückruf-URL steht unter dem Modul und wird bei der Gateway-ID eingetragen. Text, Bilder und Standorte.',
+        options: {
+          gatewayId: { type: 'string', label: 'Gateway-ID', required: true, maxLength: 8, pattern: '^\\*[A-Z0-9]{7}$', help: 'E2E-ID mit Stern, z. B. *ELVIS01' },
+          secret: { type: 'password', label: 'API-Secret', required: true },
+          privateKey: { type: 'password', label: 'Privater Schlüssel', required: true, help: '64 Hex-Zeichen (auch „private:…“), beim Anlegen der ID mit dem Threema-Werkzeug erzeugt.' },
+          apiUrl: { type: 'string', label: 'API-Adresse', required: false, default: 'https://msgapi.threema.ch', maxLength: 200 },
+        },
+        create: (o, deps) =>
+          new ThreemaGatewayAdapter(
+            { gatewayId: String(o.gatewayId ?? '').trim().toUpperCase(), secret: String(o.secret ?? ''), privateKey: String(o.privateKey ?? ''), apiUrl: String(o.apiUrl || 'https://msgapi.threema.ch') },
+            deps.messenger,
+            deps.hooks,
+          ),
+      },
+    },
+  },
+  whatsapp: {
+    name: 'WhatsApp',
+    system: 'comms',
+    drivers: {
+      sim: { ...messengerSim('WhatsApp'), create: (_o, deps) => new MessengerSim('whatsapp', deps.messenger) },
+      'cloud-api': {
+        label: 'WhatsApp Cloud API (Meta)',
+        description:
+          'Offizielle Cloud API von Meta mit eigener Rufnummer (WhatsApp Business). Senden über die Graph API, Empfang über das Cloud-Relay – Webhook-Adresse und Prüf-Token stehen unter dem Modul. Freie Nachrichten gehen nur bis 24 h nach der letzten Nachricht der Gegenstelle, danach nur eine freigegebene Vorlage. Ob eine Rufnummer WhatsApp nutzt, verrät die Cloud API nicht.',
+        options: {
+          phoneNumberId: { type: 'string', label: 'Phone-Number-ID', required: true, maxLength: 40, pattern: '^\\d{5,30}$', help: 'Meta-Entwicklerportal → WhatsApp → API-Setup' },
+          accessToken: { type: 'password', label: 'Zugriffstoken', required: true, help: 'Dauerhaftes Token eines Systembenutzers (Business-Einstellungen), nicht das 24-h-Testtoken.' },
+          appSecret: { type: 'password', label: 'App-Geheimnis', required: true, help: 'App-Einstellungen → Allgemein; prüft die Signatur eingehender Webhooks.' },
+          templateName: { type: 'string', label: 'Vorlage außerhalb des 24-h-Fensters', required: false, default: '', maxLength: 100, help: 'Name einer freigegebenen Vorlage; leer = außerhalb des Fensters nicht senden.' },
+          templateLanguage: { type: 'string', label: 'Sprache der Vorlage', required: false, default: 'de', maxLength: 10 },
+          templateHasText: { type: 'bool', label: 'Vorlage hat einen Textbaustein {{1}}', required: false, default: true, help: 'Der Nachrichtentext kommt in den Baustein {{1}} der Vorlage.' },
+          graphUrl: { type: 'string', label: 'Graph-API', required: false, default: 'https://graph.facebook.com/v21.0', maxLength: 200 },
+        },
+        create: (o, deps) =>
+          new WhatsAppCloudAdapter(
+            {
+              phoneNumberId: String(o.phoneNumberId ?? '').trim(),
+              accessToken: String(o.accessToken ?? ''),
+              appSecret: String(o.appSecret ?? ''),
+              templateName: String(o.templateName ?? '').trim(),
+              templateLanguage: String(o.templateLanguage || 'de'),
+              templateHasText: o.templateHasText !== false,
+              graphUrl: String(o.graphUrl || 'https://graph.facebook.com/v21.0'),
+            },
+            deps.messenger,
+            deps.hooks,
+          ),
+      },
+    },
+  },
+  telegram: {
+    name: 'Telegram',
+    system: 'comms',
+    drivers: {
+      sim: { ...messengerSim('Telegram'), create: (_o, deps) => new MessengerSim('telegram', deps.messenger) },
+      mtproto: {
+        label: 'Telegram-Konto (MTProto)',
+        description:
+          'Eigenes Telegram-Konto des Fahrzeugs (kein Bot): kann Rufnummern anschreiben und prüfen, wer Telegram nutzt (über den Kontaktimport des Kontos). API-ID und API-Hash unter my.telegram.org → „API development tools“ anlegen. Anmelden unter dem Modul mit Code und ggf. Passwort; die Sitzung bleibt gespeichert.',
+        options: {
+          apiId: { type: 'int', label: 'API-ID', required: true, min: 1, max: 2147483647, help: 'my.telegram.org → API development tools' },
+          apiHash: { type: 'password', label: 'API-Hash', required: true },
+          phone: { type: 'string', label: 'Rufnummer des Kontos', required: true, maxLength: 40, pattern: '^\\+?[\\d\\s/()-]{6,30}$', help: 'Mit Ländervorwahl, z. B. +49 170 1234567.' },
+        },
+        create: (o, deps) =>
+          new TelegramAdapter({ apiId: Number(o.apiId ?? 0), apiHash: String(o.apiHash ?? ''), phone: phoneKey(String(o.phone ?? '')) }, deps.messenger, deps.vault),
       },
     },
   },

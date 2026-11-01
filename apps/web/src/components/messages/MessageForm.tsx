@@ -16,6 +16,8 @@ export interface MessagePrefill {
   sender?: MessagePartyInput;
   /** Eingang aus einer E-Mail: die Absenderadresse merkt sich die gewählte Kraft */
   mail?: { id: number; from: string };
+  /** Eingang aus einer Nachricht (SMS, Messenger): die Rufnummer merkt sich die gewählte Kraft */
+  chat?: { id: number; from: string | null };
   /** Eingang aus einem Funkspruch: die gewählte Kraft merkt sich im Einsatz die ISSI des Funkgeräts */
   radio?: { issi: string };
   senderRoleId?: number | null;
@@ -51,7 +53,7 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
 
   const input = (): MessageInput =>
     incoming
-      ? { direction: 'in', sender: party, recipientRoleId: dispatcherRoutes ? null : recipientRoleId, body, mailId: prefill?.mail?.id ?? null, issi: prefill?.radio?.issi ?? null }
+      ? { direction: 'in', sender: party, recipientRoleId: dispatcherRoutes ? null : recipientRoleId, body, mailId: prefill?.mail?.id ?? null, issi: prefill?.radio?.issi ?? null, chatId: prefill?.chat?.id ?? null }
       : { direction: 'out', senderRoleId: senderRoleId ?? 0, recipient: party, body, replyToId: prefill?.replyToId ?? null, requestId: prefill?.requestId ?? null };
 
   const submit = (e: FormEvent) => {
@@ -89,7 +91,9 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
             hint={
               prefill?.mail
                 ? `Kraft im Einsatz oder aus dem Katalog (z. B. Leitstelle) wählen – sie merkt sich ${prefill.mail.from}, Ausgangsmeldungen lassen sich dann per E-Mail senden`
-                : prefill?.radio
+                : prefill?.chat?.from
+                  ? `Kraft im Einsatz oder aus dem Katalog (z. B. Leitstelle) wählen – sie merkt sich ${prefill.chat.from}, Ausgangsmeldungen lassen sich dann per Nachricht senden`
+                  : prefill?.radio
                   ? `Funkspruch von ISSI ${prefill.radio.issi} – die gewählte Kraft merkt sich die ISSI für diesen Einsatz`
                   : 'Kraft aus der Kräfteverwaltung oder Freitext'
             }
@@ -136,7 +140,7 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
         <span className="field-label">
           Meldung * ({body.length}/{MESSAGE_BODY_MAX})
         </span>
-        <MarkdownEditor value={body} onChange={setBody} maxLength={MESSAGE_BODY_MAX} placeholder={'Text der Meldung\n- Aufzählung mit „- “'} autoFocus={!!prefill && !prefill.mail && (!prefill.radio || party.unitId != null || party.forceUnitId != null)} />
+        <MarkdownEditor value={body} onChange={setBody} maxLength={MESSAGE_BODY_MAX} placeholder={'Text der Meldung\n- Aufzählung mit „- “'} autoFocus={!!prefill && !prefill.mail && !prefill.chat && (!prefill.radio || party.unitId != null || party.forceUnitId != null)} />
       </div>
 
       {!ctx?.radioConfigured && !incoming && <p className="hint tone-warn">Noch keine Fernmelder-Rolle eingestellt – niemand wird benachrichtigt (Einstellungen → Meldungen).</p>}

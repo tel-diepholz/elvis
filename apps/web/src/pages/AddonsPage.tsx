@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Package, PackagePlus, RefreshCw, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, BookOpen, Package, PackagePlus, RefreshCw, ShieldAlert } from 'lucide-react';
 import { defaultOptionValues, renderTemplate, requestedPermissions, type AddonManifest, type AddonStoreEntry, type DockerHost, type OptionValues } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useToast } from '../lib/toast';
 import { OptionsForm, validateOptions } from '../components/OptionsForm';
 import { Badge, Card, EmptyState, Field, Loading, Modal, PageHeader, Segmented } from '../components/ui';
 import { AddonStatusBadge } from './addons/common';
+import { AddonDocs } from './addons/AddonDocs';
 
 function InstallDialog({ manifest, hosts, onClose }: { manifest: AddonManifest; hosts: DockerHost[]; onClose: () => void }) {
   const toast = useToast();
@@ -100,7 +101,7 @@ function InstallDialog({ manifest, hosts, onClose }: { manifest: AddonManifest; 
   );
 }
 
-function StoreCard({ entry, onInstall }: { entry: AddonStoreEntry; onInstall: (m: AddonManifest) => void }) {
+function StoreCard({ entry, onInstall, onDocs }: { entry: AddonStoreEntry; onInstall: (m: AddonManifest) => void; onDocs: (m: AddonManifest) => void }) {
   const m = entry.manifest;
   if (!m) {
     return (
@@ -124,6 +125,11 @@ function StoreCard({ entry, onInstall }: { entry: AddonStoreEntry; onInstall: (m
         <Badge>{entry.repository.name}</Badge>
       </div>
       <div className="btn-row">
+        {entry.hasDocs && (
+          <button className="btn btn-sm" onClick={() => onDocs(m)}>
+            <BookOpen size={16} /> Anleitung
+          </button>
+        )}
         {entry.installedVersion ? (
           <Link to={`/addons/${m.id}`} className="btn btn-sm">
             Öffnen
@@ -142,6 +148,7 @@ export function AddonsPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const [tab, setTab] = useState<'installed' | 'store'>('installed');
+  const [docs, setDocs] = useState<AddonManifest | null>(null);
   const [installing, setInstalling] = useState<AddonManifest | null>(null);
   const { data: installed, isLoading } = useQuery({ queryKey: ['addons', 'list'], queryFn: api.addons });
   const { data: store } = useQuery({ queryKey: ['addons', 'store'], queryFn: api.addonStore });
@@ -217,12 +224,15 @@ export function AddonsPage() {
 
       {tab === 'store' && (
         <div className="grid">
-          {store?.map((e, i) => <StoreCard key={`${e.repository.id}-${e.addonDir}-${i}`} entry={e} onInstall={setInstalling} />)}
+          {store?.map((e, i) => <StoreCard key={`${e.repository.id}-${e.addonDir}-${i}`} entry={e} onInstall={setInstalling} onDocs={setDocs} />)}
         </div>
       )}
 
       <Modal open={!!installing} title={installing ? `${installing.name} installieren` : ''} onClose={() => setInstalling(null)}>
         {installing && <InstallDialog manifest={installing} hosts={hosts} onClose={() => setInstalling(null)} />}
+      </Modal>
+      <Modal open={!!docs} title={docs ? `Anleitung: ${docs.name}` : ''} onClose={() => setDocs(null)} wide>
+        {docs && <AddonDocs id={docs.id} />}
       </Modal>
     </>
   );

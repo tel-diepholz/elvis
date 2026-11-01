@@ -5,12 +5,13 @@ import type { ForceService } from '../services/forces.js';
 import type { IncidentService } from '../services/incidents.js';
 import type { MailService } from '../services/mail.js';
 import type { MessageService } from '../services/messages.js';
+import type { ChatService } from '../services/chat.js';
 import type { TaskViewer } from '../services/tasks.js';
 import { actorOf, idParam, operatorOf, parse } from './util.js';
 
 const viewerOf = (req: FastifyRequest): TaskViewer => ({ userId: actorOf(req).id, roleIds: req.roleIds });
 
-export function messageRoutes(app: FastifyInstance, deps: { messages: MessageService; store: Store; incidents: IncidentService; forces: ForceService; mail: MailService; notify: (t: Topic[]) => void }): void {
+export function messageRoutes(app: FastifyInstance, deps: { messages: MessageService; store: Store; incidents: IncidentService; forces: ForceService; mail: MailService; chat: ChatService; notify: (t: Topic[]) => void }): void {
   const { messages } = deps;
   const id = (req: FastifyRequest) => parse(idParam, req.params).id;
 
@@ -40,6 +41,14 @@ export function messageRoutes(app: FastifyInstance, deps: { messages: MessageSer
     if (mailFrom && unit && unit.email !== mailFrom) deps.incidents.patchUnit(unit.id, parse(unitPatchSchema, { email: mailFrom }), operatorOf(req));
     if (mailFrom && created.senderForceUnitId !== null) {
       deps.forces.setEmail(created.senderForceUnitId, mailFrom);
+      deps.notify(['forces']);
+    }
+    // Aus einer Nachricht erfasst: Rufnummer merken – für Ausgangsmeldungen per SMS oder Messenger
+    const chatFrom = input.direction === 'in' && input.chatId !== null ? deps.chat.message(input.chatId) : null;
+    const number = chatFrom?.folder === 'inbox' ? chatFrom.number : null;
+    if (number && unit && unit.mobile !== number) deps.incidents.patchUnit(unit.id, parse(unitPatchSchema, { mobile: number }), operatorOf(req));
+    if (number && created.senderForceUnitId !== null) {
+      deps.forces.setMobile(created.senderForceUnitId, number);
       deps.notify(['forces']);
     }
     return reply.code(201).send(created);

@@ -1,4 +1,17 @@
 import {
+  type CallRecord,
+  type ChatAttachment,
+  type ChatAvailability,
+  type ChatDraft,
+  type ChatFolder,
+  type ChatList,
+  type ChatMessage,
+  type ChatReachability,
+  type ChatSettings,
+  type ChatSuggestion,
+  type MessengerId,
+  type MessengerSetupInfo,
+  type MessengerSetupInput,
   type BackupConfirmInput,
   type BackupDriverId,
   type BackupSettingsInput,
@@ -257,6 +270,30 @@ export const api = {
   importMailKey: (publicKey: string) => request<MailRecipientKey[]>('POST', '/api/mail/keys', { publicKey }),
   removeMailKey: (address: string) => request<void>('DELETE', `/api/mail/keys/${encodeURIComponent(address)}`),
   mailSuggest: (q: string) => request<MailAddressSuggestion[]>('GET', `/api/mail/suggest?q=${encodeURIComponent(q)}`),
+
+  chatAvailable: () => request<ChatAvailability>('GET', '/api/chat/available'),
+  chatUnread: () => request<{ count: number }>('GET', '/api/chat/unread'),
+  chatMessages: (folder: ChatFolder) => request<ChatList>('GET', `/api/chat/messages?folder=${folder}`),
+  chatMessage: (id: number) => request<ChatMessage>('GET', `/api/chat/messages/${id}`),
+  chatThread: (key: string) => request<ChatMessage[]>('GET', `/api/chat/thread?key=${encodeURIComponent(key)}`),
+  setChatSeen: (id: number, seen: boolean) => request<void>('POST', `/api/chat/messages/${id}/seen`, { seen }),
+  removeChat: (id: number) => request<void>('DELETE', `/api/chat/messages/${id}`),
+  sendChat: (draft: ChatDraft) => request<ChatMessage[]>('POST', '/api/chat/send', draft),
+  chatSuggest: (q: string) => request<ChatSuggestion[]>('GET', `/api/chat/suggest?q=${encodeURIComponent(q)}`),
+  chatReachability: () => request<ChatReachability>('GET', '/api/chat/reachability'),
+  whatsappWindow: () => request<Record<string, string>>('GET', '/api/chat/whatsapp-window'),
+  checkChatReachability: (numbers: string[]) => request<ChatReachability>('POST', '/api/chat/reachability/check', { numbers }),
+  uploadChatFile: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<ChatAttachment>('POST', '/api/chat/files', form);
+  },
+  chatFileUrl: (id: string) => `/api/chat/files/${id}`,
+  chatSettings: () => request<ChatSettings>('GET', '/api/system/chat'),
+  messengerSetup: (id: MessengerId) => request<MessengerSetupInfo>('GET', `/api/system/messengers/${id}/setup`),
+  messengerSetupAction: (id: MessengerId, input: MessengerSetupInput) => request<{ message: string | null }>('POST', `/api/system/messengers/${id}/setup`, input),
+  updateChatSettings: (input: ChatSettings) => request<ChatSettings>('PUT', '/api/system/chat', input),
+  calls: (hours = 24) => request<CallRecord[]>('GET', `/api/telephony/calls?hours=${hours}`),
 
   contacts: () => request<Contact[]>('GET', '/api/contacts'),
   createContact: (input: ContactInput) => request<Contact>('POST', '/api/contacts', input),
@@ -518,6 +555,7 @@ export const api = {
   removeDockerHost: (id: number, force = false) => request<void>('DELETE', `/api/docker/hosts/${id}${force ? '?force=true' : ''}`),
 
   addonStore: () => request<AddonStoreEntry[]>('GET', '/api/addons/store'),
+  addonDocs: (id: string) => request<{ markdown: string }>('GET', `/api/addons/store/${encodeURIComponent(id)}/docs`),
   refreshAddonStore: () => request<{ ok: boolean }>('POST', '/api/addons/store/refresh'),
   addons: () => request<InstalledAddon[]>('GET', '/api/addons'),
   addon: (id: string) => request<InstalledAddon>('GET', `/api/addons/${id}`),

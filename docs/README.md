@@ -17,6 +17,7 @@
 - [Kräfte und Personal](funktionen/kraefte-und-personal.md) – Personalbögen, Cloud-Personalabfrage, Ortung per App
 - [Kontakte](funktionen/kontakte.md) – Adressbuch des ELW
 - [E-Mail](funktionen/email.md) – Postfach des ELW über das Relay, OpenPGP
+- [Nachrichten](funktionen/nachrichten.md) – SMS, Signal, Threema, WhatsApp und Telegram in einer Ansicht
 - [Dokumente, Vorlagen und Collabora](funktionen/dokumente.md)
 - [Drucken](funktionen/drucken.md) – Druckserver (CUPS), Lagekarten, Gastdrucker
 - [Scannen](funktionen/scannen.md) – Scan an E-Mail in den Posteingang

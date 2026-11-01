@@ -14,6 +14,7 @@ import { DueTasksButton, DueTasksPanel } from './tasks/DueTasks';
 import { MessagesButton, MessagesPanel } from './messages/MessageAlerts';
 import { useMessageAttention } from './messages/messageHooks';
 import { MOBILE_PRIMARY, NAV, type NavItem } from './nav';
+import { MESSENGER_IDS, type MessengerState, type TelephonyState } from '@elvis/shared';
 
 /** Neue Personalbögen im Posteingang */
 function useUnreadSheets(): number {
@@ -31,8 +32,17 @@ function useMail(): { available: boolean; unread: number } {
   return { available, unread: available ? (data?.count ?? 0) : 0 };
 }
 
+/** Mindestens ein Kanal für Nachrichten (SMS über die Telefonie, eingerichteter Messenger) und ungelesene Nachrichten */
+function useChat(): { available: boolean; unread: number } {
+  const { user } = useAuth();
+  const { devices } = useLive();
+  const available = !!user && (!!(devices.telephony?.state as TelephonyState | undefined)?.capabilities.sms || MESSENGER_IDS.some((id) => !!(devices[id]?.state as MessengerState | undefined)?.account));
+  const { data } = useQuery({ queryKey: ['chat', 'unread'], queryFn: api.chatUnread, enabled: available });
+  return { available, unread: available ? (data?.count ?? 0) : 0 };
+}
+
 type Badges = Record<NonNullable<NavItem['badge']>, number>;
-const BADGE_TITLE: Record<keyof Badges, string> = { personnelSheets: 'neue Personalbögen', messages: 'Meldungen zu bearbeiten', mail: 'ungelesene Mails' };
+const BADGE_TITLE: Record<keyof Badges, string> = { personnelSheets: 'neue Personalbögen', messages: 'Meldungen zu bearbeiten', mail: 'ungelesene Mails', chat: 'ungelesene Nachrichten' };
 
 function NavEntry({ item, locked, lockReason, onNavigate, badges }: { item: NavItem; locked: boolean; lockReason?: string; onNavigate?: () => void; badges: Badges }) {
   const Icon = item.icon;
@@ -73,7 +83,8 @@ export function Layout() {
   const unreadSheets = useUnreadSheets();
   const messageCount = useMessageAttention(now).attention.length;
   const mail = useMail();
-  const badges: Badges = { personnelSheets: unreadSheets, messages: messageCount, mail: mail.unread };
+  const chat = useChat();
+  const badges: Badges = { personnelSheets: unreadSheets, messages: messageCount, mail: mail.unread, chat: chat.unread };
 
   useEffect(() => setDrawerOpen(false), [location.pathname]);
 
@@ -90,7 +101,7 @@ export function Layout() {
             {group.label === 'Einsatz' && incident && <span className="nav-live">aktiv</span>}
           </div>
           {group.items
-            .filter((item) => (!item.requiresDocker || dockerEnabled) && (!item.requiresAdmin || user?.isAdmin) && (!item.requiresMail || mail.available))
+            .filter((item) => (!item.requiresDocker || dockerEnabled) && (!item.requiresAdmin || user?.isAdmin) && (!item.requiresMail || mail.available) && (!item.requiresChat || chat.available))
             .map((item) => {
               const needsLogin = !!item.requiresLogin && !user;
               const noIncident = !!item.requiresIncident && !incident;

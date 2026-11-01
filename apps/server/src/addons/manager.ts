@@ -1,3 +1,4 @@
+import type { MessengerProvision, MessengerProvisions } from '../devices/messaging/provisions.js';
 import { createHmac, randomBytes } from 'node:crypto';
 import type Docker from 'dockerode';
 import tar from 'tar-stream';
@@ -877,6 +878,14 @@ export class AddonManager {
     this.updateMapSources();
   }
 
+  private messengers: MessengerProvisions | null = null;
+
+  /** Hilfsdienste der Messenger laufender Addons (provides.messengers) an die Fahrzeugmodule melden */
+  attachMessengers(messengers: MessengerProvisions): void {
+    this.messengers = messengers;
+    this.updateMapSources();
+  }
+
   private workstations: WorkstationService | null = null;
 
   /** Registrierungstoken laufender Addons (provides.workstations) an die Arbeitsplatzverwaltung melden */
@@ -895,6 +904,7 @@ export class AddonManager {
     const printServers: PrintServerProvision[] = [];
     const guestPrinters: GuestPrinterProvision[] = [];
     const workstations: WorkstationProvision[] = [];
+    const messengers: MessengerProvision[] = [];
     for (const r of this.rows()) {
       if (r.status !== 'running') continue;
       const manifest = JSON.parse(r.manifest) as AddonManifest;
@@ -939,6 +949,9 @@ export class AddonManager {
       for (const g of manifest.provides.guestPrinters ?? []) {
         guestPrinters.push({ id: `${r.id}-${g.id}`, name: g.name, token: renderTemplate(g.token, ctx) });
       }
+      for (const m of manifest.provides.messengers ?? []) {
+        messengers.push({ id: `${r.id}-${m.id}`, name: m.name, kind: m.kind, url: renderTemplate(m.url, ctx), token: m.token ? renderTemplate(m.token, ctx) : null });
+      }
       for (const w of manifest.provides.workstations ?? []) {
         workstations.push({ id: `${r.id}-${w.id}`, name: w.name, token: renderTemplate(w.token, ctx), ...(w.installerIso && { installerIso: renderTemplate(w.installerIso, ctx) }), ...(w.aptProxy && { aptProxy: renderTemplate(w.aptProxy, ctx) }) });
       }
@@ -951,5 +964,6 @@ export class AddonManager {
     this.office?.setProvisions(offices);
     this.printing?.setProvisions(printServers, guestPrinters);
     this.workstations?.setProvisions(workstations);
+    this.messengers?.setProvisions(messengers);
   }
 }

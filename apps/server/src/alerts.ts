@@ -1,4 +1,4 @@
-import { VICTRON_STATE_LABELS, type Alert, type AlertSeverity, type DeviceId, type DeviceStateMap } from '@elvis/shared';
+import { MESSENGER_IDS, VICTRON_STATE_LABELS, type Alert, type AlertSeverity, type DeviceId, type DeviceStateMap } from '@elvis/shared';
 import type { ElvisConfig } from './config.js';
 import { DEVICE_DEFINITIONS } from './devices/drivers.js';
 
@@ -128,6 +128,27 @@ export function evaluateAlerts(get: StateGetter, offline: DeviceId[], limits: El
     if (!linkDown && fixed.length > 0) {
       add({ id: 'radio:fixed', severity: 'alarm', system: 'comms', title: 'Funkgerät gestört', detail: fixed.map((d) => d.name).join(', ') });
     }
+  }
+
+  const telephony = get('telephony');
+  if (telephony && !offline.includes('telephony')) {
+    const TRUNK_PROBLEM: Partial<Record<string, string>> = { down: 'kein Netz', searching: 'sucht Netz', 'no-sim': 'keine SIM-Karte' };
+    for (const t of telephony.trunks) {
+      const problem = TRUNK_PROBLEM[t.status];
+      if (problem) add({ id: `telephony:trunk:${t.port}`, severity: 'warn', system: 'comms', title: `Telefonie: ${t.name} – ${problem}`, detail: t.statusText ?? undefined });
+    }
+    if (telephony.sip.reachable === false) {
+      add({ id: 'telephony:sip', severity: 'warn', system: 'comms', title: 'Telefonie: SIP-Dienst des Gateways antwortet nicht', detail: telephony.sip.target ?? undefined });
+    }
+  }
+
+  // Messenger: Verbindung gestört bzw. Konto noch nicht eingerichtet (nicht erreichbar meldet schon die Regel oben)
+  for (const id of MESSENGER_IDS) {
+    const m = get(id);
+    if (!m || offline.includes(id)) continue;
+    const name = DEVICE_DEFINITIONS[id].name;
+    if (m.status === 'error') add({ id: `${id}:link`, severity: 'warn', system: 'comms', title: `${name}: Verbindung gestört`, detail: m.link?.error ?? undefined });
+    if (m.status === 'setup') add({ id: `${id}:setup`, severity: 'info', system: 'comms', title: `${name}: Einrichtung ausstehend`, detail: m.setup?.hint });
   }
 
   return sortAlerts(out);

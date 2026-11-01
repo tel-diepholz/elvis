@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
@@ -49,5 +51,36 @@ describe('Addon-Repositories', () => {
   it('übernimmt Online-Repositories aus ELVIS_ADDON_REPOSITORIES', () => {
     const cfg = loadConfig({ ELVIS_CONFIG: '/gibt/es/nicht.json', ELVIS_ADDON_REPOSITORIES: 'https://example.org/a, https://example.org/b' });
     expect(cfg.addons.repositories).toEqual(['https://example.org/a', 'https://example.org/b']);
+  });
+  it('liest die Anleitung (docs) lokal und online, online auch aus dem Zwischenspeicher', async () => {
+    const local = new RepoService({ builtinDir: BUILTIN, repositories: [] }, ':memory:');
+    await local.refresh();
+    expect(local.docs('signal-cli')).toMatch(/^# Signal \(signal-cli\)/);
+    expect(local.docs('signal-cli')).toContain('signalcaptchas.org');
+    expect(local.docs('hello')).toBeNull();
+
+    const doc = '# Hallo\n\nAnleitung online';
+    const hello = readFileSync(`${BUILTIN}/hello/addon.yaml`, 'utf8').replace(/^version: .*$/m, 'version: 9.0.0').replace(/^arch:/m, 'docs: docs/ANLEITUNG.md\narch:');
+    let online = true;
+    server = createServer((req, res) => {
+      if (!online) return res.writeHead(503).end();
+      if (req.url === '/repository.yaml') return res.end('name: Online\naddons: [hello]\n');
+      if (req.url === '/hello/addon.yaml') return res.end(hello);
+      if (req.url === '/hello/docs/ANLEITUNG.md') return res.end(doc);
+      res.writeHead(404).end();
+    });
+    await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
+    const url = `http://127.0.0.1:${(server!.address() as AddressInfo).port}`;
+    const dataDir = mkdtempSync(join(tmpdir(), 'elvis-repo-docs-'));
+    try {
+      const repo = new RepoService({ builtinDir: null, repositories: [url] }, dataDir);
+      await repo.refresh();
+      expect(repo.docs('hello')).toBe(doc);
+      online = false;
+      await repo.refresh();
+      expect(repo.docs('hello')).toBe(doc);
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
   });
 });

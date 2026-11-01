@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Building2, Contact as ContactIcon, FolderPlus, Pencil, Search, Trash2, User, UserPlus } from 'lucide-react';
-import { contactName, folderPath, type Contact, type ContactCategory, type ContactData } from '@elvis/shared';
+import { CHAT_CHANNEL_LABEL, contactName, folderPath, formatPhone, phoneKey, type Contact, type ContactCategory, type ContactData } from '@elvis/shared';
 import { api } from '../lib/api';
+import { ChannelIcon } from '../components/chat/ChannelIcon';
 import { useToast } from '../lib/toast';
 import { Badge, Card, EmptyState, Field, Loading, Modal, PageHeader } from '../components/ui';
 import { FolderSelect, FolderTree } from '../components/documents/FolderTree';
@@ -32,6 +33,8 @@ export function ContactsPage() {
   const { data: contacts, isLoading } = useQuery({ queryKey: ['contacts'], queryFn: api.contacts });
   const { data: categories = [] } = useQuery({ queryKey: ['contacts', 'categories'], queryFn: api.contactCategories });
   const { data: mail } = useQuery({ queryKey: ['mail', 'available'], queryFn: api.mailAvailable });
+  // Je Rufnummer die Kanäle, über die sie erreichbar ist (SMS für Mobilnummern, geprüfte bzw. bekannte Messenger)
+  const { data: reach = {} } = useQuery({ queryKey: ['chat', 'reachability'], queryFn: api.chatReachability });
 
   const current = categories.find((c) => c.id === category);
   const here = folderPath(categories, category) || 'Alle Kontakte';
@@ -156,6 +159,20 @@ export function ContactsPage() {
                               <div key={i}>
                                 <a href={`tel:${p.number.replace(/[^\d+]/g, '')}`} className="nowrap">{p.number}</a>
                                 {p.label && <span className="muted"> · {p.label}</span>}
+                                {(reach[phoneKey(p.number)] ?? []).length > 0 && (
+                                  <span className="contact-channels">
+                                    {reach[phoneKey(p.number)]!.map((ch) => (
+                                      <Link
+                                        key={ch}
+                                        to={`/nachrichten?an=${encodeURIComponent(formatPhone(p.number))}&kanal=${ch}`}
+                                        title={`Per ${CHAT_CHANNEL_LABEL[ch]} schreiben`}
+                                        aria-label={`${CHAT_CHANNEL_LABEL[ch]} an ${p.number}`}
+                                      >
+                                        <ChannelIcon channel={ch} size={16} title={`Per ${CHAT_CHANNEL_LABEL[ch]} schreiben`} />
+                                      </Link>
+                                    ))}
+                                  </span>
+                                )}
                               </div>
                             ))
                           : '–'}
