@@ -7451,6 +7451,8 @@ fieldset.field {
 }
 .setup-option .btn-row {
   margin-top: auto;
+}
+
 /* Nachrichten als Gespräche: Liste links, Verlauf rechts (schmal: eins von beiden) */
 .chat-layout {
   display: grid;
