@@ -50,6 +50,7 @@ const ERROR_TEXT: Record<number, string> = {
   131056: 'zu viele Nachrichten an diese Nummer',
   130429: 'Durchsatzgrenze erreicht',
   190: 'Zugriffstoken ungültig oder abgelaufen',
+  133010: 'Nummer ist für die Cloud API nicht registriert (Anleitung: „Fehler beheben“)',
 };
 
 /** Signatur X-Hub-Signature-256 = sha256=HMAC(App-Geheimnis, Rohdaten) */
