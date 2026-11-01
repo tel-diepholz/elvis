@@ -7417,6 +7417,40 @@ fieldset.field {
   background: var(--muted-bg);
 }
 
+/* Einrichtung eines Messengers: Varianten nebeneinander (schmal untereinander) */
+.setup-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.setup-option,
+.setup-variant {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev);
+}
+.setup-option h3,
+.setup-variant h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1rem;
+}
+.setup-option ul,
+.setup-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.setup-option .btn-row {
+  margin-top: auto;
 /* Nachrichten als Gespräche: Liste links, Verlauf rechts (schmal: eins von beiden) */
 .chat-layout {
   display: grid;
