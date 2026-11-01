@@ -1,3 +1,4 @@
+import type { DamageAccount, DamageAccountInput, DamageAccountPatch, DamageCountBooking, DamageCountInput, DamageEntry, DamageEntryInput, DamageEntryPatch } from '@elvis/shared';
 import type { Phone, PhoneConfigInput, PhoneInput, PhoneKeyInput, PhoneKeySlot, PhoneSystemStatus } from '@elvis/shared';
 import {
   type CallRecord,
@@ -252,6 +253,16 @@ export const api = {
   addUnit: (id: number, unit: NewUnit) => request<Unit>('POST', `/api/incidents/${id}/units`, unit),
   patchUnit: (unitId: number, patch: UnitPatch) => request<Unit>('PATCH', `/api/units/${unitId}`, patch),
   deployUnit: (id: number, input: DeployUnitInput) => request<Unit>('POST', `/api/incidents/${id}/units/deploy`, input),
+
+  // Schadenkonten
+  damageAccounts: (incidentId: number) => request<DamageAccount[]>('GET', `/api/incidents/${incidentId}/damage-accounts`),
+  createDamageAccount: (incidentId: number, input: DamageAccountInput) => request<DamageAccount>('POST', `/api/incidents/${incidentId}/damage-accounts`, input),
+  updateDamageAccount: (id: number, input: DamageAccountPatch) => request<DamageAccount>('PATCH', `/api/damage-accounts/${id}`, input),
+  closeDamageAccount: (id: number) => request<DamageAccount>('POST', `/api/damage-accounts/${id}/close`),
+  addDamageEntry: (accountId: number, input: DamageEntryInput) => request<DamageEntry>('POST', `/api/damage-accounts/${accountId}/entries`, input),
+  updateDamageEntry: (id: number, input: DamageEntryPatch) => request<DamageEntry>('PATCH', `/api/damage-entries/${id}`, input),
+  damageCounts: (accountId: number) => request<DamageCountBooking[]>('GET', `/api/damage-accounts/${accountId}/counts`),
+  bookDamageCount: (accountId: number, input: DamageCountInput) => request<DamageAccount>('POST', `/api/damage-accounts/${accountId}/counts`, input),
   appRelayEnabled: () => request<{ enabled: boolean }>('GET', '/api/app-relay'),
   appRelayStatus: () => request<AppRelayStatus>('GET', '/api/system/app-relay'),
   mailAccount: () => request<MailAccountStatus>('GET', '/api/system/mail'),

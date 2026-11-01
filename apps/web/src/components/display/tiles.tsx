@@ -3,8 +3,9 @@ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Bell, Cctv, CalendarDays, Clock, CloudSun, Image as ImageIcon, Layers, ListChecks, Map as MapIcon, Moon, Network, Repeat, Sun, Type, Users, Video, Wifi } from 'lucide-react';
+import { Bell, Cctv, CalendarDays, ClipboardPlus, Clock, CloudSun, Image as ImageIcon, Layers, ListChecks, Map as MapIcon, Moon, Network, Repeat, Sun, Type, Users, Video, Wifi } from 'lucide-react';
 import {
+  DAMAGE_INJURED,
   DEFAULT_VEHICLE_SIGN,
   DISPLAY_TILE_TYPES,
   UNIT_STATUS,
@@ -18,6 +19,9 @@ import {
   taskIsDue,
   unitChildren,
   unitDescendants,
+  type DamageAccount,
+  type DamageCount,
+  type DamageCountCategory,
   type DisplayDevice,
   type DisplayMapView,
   type DisplayTile,
@@ -51,7 +55,7 @@ import { MapStylePicker } from '../../pages/map/toolbar';
  */
 export const TileConfigContext = createContext<{ setConfig: (tileId: string, patch: DisplayTile['config']) => void } | null>(null);
 
-export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, forecast: CalendarDays, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users, scenes: Layers, image: ImageIcon };
+export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, forecast: CalendarDays, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users, damage: ClipboardPlus, scenes: Layers, image: ImageIcon };
 
 const date = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 const time = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -668,6 +672,77 @@ function ForcesTile({ tile }: { tile: DisplayTile }) {
   );
 }
 
+const DAMAGE_COLUMNS: { label: string; categories: DamageCountCategory[] }[] = [
+  { label: 'Verletzte', categories: DAMAGE_INJURED },
+  { label: 'Tote', categories: ['tot'] },
+  { label: 'Vermisste', categories: ['vermisst'] },
+];
+
+/** Summe einer Spalte; „~“ wenn ein Schätzwert dabei ist, „–“ ohne Meldung */
+function damageCell(counts: DamageCount[], categories: DamageCountCategory[]): string {
+  const hit = counts.filter((c) => categories.includes(c.category));
+  if (!hit.length) return '–';
+  return `${hit.some((c) => c.estimated) ? '~' : ''}${hit.reduce((n, c) => n + c.value, 0)}`;
+}
+
+/** Offene Schadenkonten mit Kräften und Personenschäden, darunter die Summe über alle (auch aufgelöste) Konten */
+function DamageTile() {
+  const { data: incident } = useQuery({ queryKey: ['incident', 'active', 'display'], queryFn: () => api.activeIncident().catch(() => null) });
+  const { data: accounts } = useQuery({ queryKey: ['damage', incident?.id ?? 0], queryFn: () => api.damageAccounts(incident!.id), enabled: !!incident });
+  const { data: units = [] } = useMapUnits(incident?.id);
+  if (!incident) return <TileEmpty text="Kein Einsatz aufgelegt" />;
+  if (!accounts) return <TileEmpty text="Lade Schadenkonten …" />;
+  const open = accounts.filter((a) => !a.closedAt);
+  if (!open.length) return <TileEmpty text="Keine Schadenkonten" />;
+  const all = accounts.flatMap((a) => a.counts);
+  const active = (a: DamageAccount) => units.filter((u) => u.accountId === a.id && u.status !== 'entlassen');
+  return (
+    <div className="tile-damage">
+      <table>
+        <thead>
+          <tr>
+            <th colSpan={2}>Schadenkonto</th>
+            <th>Kräfte</th>
+            {DAMAGE_COLUMNS.map((c) => (
+              <th key={c.label}>{c.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {open.map((a) => (
+            <tr key={a.id}>
+              <td>
+                <span className="damage-number tile-damage-number">{a.number}</span>
+              </td>
+              <td className="tile-damage-name">
+                {a.name}
+                {a.entries.some((e) => e.side === 'gefahr' && !e.doneAt) && <span className="tile-damage-danger"> · Gefahr</span>}
+              </td>
+              <td className="mono">{formatStrength(sumStrength(active(a)))}</td>
+              {DAMAGE_COLUMNS.map((c) => (
+                <td key={c.label} className="mono">
+                  {damageCell(a.counts, c.categories)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={2}>Gesamt</td>
+            <td className="mono">{formatStrength(sumStrength(units.filter((u) => u.accountId !== null && u.status !== 'entlassen')))}</td>
+            {DAMAGE_COLUMNS.map((c) => (
+              <td key={c.label} className="mono">
+                {damageCell(all, c.categories)}
+              </td>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 /** Hochgeladenes Bild, eingepasst oder kachelfüllend */
 function ImageTile({ tile }: { tile: DisplayTile }) {
   const id = typeof tile.config.imageId === 'number' ? tile.config.imageId : null;
@@ -765,6 +840,8 @@ export function TileView({ tile }: { tile: DisplayTile }) {
       return <TasksTile tile={tile} />;
     case 'forces':
       return <ForcesTile tile={tile} />;
+    case 'damage':
+      return <DamageTile />;
     case 'scenes':
       return <ScenesTile tile={tile} />;
     case 'image':

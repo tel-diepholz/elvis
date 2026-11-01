@@ -17,6 +17,8 @@ const BEFORE_FORCES = `
   CREATE INDEX units_incident ON units(incident_id);
 `;
 
+/** Schadenkonten zurückdrehen (die beiden letzten Migrationen) */
+const UNDO_DAMAGE = 'DROP INDEX units_account; ALTER TABLE units DROP COLUMN account_id; DROP TABLE damage_counts; DROP TABLE damage_entries; DROP TABLE damage_accounts';
 const UNDO_TELEPHONY = 'DROP TABLE user_dashboards; DROP TABLE phone_key_overrides; DROP TABLE phones; DROP TABLE chat_reachability; DROP TABLE chat_messages; DROP TABLE chat_files; DROP TABLE calls; ALTER TABLE force_units DROP COLUMN mobile; ALTER TABLE units DROP COLUMN mobile';
 const UNDO_CONTACTS = 'DROP TABLE contact_category_members; DROP TABLE contacts; DROP TABLE contact_categories; ALTER TABLE personnel DROP COLUMN email';
 /** v37 zurückdrehen: Anforderungen samt Verweisen */
@@ -36,6 +38,7 @@ describe('Migrationen', () => {
       const legacy = new Database(join(dir, 'elvis.sqlite'));
       legacy.exec('ALTER TABLE addons DROP COLUMN manifest');
       // v19: Rollen und Aufgaben (Spalten mit Fremdschlüssel lassen sich nicht einzeln entfernen)
+      legacy.exec(UNDO_DAMAGE);
       legacy.exec(UNDO_TELEPHONY); // v45, v47
       legacy.exec('ALTER TABLE force_units DROP COLUMN email; ALTER TABLE messages DROP COLUMN sender_force_id; ALTER TABLE messages DROP COLUMN recipient_force_id'); // v41
       legacy.exec('ALTER TABLE units DROP COLUMN email'); // v40
@@ -84,6 +87,7 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec(UNDO_DAMAGE);
       legacy.exec(UNDO_TELEPHONY);
       legacy.exec('DROP TABLE radio_ids; DROP TABLE user_last_roles');
       legacy.exec(UNDO_CONTACTS);
@@ -115,13 +119,14 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec(UNDO_DAMAGE);
       legacy.exec('DROP TABLE user_dashboards; DROP TABLE phone_key_overrides; DROP TABLE phones; DROP TABLE chat_reachability; DROP TABLE chat_messages; DROP TABLE chat_files');
       legacy.exec(`CREATE TABLE sms_messages (id INTEGER PRIMARY KEY, folder TEXT NOT NULL, port INTEGER, number TEXT NOT NULL, text TEXT NOT NULL,
         status TEXT NOT NULL, error TEXT, seen INTEGER NOT NULL DEFAULT 0, date TEXT NOT NULL, created_by TEXT NOT NULL)`);
       legacy.exec(`INSERT INTO sms_messages VALUES (7, 'inbox', 1, '+491711234567', 'Hallo', 'received', NULL, 0, 't1', 'Gateway'),
         (9, 'sent', 2, '+491609999999', 'Rückruf', 'failed', 'Netz', 1, 't2', 'Max Müller')`);
       // Stand vor der SMS-Migration (danach: Signal-Kennungen neu prüfen)
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 4}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 6}`);
       legacy.close();
 
       const db = openDb(dir);
@@ -141,10 +146,11 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec(UNDO_DAMAGE);
       legacy.exec('DROP TABLE user_dashboards; DROP TABLE phone_key_overrides; DROP TABLE phones');
       legacy.exec(`INSERT INTO chat_reachability VALUES ('signal', '+491711234567', 1, '+491711234567', '2099-01-01'),
         ('signal', '+491609999999', 1, 'uuid-x', '2099-01-01'), ('threema', '+491711234567', 1, 'ABCD1234', '2099-01-01')`);
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 3}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 5}`);
       legacy.close();
 
       const db = openDb(dir);
@@ -152,6 +158,47 @@ describe('Migrationen', () => {
         { channel: 'signal', number: '+491609999999', checked_at: '2099-01-01' },
         { channel: 'signal', number: '+491711234567', checked_at: '1970-01-01T00:00:00.000Z' },
         { channel: 'threema', number: '+491711234567', checked_at: '2099-01-01' },
+      ]);
+      db.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('macht aus Freitext-Abschnitten Schadenkonten', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'elvis-mig-'));
+    try {
+      openDb(dir).close();
+      const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec(UNDO_DAMAGE);
+      legacy.exec("INSERT INTO incidents (id, title, started_at, closed_at) VALUES (1, 'Brand', 't0', 't9'), (2, 'Sturm', 't10', NULL)");
+      const unit = legacy.prepare(
+        "INSERT INTO units (incident_id, name, sign, section, status, created_at, updated_at) VALUES (?, ?, '{}', ?, 'einsatz', ?, ?)",
+      );
+      for (const [inc, name, section, at] of [
+        [1, 'HLF', 'EA Nord', 't1'],
+        [1, 'TLF', '', 't2'],
+        [2, 'ELW', ' EA Süd ', 't11'],
+        [2, 'RW', 'EA Ost', 't12'],
+        [2, 'DLK', 'EA Süd', 't13'],
+      ] as const) unit.run(inc, name, section, at, at);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 2}`);
+      legacy.close();
+
+      const db = openDb(dir);
+      expect(db.prepare('SELECT incident_id, number, name, created_by FROM damage_accounts ORDER BY id').all()).toEqual([
+        { incident_id: 1, number: 1, name: 'EA Nord', created_by: 'System' },
+        { incident_id: 2, number: 1, name: 'EA Süd', created_by: 'System' },
+        { incident_id: 2, number: 2, name: 'EA Ost', created_by: 'System' },
+      ]);
+      expect(
+        db.prepare('SELECT u.name, a.name AS account FROM units u LEFT JOIN damage_accounts a ON a.id = u.account_id ORDER BY u.id').all(),
+      ).toEqual([
+        { name: 'HLF', account: 'EA Nord' },
+        { name: 'TLF', account: null },
+        { name: 'ELW', account: 'EA Süd' },
+        { name: 'RW', account: 'EA Ost' },
+        { name: 'DLK', account: 'EA Süd' },
       ]);
       db.close();
     } finally {

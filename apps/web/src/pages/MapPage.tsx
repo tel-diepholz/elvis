@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Check, Flag, History, ListPlus, MapPin, Plane, Printer, Ship, Trash2, Undo2, X } from 'lucide-react';
-import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type OverpassFeature, type TacticalSign, type TrackedData, type TrafficHit, type Unit } from '@elvis/shared';
+import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type OverpassFeature, type TacticalSign, type TrackedData, type TrafficHit, type Unit, type DamageAccount } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useActiveIncident, useNow, useSettings } from '../lib/hooks';
 import { useAuth } from '../lib/auth';
@@ -18,6 +18,8 @@ import { useToast } from '../lib/toast';
 import { Modal } from '../components/ui';
 import { AREA_STYLE, MapObjectsLayer, objectBounds, useMapObjects } from '../components/map/objects';
 import { UnitsLayer, useMapUnits } from '../components/map/units';
+import { DamageLayer } from '../components/map/damage';
+import { useDamageAccounts } from '../components/damage/damageParts';
 import { Dv102Picker, GeneratorSignDialog, generatorName, generatorSign } from '../components/map/dv102';
 import { ALTITUDE_LEGEND } from '../components/map/aircraftIcons';
 import { RadarControl, RadarLayer, useRadar } from '../components/map/radar';
@@ -146,8 +148,9 @@ export function MapPage() {
   const units = history ? history.units : liveUnits;
   const shownIncident = incident && history ? { ...incident, ...history.incident } : incident;
   const [placing, setPlacing] = useState<PlaceKind | null>(null);
-  /** Einheit der Kräfteübersicht, deren Position gerade gesetzt wird */
-  const [placingUnit, setPlacingUnit] = useState<Unit | null>(null);
+  /** Einheit der Kräfteübersicht bzw. Schadenkonto, dessen Position gerade gesetzt wird */
+  const [placingUnit, setPlacingUnit] = useState<Unit | DamageAccount | null>(null);
+  const { data: accounts = [] } = useDamageAccounts(incident?.id);
   /** Form, die gerade gezeichnet wird (Menü „Objekte“ → Zeichnen) */
   const [drawing, setDrawing] = useState<Drawing | null>(null);
   /** Form, die gerade bearbeitet wird (Objektliste → Form bearbeiten); das Objekt selbst ist so lange ausgeblendet */
@@ -234,6 +237,11 @@ export function MapPage() {
     onError: (e) => toast('error', e.message),
   });
 
+  const moveAccount = useMutation({
+    mutationFn: ({ account, lat, lon }: { account: DamageAccount; lat: number; lon: number }) => api.updateDamageAccount(account.id, { lat, lon }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['damage', incident!.id] }),
+    onError: (e) => toast('error', e.message),
+  });
   const moveUnit = useMutation({
     mutationFn: ({ unit, lat, lon }: { unit: Unit; lat: number; lon: number }) => api.patchUnit(unit.id, { lat, lon }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['units', incident!.id] }),
@@ -259,6 +267,17 @@ export function MapPage() {
     setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
+  // /karte?konto=<id> (Seite Schadenkonten): Schadenkonto anfliegen bzw. ohne Position zum Setzen wählen
+  const accountParam = Number(params.get('konto')) || null;
+  useEffect(() => {
+    if (!accountParam) return;
+    const a = accounts.find((x) => x.id === accountParam);
+    if (!a) return;
+    if (a.lat !== null && a.lon !== null) fly([a.lat, a.lon], { zoom: 17 });
+    if (canEdit) (setPlacing(null), setDrawing(null), setShapeEdit(null), setPlacingUnit(a));
+    setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountParam, accounts]);
   /** Suchtreffer anfliegen: Straßen und Orte ganz zeigen, Adressen und Koordinaten nah heran */
   const showHit = (r: GeocodeResult) => {
     setSearchHit(r);
@@ -368,10 +387,10 @@ export function MapPage() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const place = (kind: PlaceKind | Unit, lat: number, lon: number) => {
+  const place = (kind: PlaceKind | Unit | DamageAccount, lat: number, lon: number) => {
     setPlacing(null);
     setPlacingUnit(null);
-    if (typeof kind === 'object') return moveUnit.mutate({ unit: kind, lat, lon });
+    if (typeof kind === 'object') return 'status' in kind ? moveUnit.mutate({ unit: kind, lat, lon }) : moveAccount.mutate({ account: kind, lat, lon });
     if (kind === 'incident') setLocation.mutate({ lat, lon });
     else if (kind === 'point') addObject.mutate({ kind: 'point', name: 'Punkt', lat, lon, data: { detail: '' } });
     // Name wie in der Auswahl (Dateiname des Zeichens ohne Unterstriche) bzw. Grundzeichen mit Text
@@ -396,7 +415,10 @@ export function MapPage() {
         {layers.ships && !historyAt && <ShipLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setShipStatus} />}
         <MapObjectsLayer objects={shapeEdit ? objects.filter((o) => o.id !== shapeEdit.id) : objects} wind={wind} now={now} links />
         {overpassHits && <OverpassLayer hits={overpassHits} taken={takenOsm} adding={addObject.isPending} onAdd={canEdit ? addFeature : undefined} />}
-        <UnitsLayer units={units} movable={placingUnit?.id} onMove={canEdit ? (unit, lat, lon) => place(unit, lat, lon) : undefined} />
+        <UnitsLayer units={units} movable={placingUnit && 'status' in placingUnit ? placingUnit.id : null} onMove={canEdit ? (unit, lat, lon) => place(unit, lat, lon) : undefined} />
+        {!historyAt && (
+          <DamageLayer accounts={accounts} movable={placingUnit && !('status' in placingUnit) ? placingUnit.id : null} onMove={canEdit ? (a, lat, lon) => place(a, lat, lon) : undefined} />
+        )}
         {showVehicle && (
           <Marker position={vPos!} icon={vehicleIcon}>
             <Popup>

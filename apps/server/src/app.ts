@@ -97,8 +97,10 @@ import { TaskService } from './services/tasks.js';
 import { taskRoutes } from './routes/tasks.js';
 import { MessageService } from './services/messages.js';
 import { RequestService } from './services/requests.js';
+import { DamageService } from './services/damage.js';
 import { messageRoutes } from './routes/messages.js';
 import { requestRoutes } from './routes/requests.js';
+import { damageRoutes } from './routes/damage.js';
 import { printingRoutes, type OfficeDownload } from './routes/printing.js';
 import { PrintService, type IppTransport } from './services/printing.js';
 import { scanningRoutes } from './routes/scanning.js';
@@ -179,6 +181,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const tasks = new TaskService(db, { store, roles, notify: (t) => hub.invalidate(t) });
   const messages = new MessageService(db, { store, roles, notify: (t) => hub.invalidate(t) });
   const requests = new RequestService(db, { store, roles, tasks, messages, notify: (t) => hub.invalidate(t) });
+  const damage = new DamageService(db, { store, notify: (t) => hub.invalidate(t) });
   const forces = new ForceService(db, store);
   const incidents = new IncidentService(
     store,
@@ -386,6 +389,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     taskRoutes(api, { tasks, roles, store, notify: (t) => hub.invalidate(t) });
     messageRoutes(api, { messages, store, incidents, forces, mail, chat, notify: (t) => hub.invalidate(t) });
     requestRoutes(api, { requests, store, notify: (t) => hub.invalidate(t) });
+    damageRoutes(api, { damage });
     deviceRoutes(api, devices, store, (t) => hub.invalidate(t));
     incidentRoutes(api, { incidents, forces, store, notify: (t) => hub.invalidate(t) });
     documentRoutes(api, { documents, templates, office, store, notify: (t) => hub.invalidate(t) });

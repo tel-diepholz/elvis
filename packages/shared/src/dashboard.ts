@@ -29,6 +29,7 @@ export const DASHBOARD_TILE_TYPES: Record<DashboardTileType, DashboardTileTypeIn
   messages: { label: 'Meldungen im Einsatz', description: 'Meldungen, bei denen Sie gerade etwas tun müssen', size: { w: 4, h: 4 }, requiresLogin: true },
   tasks: fromDisplay('tasks', 4, 5, { requiresLogin: true }),
   forces: fromDisplay('forces', 6, 6, { requiresLogin: true }),
+  damage: fromDisplay('damage', 6, 4, { requiresLogin: true }),
   map: fromDisplay('map', 6, 6),
   weather: fromDisplay('weather', 4, 3),
   forecast: fromDisplay('forecast', 8, 4),

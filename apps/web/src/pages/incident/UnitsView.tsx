@@ -32,6 +32,7 @@ import { TacticalSignEditor } from '../../components/tactical/TacticalSignEditor
 import { TacticalSignImage } from '../../components/tactical/TacticalSign';
 import { RoleInput, StatusBadge, StatusSelect, StrengthFields } from '../../components/forces/fields';
 import { AppLinkInfo, PairAppForm } from './AppLinkParts';
+import { AccountSelect } from '../../components/damage/damageParts';
 
 const NO_SECTION = 'Ohne Abschnitt';
 
@@ -57,33 +58,20 @@ function ParentSelect({ value, options, onChange }: { value: number | null; opti
   );
 }
 
-function SectionInput({ value, onChange, sections }: { value: string; onChange: (v: string) => void; sections: string[] }) {
-  return (
-    <>
-      <input value={value} onChange={(e) => onChange(e.target.value)} list="unit-sections" placeholder="z. B. EA Brandbekämpfung" maxLength={100} />
-      <datalist id="unit-sections">
-        {sections.map((s) => (
-          <option key={s} value={s} />
-        ))}
-      </datalist>
-    </>
-  );
-}
-
 /** Einheit im Einsatz neu erfassen oder bearbeiten (Status wird in der Liste geändert) */
 export function UnitForm({
+  incidentId,
   initial,
   defaultParentId = null,
   units,
-  sections,
   roles,
   pending,
   onSubmit,
 }: {
+  incidentId: number;
   initial?: Unit;
   defaultParentId?: number | null;
   units: Unit[];
-  sections: string[];
   roles: string[];
   pending: boolean;
   onSubmit: (u: NewUnit & UnitPatch) => void;
@@ -92,12 +80,12 @@ export function UnitForm({
     name: initial?.name ?? '',
     callsign: initial?.callsign ?? '',
     organization: initial?.organization ?? '',
-    section: initial?.section ?? '',
     notes: initial?.notes ?? '',
     email: initial?.email ?? '',
     role: initial?.role ?? '',
   });
   const [parentId, setParentId] = useState<number | null>(initial ? initial.parentId : defaultParentId);
+  const [accountId, setAccountId] = useState<number | null>(initial?.accountId ?? null);
   const [strength, setStrength] = useState(initial?.strength ?? { leaders: 0, subLeaders: 1, crew: 8 });
   const [status, setStatus] = useState<UnitStatus>('alarmiert');
   const [sign, setSign] = useState<TacticalSign>(initial?.sign ?? DEFAULT_UNIT_SIGN);
@@ -106,7 +94,7 @@ export function UnitForm({
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!f.name.trim()) return;
-    onSubmit({ ...f, role: parentId ? f.role : '', parentId, strength, sign, ...(initial ? {} : { status }) });
+    onSubmit({ ...f, role: parentId ? f.role : '', parentId, accountId, strength, sign, ...(initial ? {} : { status }) });
   };
 
   return (
@@ -125,7 +113,7 @@ export function UnitForm({
           <input type="email" value={f.email} onChange={set('email')} placeholder="wird aus eingehenden Mails übernommen" maxLength={254} />
         </Field>
         <Field label="Einsatzabschnitt">
-          <SectionInput value={f.section} onChange={(section) => setF((x) => ({ ...x, section }))} sections={sections} />
+          <AccountSelect incidentId={incidentId} value={accountId} onChange={setAccountId} />
         </Field>
         <Field label="Unterstellt">
           <ParentSelect value={parentId} options={parentOptions(units, initial)} onChange={setParentId} />
@@ -188,27 +176,27 @@ function catalogTree(all: ForceUnit[], rootId: number, active: Set<number>): Cat
 
 /** Systemeinheit aus der Kräfteverwaltung übernehmen; einzelne Untereinheiten lassen sich abwählen */
 function DeployForm({
+  incidentId,
   catalog,
   units,
-  sections,
   roles,
   defaultParentId,
   pending,
   onSubmit,
 }: {
+  incidentId: number;
   catalog: ForceUnit[];
   units: Unit[];
-  sections: string[];
   roles: string[];
   defaultParentId: number | null;
   pending: boolean;
-  onSubmit: (input: { tree: DeployNode; parentId: number | null; role: string; section: string; status: UnitStatus }) => void;
+  onSubmit: (input: { tree: DeployNode; parentId: number | null; role: string; accountId: number | null; status: UnitStatus }) => void;
 }) {
   const [query, setQuery] = useState('');
   const [rootId, setRootId] = useState<number | null>(null);
   const [off, setOff] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<UnitStatus>('alarmiert');
-  const [section, setSection] = useState('');
+  const [accountId, setAccountId] = useState<number | null>(null);
   const [parentId, setParentId] = useState<number | null>(defaultParentId);
   const [role, setRole] = useState('');
 
@@ -282,7 +270,7 @@ function DeployForm({
       className="form"
       onSubmit={(e) => {
         e.preventDefault();
-        if (selected(tree)) onSubmit({ tree: toDeploy(tree), parentId, role: parentId ? role : '', section, status });
+        if (selected(tree)) onSubmit({ tree: toDeploy(tree), parentId, role: parentId ? role : '', accountId, status });
       }}
     >
       <div>
@@ -299,7 +287,7 @@ function DeployForm({
           <StatusSelect value={status} onChange={setStatus} />
         </Field>
         <Field label="Einsatzabschnitt">
-          <SectionInput value={section} onChange={setSection} sections={sections} />
+          <AccountSelect incidentId={incidentId} value={accountId} onChange={setAccountId} />
         </Field>
         <Field label="Unterstellt">
           <ParentSelect value={parentId} options={parentOptions(units)} onChange={setParentId} />
@@ -589,16 +577,16 @@ export function UnitsView({ incident, readOnly }: { incident: Incident; readOnly
           />
           {mode === 'catalog' ? (
             <DeployForm
+              incidentId={incident.id}
               catalog={catalog}
               units={all}
-              sections={sections}
               roles={roles}
               defaultParentId={adding ?? null}
               pending={deploy.isPending}
               onSubmit={(input) => deploy.mutate(input)}
             />
           ) : (
-            <UnitForm units={all} sections={sections} roles={roles} defaultParentId={adding ?? null} pending={add.isPending} onSubmit={(u) => add.mutate(u)} />
+            <UnitForm incidentId={incident.id} units={all} roles={roles} defaultParentId={adding ?? null} pending={add.isPending} onSubmit={(u) => add.mutate(u)} />
           )}
         </div>
       </Modal>
@@ -608,9 +596,9 @@ export function UnitsView({ incident, readOnly }: { incident: Incident; readOnly
       <Modal open={!!editing} title={`${editing?.name ?? ''} bearbeiten`} onClose={() => setEditing(null)} wide>
         {editing && (
           <UnitForm
+            incidentId={incident.id}
             initial={editing}
             units={all}
-            sections={sections}
             roles={roles}
             pending={patch.isPending}
             onSubmit={(p) => patch.mutate({ id: editing.id, p: { ...p, status: undefined } })}

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ForceUnit, ForceUnitInput, Incident, JournalEntry, Unit, User } from '@elvis/shared';
+import type { DamageAccount, ForceUnit, ForceUnitInput, Incident, JournalEntry, Unit, User } from '@elvis/shared';
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
 import { adminCookie, sessionCookie } from '../test-helpers.js';
@@ -87,11 +87,12 @@ describe('Kräfte im Einsatz', () => {
     const { elw, hlf, lf, zug, gg } = await catalog();
     const incident = (await req<Incident>('POST', '/api/incidents', { title: 'Brand' })).body;
     const tree = { forceUnitId: zug.id, children: [{ forceUnitId: elw.id, children: [] }, { forceUnitId: hlf.id, children: [] }] };
-    const res = await req<Unit>('POST', `/api/incidents/${incident.id}/units/deploy`, { tree, section: 'EA Nord' });
+    const nord = (await req<DamageAccount>('POST', `/api/incidents/${incident.id}/damage-accounts`, { name: 'EA Nord' })).body;
+    const res = await req<Unit>('POST', `/api/incidents/${incident.id}/units/deploy`, { tree, accountId: nord.id });
     expect(res.status).toBe(201);
     const units = (await req<Unit[]>('GET', `/api/incidents/${incident.id}/units`)).body;
     expect(units.map((u) => u.name)).toEqual(['Löschzug Mitte', 'ELW 1', 'HLF 20']);
-    expect(units.find((u) => u.name === 'ELW 1')).toMatchObject({ parentId: res.body.id, role: 'Führungsfahrzeug', sourceId: elw.id, section: 'EA Nord', status: 'alarmiert' });
+    expect(units.find((u) => u.name === 'ELW 1')).toMatchObject({ parentId: res.body.id, role: 'Führungsfahrzeug', sourceId: elw.id, accountId: nord.id, section: 'EA Nord', status: 'alarmiert' });
 
     // Nicht im Zug enthalten bzw. schon im Einsatz
     const bad = { forceUnitId: gg.id, children: [{ forceUnitId: lf.id, children: [] }] };
@@ -115,7 +116,8 @@ describe('Kräfte im Einsatz', () => {
     const lf = (await units()).find((u) => u.name === 'LF 10')!;
 
     await req('PATCH', `/api/units/${lf.id}`, { status: 'entlassen' });
-    await req('PATCH', `/api/units/${root.id}`, { status: 'einsatz', section: 'EA Süd' });
+    const sued = (await req<DamageAccount>('POST', `/api/incidents/${incident.id}/damage-accounts`, { name: 'EA Süd' })).body;
+    await req('PATCH', `/api/units/${root.id}`, { status: 'einsatz', accountId: sued.id });
     expect((await units()).map((u) => [u.name, u.status])).toEqual([
       ['Löschzug Mitte', 'einsatz'],
       ['ELW 1', 'einsatz'],
