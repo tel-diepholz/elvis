@@ -7328,6 +7328,14 @@ fieldset.field {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
+.chat-document-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
 .chat-location {
   display: inline-flex;
   align-items: center;

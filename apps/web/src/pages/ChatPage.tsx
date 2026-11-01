@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, Search, Trash2, UserPlus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, FolderInput, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, Search, Trash2, UserPlus } from 'lucide-react';
 import {
   CHAT_CHANNEL_LABEL,
   CHAT_CHANNELS,
@@ -20,9 +20,10 @@ import { api } from '../lib/api';
 import { fmtDateTime, fmtTime } from '../lib/format';
 import { useActiveIncident } from '../lib/hooks';
 import { useToast } from '../lib/toast';
-import { EmptyState, Loading, Modal, PageHeader } from '../components/ui';
+import { EmptyState, Field, Loading, Modal, PageHeader } from '../components/ui';
 import { ContactForm, emptyContact } from '../components/contacts/ContactForm';
 import { ChannelIcon } from '../components/chat/ChannelIcon';
+import { FolderSelect } from '../components/documents/FolderTree';
 import { ChatComposer, type ChatDraftForm } from '../components/chat/ChatComposer';
 import { ThreadReply, type ReplyTarget } from '../components/chat/ThreadReply';
 import { MessageForm } from '../components/messages/MessageForm';
@@ -68,6 +69,7 @@ export function ChatPage() {
   const [search, setSearch] = useState('');
   const [asMessage, setAsMessage] = useState<ChatMessage | null>(null);
   const [asContact, setAsContact] = useState<string | null>(null);
+  const [asDocument, setAsDocument] = useState<ChatMessage | null>(null);
   const { data: incident } = useActiveIncident();
   const { data: avail } = useQuery({ queryKey: ['chat', 'available'], queryFn: api.chatAvailable });
   const available = !!avail?.available;
@@ -184,6 +186,7 @@ export function ChatPage() {
               onBack={() => select(null)}
               onSent={(m) => m[0] && m[0].thread !== selected.key && select(m[0].thread)}
               onMessage={incident ? setAsMessage : undefined}
+              onDocument={incident ? setAsDocument : undefined}
               onContact={setAsContact}
             />
           ) : (
@@ -199,6 +202,9 @@ export function ChatPage() {
       </Modal>
       <Modal open={asMessage !== null && !!incident} title="Eingangsmeldung aus Nachricht" onClose={() => setAsMessage(null)} wide>
         {asMessage && incident && <ChatToMessage incident={incident} msg={asMessage} onDone={() => setAsMessage(null)} />}
+      </Modal>
+      <Modal open={asDocument !== null && !!incident} title="In Dokumente übernehmen" onClose={() => setAsDocument(null)}>
+        {asDocument && incident && <ChatToDocumentForm incident={incident} msg={asDocument} onDone={() => setAsDocument(null)} />}
       </Modal>
       <Modal open={asContact !== null} title="Als Kontakt anlegen" onClose={() => setAsContact(null)} wide>
         {asContact !== null && <NewContact number={asContact} onDone={() => setAsContact(null)} />}
@@ -216,6 +222,7 @@ function ThreadView({
   onBack,
   onSent,
   onMessage,
+  onDocument,
   onContact,
 }: {
   thread: ChatThread;
@@ -226,6 +233,8 @@ function ThreadView({
   onSent: (m: ChatMessage[]) => void;
   /** Nur mit laufendem Einsatz */
   onMessage?: (m: ChatMessage) => void;
+  /** Bild in die Dokumente des Einsatzes übernehmen; nur mit laufendem Einsatz */
+  onDocument?: (m: ChatMessage) => void;
   onContact: (number: string) => void;
 }) {
   const toast = useToast();
@@ -332,6 +341,11 @@ function ThreadView({
                         <MessageSquarePlus size={14} />
                       </button>
                     )}
+                    {onDocument && m.attachment && (
+                      <button className="btn btn-ghost btn-icon btn-sm" title="In Dokumente übernehmen" aria-label="In Dokumente übernehmen" onClick={() => onDocument(m)}>
+                        <FolderInput size={14} />
+                      </button>
+                    )}
                   </span>
                 </span>
                 {m.status === 'failed' && m.error && <span className="thread-error tone-alarm small">{m.error}</span>}
@@ -378,6 +392,52 @@ function ChatToMessage({ incident, msg, onDone }: { incident: Incident; msg: Cha
       pending={create.isPending}
       onSubmit={(input) => create.mutate(input)}
     />
+  );
+}
+
+/** Bild einer Nachricht in die Dokumente des Einsatzes übernehmen: Ordner wählen (Vorgabe „Fotos“), Beschreibung vorbelegt */
+function ChatToDocumentForm({ incident, msg, onDone }: { incident: Incident; msg: ChatMessage; onDone: () => void }) {
+  const toast = useToast();
+  const { data: listing } = useQuery({ queryKey: ['documents', incident.id], queryFn: () => api.documents(incident.id) });
+  const [folderId, setFolderId] = useState<number | null | undefined>(undefined);
+  const who = msg.name ?? (msg.number ? formatPhone(msg.number) : msg.peer);
+  const [description, setDescription] = useState(() =>
+    [`${CHAT_CHANNEL_LABEL[msg.channel]} ${msg.folder === 'inbox' ? 'von' : 'an'} ${who}, ${fmtDateTime(msg.date)}`, msg.text.trim()].filter(Boolean).join(': ').slice(0, 500),
+  );
+  const save = useMutation({
+    mutationFn: (target: number | null) => api.chatToDocument(msg.id, { incidentId: incident.id, folderId: target, description }),
+    onSuccess: (d) => (toast('success', `${d.filename} in den Dokumenten abgelegt`), onDone()),
+    onError: (e) => toast('error', e.message),
+  });
+  if (!listing) return <Loading />;
+  // Vorgabe: Ordner „Fotos“ auf oberster Ebene, falls vorhanden
+  const chosen = folderId !== undefined ? folderId : (listing.folders.find((f) => f.parentId === null && f.name === 'Fotos')?.id ?? null);
+  return (
+    <form
+      className="form-grid"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate(chosen);
+      }}
+    >
+      {msg.attachment && (
+        <img className="chat-document-preview" src={api.chatFileUrl(msg.attachment.id)} alt={msg.attachment.name} />
+      )}
+      <Field label="Ordner" hint={`Dokumente des Einsatzes „${incident.title}“`}>
+        <FolderSelect folders={listing.folders} value={chosen} onChange={setFolderId} rootLabel="Einsatz (oberste Ebene)" />
+      </Field>
+      <Field label="Beschreibung">
+        <input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} />
+      </Field>
+      <div className="btn-row">
+        <button type="submit" className="btn btn-primary" disabled={save.isPending}>
+          <FolderInput size={14} /> Übernehmen
+        </button>
+        <button type="button" className="btn" onClick={onDone}>
+          Abbrechen
+        </button>
+      </div>
+    </form>
   );
 }
 

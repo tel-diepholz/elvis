@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { phoneKey, smsParts, type AuditEntry, type CallRecord, type ChatAttachment, type ChatAvailability, type ChatList, type ChatMessage, type ChatReachability, type ChatThread, type ForceUnit, type Incident, type JournalEntry, type Message, type Role, type Unit } from '@elvis/shared';
+import { phoneKey, smsParts, type AuditEntry, type CallRecord, type ChatAttachment, type ChatAvailability, type ChatList, type ChatMessage, type ChatReachability, type ChatThread, type DocumentListing, type ForceUnit, type Incident, type IncidentDocument, type JournalEntry, type Message, type Role, type Unit } from '@elvis/shared';
 import { simImage, simPeer } from '../devices/sim/messenger.js';
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
@@ -349,6 +349,28 @@ describe('Anrufliste', () => {
       ['in', 'Muster, Max', 'Telekom 1', null],
     ]);
     expect(calls[1]!.durationS).toBe(125);
+  });
+});
+
+describe('Bild aus einer Nachricht in die Dokumente', () => {
+  it('legt das Bild im gewählten Ordner des Einsatzes ab', async () => {
+    const inc = (await req<Incident>('POST', '/api/incidents', { title: 'Hochwasser' })).body;
+    const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+    await app.chat.ingest({ channel: 'signal', peer: '+491711234567', number: '+491711234567', peerName: 'Max', text: 'Deich', attachment: { name: 'deich.png', mimeType: 'image/png', data: png }, location: null, externalId: 'img1', receivedAt: new Date().toISOString() });
+    const msg = (await req<ChatMessage[]>('GET', '/api/chat/thread?key=%2B491711234567')).body[0]!;
+    const listing = (await req<DocumentListing>('GET', `/api/incidents/${inc.id}/documents`)).body;
+    const fotos = listing.folders.find((f) => f.name === 'Fotos')!;
+
+    const res = await req<IncidentDocument>('POST', `/api/chat/messages/${msg.id}/document`, { incidentId: inc.id, folderId: fotos.id, description: 'Signal von Max' });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ folderId: fotos.id, filename: 'deich.png', mimeType: 'image/png', sizeBytes: png.length, description: 'Signal von Max' });
+    const content = await app.server.inject({ method: 'GET', url: `/api/documents/${res.body.id}/content`, headers: { cookie: admin } });
+    expect(content.rawPayload.equals(png)).toBe(true);
+    // Das Bild bleibt im Chat erhalten
+    expect((await req<ChatMessage>('GET', `/api/chat/messages/${msg.id}`)).body.attachment?.name).toBe('deich.png');
+
+    const text = received('+491711234567', 'Ohne Bild');
+    expect((await req('POST', `/api/chat/messages/${text.id}/document`, { incidentId: inc.id })).status).toBe(400);
   });
 });
 

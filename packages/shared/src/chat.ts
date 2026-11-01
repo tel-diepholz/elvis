@@ -239,6 +239,14 @@ export const chatRecipientSchema = z.object({
 });
 export type ChatRecipient = z.output<typeof chatRecipientSchema>;
 
+/** Bild einer Nachricht in die Dokumente eines Einsatzes übernehmen; folderId null = oberste Ebene */
+export const chatToDocumentSchema = z.object({
+  incidentId: z.number().int().positive(),
+  folderId: z.number().int().positive().nullable().default(null),
+  description: z.string().trim().max(500).default(''),
+});
+export type ChatToDocument = z.input<typeof chatToDocumentSchema>;
+
 export const chatDraftSchema = z
   .object({
     to: z.array(chatRecipientSchema).min(1, 'Mindestens ein Empfänger').max(20, 'Höchstens 20 Empfänger'),

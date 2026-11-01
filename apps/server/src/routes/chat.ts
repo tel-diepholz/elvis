@@ -1,12 +1,14 @@
 import { createReadStream } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CHAT_ATTACHMENT_MAX_BYTES, MESSENGER_IDS, chatDraftSchema, chatSettingsSchema, messengerSetupSchema } from '@elvis/shared';
+import { CHAT_ATTACHMENT_MAX_BYTES, MESSENGER_IDS, chatDraftSchema, chatToDocumentSchema, chatSettingsSchema, messengerSetupSchema } from '@elvis/shared';
 import { HttpError } from '../errors.js';
 import type { ChatService } from '../services/chat.js';
 import type { ContactService } from '../services/contacts.js';
+import type { DocumentService } from '../services/documents.js';
 import type { ReachabilityService } from '../services/reachability.js';
-import { idParam, operatorOf, parse } from './util.js';
+import { MAX_DOCUMENT_BYTES } from './documents.js';
+import { actorOf, idParam, operatorOf, parse } from './util.js';
 
 const folderQuery = z.object({ folder: z.enum(['inbox', 'sent']).default('inbox') });
 const seenBody = z.object({ seen: z.boolean() });
@@ -16,7 +18,7 @@ const fileParams = z.object({ fileId: z.string().regex(/^[0-9a-f]{32}$/) });
 const checkBody = z.object({ numbers: z.array(z.string().trim().min(3).max(40)).max(20) });
 
 /** Nachrichten (SMS und Messenger) für alle Angemeldeten; Kanalreihenfolge nur Admins */
-export function chatRoutes(app: FastifyInstance, deps: { chat: ChatService; reachability: ReachabilityService; contacts: ContactService }): void {
+export function chatRoutes(app: FastifyInstance, deps: { chat: ChatService; reachability: ReachabilityService; contacts: ContactService; documents: DocumentService }): void {
   const { chat, reachability } = deps;
   app.get('/api/chat/available', async () => chat.available());
   app.get('/api/chat/unread', async () => ({ count: chat.unread() }));
@@ -33,6 +35,21 @@ export function chatRoutes(app: FastifyInstance, deps: { chat: ChatService; reac
   app.delete('/api/chat/messages/:id', async (req, reply) => {
     chat.remove(parse(idParam, req.params).id, operatorOf(req));
     return reply.code(204).send();
+  });
+  // Bild einer Nachricht in die Dokumente eines Einsatzes übernehmen (Eintrag im Einsatztagebuch schreibt die Dokumentverwaltung)
+  app.post('/api/chat/messages/:id/document', async (req, reply) => {
+    const input = parse(chatToDocumentSchema, req.body);
+    const msg = chat.message(parse(idParam, req.params).id);
+    if (!msg.attachment) throw new HttpError(400, 'Die Nachricht hat keinen Anhang');
+    const file = chat.file(msg.attachment.id);
+    const doc = await deps.documents.upload(
+      input.incidentId,
+      input.folderId,
+      { filename: file.name, mimeType: file.mimeType, stream: createReadStream(file.path), description: input.description },
+      actorOf(req),
+      MAX_DOCUMENT_BYTES,
+    );
+    return reply.code(201).send(doc);
   });
   app.post('/api/chat/send', async (req, reply) => reply.code(202).send(chat.send(parse(chatDraftSchema, req.body), operatorOf(req)).messages));
   app.get('/api/chat/suggest', async (req) => deps.contacts.chatSuggestions(parse(suggestQuery, req.query).q));
