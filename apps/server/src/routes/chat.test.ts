@@ -41,6 +41,17 @@ afterEach(async () => {
 });
 
 const received = (number: string, text: string) => app.chat.ingestSms({ port: 1, number, text, receivedAt: new Date().toISOString() });
+/** Datei in die Dokumente eines Einsatzes hochladen und als Anhang übernehmen */
+async function fromDocument(file: { name: string; type: string; data: Buffer }): Promise<ChatAttachment> {
+  const incidents = (await req<Incident[]>('GET', '/api/incidents')).body;
+  const inc = incidents.find((i) => i.closedAt === null) ?? (await req<Incident>('POST', '/api/incidents', { title: 'Anhänge' })).body;
+  const doc = await app.server.inject({ method: 'POST', url: `/api/incidents/${inc.id}/documents`, ...multipart(file) });
+  expect(doc.statusCode).toBe(201);
+  const res = await req<ChatAttachment>('POST', '/api/chat/files/from-document', { documentId: doc.json<{ id: number }>().id });
+  expect(res.status).toBe(201);
+  return res.body;
+}
+
 const sentList = async () => (await req<ChatList>('GET', '/api/chat/messages?folder=sent')).body.items;
 const settled = () => until(async () => (await sentList()).every((m) => m.status !== 'sending'));
 
@@ -190,9 +201,7 @@ describe('Nachrichten: Messenger', () => {
   });
 
   it('sendet über mehrere Kanäle mit Bild, Zustellbestätigung und Fehlern', async () => {
-    const up = await app.server.inject({ method: 'POST', url: '/api/chat/files', ...multipart({ name: 'karte.png', type: 'image/png', data: simImage() }) });
-    expect(up.statusCode).toBe(201);
-    const attachment = up.json<ChatAttachment>();
+    const attachment = await fromDocument({ name: 'karte.png', type: 'image/png', data: simImage() });
     const res = await req<ChatMessage[]>('POST', '/api/chat/send', {
       to: [
         { channel: 'signal', to: '0171 1234567' },
@@ -215,9 +224,16 @@ describe('Nachrichten: Messenger', () => {
     expect((await req('POST', '/api/chat/send', { to: [{ channel: 'sms', to: '0171 1234567' }], attachmentId: attachment.id })).status).toBe(400);
     expect((await req('POST', '/api/chat/send', { to: [{ channel: 'whatsapp', to: 'max' }], text: 'x' })).status).toBe(400);
     expect((await req('POST', '/api/chat/send', { to: [{ channel: 'signal', to: '0171 1234567' }] })).status).toBe(400);
-    // Nur Bilder
-    const pdf = await app.server.inject({ method: 'POST', url: '/api/chat/files', ...multipart({ name: 'x.pdf', type: 'application/pdf', data: Buffer.from('%PDF') }) });
-    expect(pdf.statusCode).toBe(415);
+    // Dateien aus den Dokumenten: über Messenger ja, per SMS nicht; Download nur als Anhang
+    const pdf = await fromDocument({ name: 'Lageplan.pdf', type: 'application/pdf', data: Buffer.from('%PDF-1.4') });
+    expect(pdf).toMatchObject({ name: 'Lageplan.pdf', mimeType: 'application/pdf', size: 8 });
+    expect((await req('POST', '/api/chat/send', { to: [{ channel: 'sms', to: '0171 1234567' }], text: 'Plan', attachmentId: pdf.id })).body).toMatchObject({ error: 'SMS kann keine Dateien übertragen' });
+    expect((await req('POST', '/api/chat/send', { to: [{ channel: 'signal', to: '0171 1234567' }], attachmentId: pdf.id })).status).toBe(202);
+    const dl = await app.server.inject({ method: 'GET', url: `/api/chat/files/${pdf.id}`, headers: { cookie: admin } });
+    expect(dl.headers['content-disposition']).toBe("attachment; filename*=UTF-8''Lageplan.pdf");
+    // Vom eigenen Rechner gibt es keine Anhänge mehr
+    expect((await app.server.inject({ method: 'POST', url: '/api/chat/files', ...multipart({ name: 'x.png', type: 'image/png', data: simImage() }) })).statusCode).toBe(404);
+    expect((await req('POST', '/api/chat/files/from-document', { documentId: 99999 })).status).toBe(404);
 
     await req('POST', '/api/chat/send', { to: [{ channel: 'telegram', to: '0171 1234567' }], text: 'Test #fehler' });
     await settled();

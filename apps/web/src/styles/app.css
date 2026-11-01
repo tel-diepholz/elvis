@@ -7328,6 +7328,74 @@ fieldset.field {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
+.chat-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev);
+  color: inherit;
+  text-decoration: none;
+}
+.chat-file:hover {
+  border-color: var(--accent);
+}
+.chat-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-pick-search {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.doc-pick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.doc-pick-list li + li {
+  border-top: 1px solid var(--border);
+}
+.doc-pick-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'icon name' 'icon meta';
+  column-gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.doc-pick-item > svg {
+  grid-area: icon;
+}
+.doc-pick-item:hover,
+.doc-pick-item:focus-visible {
+  background: var(--bg-hover);
+}
+.doc-pick-name {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-pick-meta {
+  grid-area: meta;
+}
 .chat-document-preview {
   display: block;
   max-width: 100%;

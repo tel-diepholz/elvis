@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, FolderInput, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, Search, Trash2, UserPlus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, FileText, FolderInput, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, Search, Trash2, UserPlus } from 'lucide-react';
 import {
   CHAT_CHANNEL_LABEL,
   CHAT_CHANNELS,
@@ -9,6 +9,7 @@ import {
   MESSAGE_BODY_MAX,
   MESSAGE_PARTY_MAX,
   formatPhone,
+  isChatImage,
   phoneKey,
   type ChatChannel,
   type ChatMessage,
@@ -17,7 +18,7 @@ import {
   type MessageInput,
 } from '@elvis/shared';
 import { api } from '../lib/api';
-import { fmtDateTime, fmtTime } from '../lib/format';
+import { fmtBytes, fmtDateTime, fmtTime } from '../lib/format';
 import { useActiveIncident } from '../lib/hooks';
 import { useToast } from '../lib/toast';
 import { EmptyState, Field, Loading, Modal, PageHeader } from '../components/ui';
@@ -316,11 +317,16 @@ function ThreadView({
               {divider && <div className="thread-day muted small">{divider}</div>}
               <div className={`thread-bubble ${m.folder === 'inbox' ? 'in' : 'out'} ${m.status === 'failed' ? 'failed' : ''}`}>
                 {m.text && <span className="thread-text">{m.text}</span>}
-                {m.attachment && (
-                  <a className="chat-image" href={api.chatFileUrl(m.attachment.id)} target="_blank" rel="noreferrer" title={m.attachment.name}>
-                    <img src={api.chatFileUrl(m.attachment.id)} alt={m.attachment.name} loading="lazy" />
-                  </a>
-                )}
+                {m.attachment &&
+                  (isChatImage(m.attachment.mimeType) ? (
+                    <a className="chat-image" href={api.chatFileUrl(m.attachment.id)} target="_blank" rel="noreferrer" title={m.attachment.name}>
+                      <img src={api.chatFileUrl(m.attachment.id)} alt={m.attachment.name} loading="lazy" />
+                    </a>
+                  ) : (
+                    <a className="chat-file" href={api.chatFileUrl(m.attachment.id)} download={m.attachment.name} title="Herunterladen">
+                      <FileText size={16} /> <span className="chat-file-name">{m.attachment.name}</span> <span className="muted small">{fmtBytes(m.attachment.size)}</span>
+                    </a>
+                  ))}
                 {m.location && (
                   <Link className="chat-location" to={mapLink(m.location, name)}>
                     <MapPin size={14} /> {m.location.label || `${m.location.lat.toFixed(5)}, ${m.location.lon.toFixed(5)}`} · In Karte zeigen
@@ -341,7 +347,7 @@ function ThreadView({
                         <MessageSquarePlus size={14} />
                       </button>
                     )}
-                    {onDocument && m.attachment && (
+                    {onDocument && m.attachment && m.folder === 'inbox' && (
                       <button className="btn btn-ghost btn-icon btn-sm" title="In Dokumente übernehmen" aria-label="In Dokumente übernehmen" onClick={() => onDocument(m)}>
                         <FolderInput size={14} />
                       </button>
@@ -395,7 +401,7 @@ function ChatToMessage({ incident, msg, onDone }: { incident: Incident; msg: Cha
   );
 }
 
-/** Bild einer Nachricht in die Dokumente des Einsatzes übernehmen: Ordner wählen (Vorgabe „Fotos“), Beschreibung vorbelegt */
+/** Anhang einer Nachricht in die Dokumente des Einsatzes übernehmen: Ordner wählen (Vorgabe für Bilder „Fotos“), Beschreibung vorbelegt */
 function ChatToDocumentForm({ incident, msg, onDone }: { incident: Incident; msg: ChatMessage; onDone: () => void }) {
   const toast = useToast();
   const { data: listing } = useQuery({ queryKey: ['documents', incident.id], queryFn: () => api.documents(incident.id) });
@@ -410,8 +416,9 @@ function ChatToDocumentForm({ incident, msg, onDone }: { incident: Incident; msg
     onError: (e) => toast('error', e.message),
   });
   if (!listing) return <Loading />;
-  // Vorgabe: Ordner „Fotos“ auf oberster Ebene, falls vorhanden
-  const chosen = folderId !== undefined ? folderId : (listing.folders.find((f) => f.parentId === null && f.name === 'Fotos')?.id ?? null);
+  // Vorgabe: „Fotos“ bzw. „Sonstiges“ auf oberster Ebene, falls vorhanden
+  const preset = msg.attachment && isChatImage(msg.attachment.mimeType) ? 'Fotos' : 'Sonstiges';
+  const chosen = folderId !== undefined ? folderId : (listing.folders.find((f) => f.parentId === null && f.name === preset)?.id ?? null);
   return (
     <form
       className="form-grid"
@@ -420,7 +427,7 @@ function ChatToDocumentForm({ incident, msg, onDone }: { incident: Incident; msg
         save.mutate(chosen);
       }}
     >
-      {msg.attachment && (
+      {msg.attachment && isChatImage(msg.attachment.mimeType) && (
         <img className="chat-document-preview" src={api.chatFileUrl(msg.attachment.id)} alt={msg.attachment.name} />
       )}
       <Field label="Ordner" hint={`Dokumente des Einsatzes „${incident.title}“`}>

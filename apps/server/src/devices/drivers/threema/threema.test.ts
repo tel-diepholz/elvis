@@ -105,10 +105,13 @@ describe('Threema Gateway (E2E)', () => {
     try {
       writeFileSync(join(dir, 'f'), 'BILD');
       await adapter.sendMessage({ peer: MAX_ID, number: null, text: 'Lage', attachment: { name: 'a.png', mimeType: 'image/png', path: join(dir, 'f') }, location: null });
+      // Dateien als Datei (j = 0), Bilder als Medium (j = 1)
+      await adapter.sendMessage({ peer: MAX_ID, number: null, text: '', attachment: { name: 'Plan.pdf', mimeType: 'application/pdf', path: join(dir, 'f') }, location: null });
+      expect(JSON.parse(new TextDecoder().decode(gw.sent.at(-1)!.payload))).toMatchObject({ m: 'application/pdf', n: 'Plan.pdf', j: 0 });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-    const file = JSON.parse(new TextDecoder().decode(gw.sent.at(-1)!.payload)) as { b: string; k: string; m: string; d: string; s: number };
+    const file = JSON.parse(new TextDecoder().decode(gw.sent.at(-2)!.payload)) as { b: string; k: string; m: string; d: string; s: number };
     expect(file).toMatchObject({ m: 'image/png', n: 'a.png', d: 'Lage', s: 4, j: 1 });
     expect(Buffer.from(nacl.secretbox.open(gw.blobs.get(file.b)!, FILE_NONCE, Buffer.from(file.k, 'hex'))!).toString()).toBe('BILD');
 

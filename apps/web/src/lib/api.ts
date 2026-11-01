@@ -288,11 +288,8 @@ export const api = {
   chatReachability: () => request<ChatReachability>('GET', '/api/chat/reachability'),
   whatsappWindow: () => request<Record<string, string>>('GET', '/api/chat/whatsapp-window'),
   checkChatReachability: (numbers: string[]) => request<ChatReachability>('POST', '/api/chat/reachability/check', { numbers }),
-  uploadChatFile: (file: File) => {
-    const form = new FormData();
-    form.append('file', file);
-    return request<ChatAttachment>('POST', '/api/chat/files', form);
-  },
+  /** Dokument aus der Dokumentverwaltung als Anhang übernehmen */
+  chatFileFromDocument: (documentId: number) => request<ChatAttachment>('POST', '/api/chat/files/from-document', { documentId }),
   chatFileUrl: (id: string) => `/api/chat/files/${id}`,
   chatSettings: () => request<ChatSettings>('GET', '/api/system/chat'),
   messengerSetup: (id: MessengerId) => request<MessengerSetupInfo>('GET', `/api/system/messengers/${id}/setup`),

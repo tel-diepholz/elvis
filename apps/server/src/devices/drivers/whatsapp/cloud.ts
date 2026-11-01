@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { CHAT_IMAGE_TYPES, phoneKey, type MessengerState, type RelayHookEvent } from '@elvis/shared';
+import { CHAT_IMAGE_TYPES, isChatImage, phoneKey, type MessengerState, type RelayHookEvent } from '@elvis/shared';
 import { BaseAdapter, CommandError, type AdapterContext } from '../../adapter.js';
 import type { HookSource, MessengerAdapter, MessengerBus, OutgoingChat, SendResult } from '../../messaging/bus.js';
 
@@ -81,7 +81,7 @@ export class WhatsAppCloudAdapter extends BaseAdapter<'whatsapp'> implements Mes
       status: 'connecting',
       account: null,
       link: { connected: false, target: 'WhatsApp Cloud API', error: null, lastEventAt: null },
-      capabilities: { images: true, location: true, reachability: false },
+      capabilities: { images: true, files: true, location: true, reachability: false },
       setup: null,
     } satisfies MessengerState);
     this.online = false;
@@ -247,7 +247,10 @@ export class WhatsAppCloudAdapter extends BaseAdapter<'whatsapp'> implements Mes
       form.append('type', msg.attachment.mimeType);
       form.append('file', new Blob([await readFile(msg.attachment.path)], { type: msg.attachment.mimeType }), msg.attachment.name);
       const media = await this.api<{ id: string }>(`${this.opts.phoneNumberId}/media`, { form });
-      id = await this.post(to, { type: 'image', image: { id: media.id, ...(msg.text && { caption: msg.text.slice(0, 1024) }) } });
+      const caption = msg.text ? { caption: msg.text.slice(0, 1024) } : {};
+      id = isChatImage(msg.attachment.mimeType)
+        ? await this.post(to, { type: 'image', image: { id: media.id, ...caption } })
+        : await this.post(to, { type: 'document', document: { id: media.id, filename: msg.attachment.name, ...caption } });
     } else if (msg.text) id = await this.post(to, { type: 'text', text: { body: msg.text, preview_url: true } });
     if (msg.location) {
       const loc = await this.post(to, { type: 'location', location: { latitude: msg.location.lat, longitude: msg.location.lon, ...(msg.location.label && { name: msg.location.label }) } });

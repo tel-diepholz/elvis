@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CHAT_ATTACHMENT_MAX_BYTES, MESSENGER_IDS, chatDraftSchema, chatToDocumentSchema, chatSettingsSchema, messengerSetupSchema } from '@elvis/shared';
+import { MESSENGER_IDS, chatDraftSchema, chatFromDocumentSchema, chatToDocumentSchema, isChatImage, chatSettingsSchema, messengerSetupSchema } from '@elvis/shared';
 import { HttpError } from '../errors.js';
 import type { ChatService } from '../services/chat.js';
 import type { ContactService } from '../services/contacts.js';
@@ -64,10 +64,10 @@ export function chatRoutes(app: FastifyInstance, deps: { chat: ChatService; reac
     return reachability.map(numbers);
   });
 
-  app.post('/api/chat/files', async (req, reply) => {
-    const file = await req.file({ limits: { fileSize: CHAT_ATTACHMENT_MAX_BYTES } });
-    if (!file) throw new HttpError(400, 'Keine Datei übermittelt');
-    return reply.code(201).send(await chat.upload({ filename: file.filename, mimeType: file.mimetype, stream: file.file }, operatorOf(req), CHAT_ATTACHMENT_MAX_BYTES));
+  // Dokument aus der Dokumentverwaltung als Anhang übernehmen (Kopie; Anhänge vom eigenen Rechner gibt es nicht)
+  app.post('/api/chat/files/from-document', async (req, reply) => {
+    const doc = deps.documents.visibleDocument(parse(chatFromDocumentSchema, req.body).documentId, req.user?.id ?? null);
+    return reply.code(201).send(await chat.fromDocument(doc, operatorOf(req)));
   });
   app.get('/api/chat/files/:fileId', async (req, reply) => {
     const f = chat.file(parse(fileParams, req.params).fileId);
@@ -76,6 +76,8 @@ export function chatRoutes(app: FastifyInstance, deps: { chat: ChatService; reac
       .header('x-content-type-options', 'nosniff')
       .header('content-security-policy', "default-src 'none'")
       .header('cache-control', 'private, max-age=31536000, immutable')
+      // Dateien (PDF, Office, auch HTML) nur herunterladen, nicht im Browser unter dieser Adresse öffnen
+      .header('content-disposition', isChatImage(f.mimeType) ? 'inline' : `attachment; filename*=UTF-8''${encodeURIComponent(f.name)}`)
       .send(createReadStream(f.path));
   });
 

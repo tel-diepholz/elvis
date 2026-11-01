@@ -1,12 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
-import { unlink, writeFile } from 'node:fs/promises';
+import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Readable } from 'node:stream';
 import {
   CHAT_CHANNEL_LABEL,
+  CHAT_ATTACHMENT_MAX_BYTES,
   CHAT_CHANNELS,
-  CHAT_IMAGE_TYPES,
   DEFAULT_CHANNEL_ORDER,
   MESSENGER_IDS,
   SMS_MAX_LENGTH,
@@ -14,6 +13,7 @@ import {
   chatThreadKey,
   chatPeer,
   chatSettingsSchema,
+  isChatImage,
   isMessenger,
   locationLink,
   looksLikePhone,
@@ -41,7 +41,6 @@ import type { DeviceManager } from '../devices/manager.js';
 import { isMessengerAdapter, type ChatReceipt, type IncomingChat, type MessengerAdapter, type MessengerBus } from '../devices/messaging/bus.js';
 import type { IncomingSms, TelephonyBus } from '../devices/telephony/bus.js';
 import { HttpError } from '../errors.js';
-import { writeStream } from './files.js';
 
 export interface ChatDeps {
   store: Store;
@@ -139,7 +138,7 @@ export class ChatService {
     const defaultPort = ports.some((p) => p.port === smsPort) ? smsPort : (ports.find((p) => p.status === 'up')?.port ?? ports[0]?.port ?? null);
     const up = ports.some((p) => p.status === 'up');
     return {
-      info: { channel: 'sms', label: 'SMS', available, account: null, status: !available ? 'offline' : up ? 'connected' : 'error', images: false, location: false, reachability: true, window24h: false },
+      info: { channel: 'sms', label: 'SMS', available, account: null, status: !available ? 'offline' : up ? 'connected' : 'error', images: false, files: false, location: false, reachability: true, window24h: false },
       ports,
       defaultPort,
     };
@@ -156,6 +155,7 @@ export class ChatService {
       account: state?.account ?? null,
       status: state?.status ?? 'offline',
       images: !!state?.capabilities.images,
+      files: !!state?.capabilities.files,
       location: !!state?.capabilities.location,
       reachability: !!state?.capabilities.reachability,
       window24h: channel === 'whatsapp' && adapter?.driver === 'cloud-api',
@@ -377,16 +377,12 @@ export class ChatService {
 
   // --- Bilder ---
 
-  async upload(file: { filename: string; mimeType: string; stream: Readable }, operator: string, maxBytes: number): Promise<ChatAttachment> {
-    if (!CHAT_IMAGE_TYPES.includes(file.mimeType)) {
-      file.stream.resume();
-      throw new HttpError(415, 'Nur Bilder (JPEG, PNG, WebP, GIF)');
-    }
-    const id = randomBytes(16).toString('hex');
-    const size = await writeStream(join(this.fileDir, id), file.stream, maxBytes);
-    const name = file.filename.slice(0, 200) || 'bild';
-    this.db.prepare('INSERT INTO chat_files (id, name, mime_type, size, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(id, name, file.mimeType, size, new Date().toISOString(), operator);
-    return { id, name, mimeType: file.mimeType, size };
+  /** Dokument aus der Dokumentverwaltung als Anhang kopieren – die Nachricht behält ihn, auch wenn das Dokument später geändert oder gelöscht wird */
+  async fromDocument(doc: { filename: string; mimeType: string; path: string }, operator: string): Promise<ChatAttachment> {
+    const size = (await stat(doc.path)).size;
+    if (size > CHAT_ATTACHMENT_MAX_BYTES) throw new HttpError(413, `Anhänge höchstens ${Math.round(CHAT_ATTACHMENT_MAX_BYTES / 1024 / 1024)} MB`);
+    const id = await this.storeFile(doc.filename, doc.mimeType, await readFile(doc.path), operator);
+    return { id, name: doc.filename.slice(0, 200), mimeType: doc.mimeType, size };
   }
 
   private async storeFile(name: string, mimeType: string, data: Buffer, by: string): Promise<string> {
@@ -439,7 +435,8 @@ export class ChatService {
       if (!info.available) throw new HttpError(409, r.channel === 'sms' ? 'Kein GSM-Gateway mit SMS aktiv' : `${label} ist nicht eingerichtet`);
       const { peer, number } = chatPeer(r.channel, r.to);
       if ((r.channel === 'sms' || r.channel === 'whatsapp') && !looksLikePhone(r.to)) throw new HttpError(400, `${label}: „${r.to}“ ist keine Rufnummer`);
-      if (attachment && !info.images) throw new HttpError(400, `${label} kann keine Bilder übertragen`);
+      if (attachment && isChatImage(attachment.mimeType) && !info.images) throw new HttpError(400, `${label} kann keine Bilder übertragen`);
+      if (attachment && !isChatImage(attachment.mimeType) && !info.files) throw new HttpError(400, `${label} kann keine Dateien übertragen`);
       if (r.channel === 'sms') {
         if (draft.port !== undefined && !avail.ports.some((p) => p.port === draft.port)) throw new HttpError(400, `Port ${draft.port} gibt es am Gateway nicht`);
         if (smsText(draft.text, draft.location).length > SMS_MAX_LENGTH) throw new HttpError(400, `SMS: höchstens ${SMS_MAX_LENGTH} Zeichen`);

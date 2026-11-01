@@ -57,7 +57,7 @@ export class MessengerSim<K extends MessengerId> extends SimAdapter<K> implement
       account: id === 'threema' ? '*ELVIS01' : '+491700000000',
       link: null,
       // Die WhatsApp Cloud API kann nicht prüfen, ob eine Rufnummer WhatsApp nutzt
-      capabilities: { images: true, location: true, reachability: id !== 'whatsapp' },
+      capabilities: { images: true, files: true, location: true, reachability: id !== 'whatsapp' },
       setup: null,
     } satisfies MessengerState);
   }

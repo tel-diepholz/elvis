@@ -108,6 +108,7 @@ describe('WhatsApp Cloud API', () => {
       writeFileSync(join(dir, 'f'), 'BILD');
       const r = await adapter.sendMessage({ windowOpen: true, peer: '+491701234567', number: '+491701234567', text: 'Lagebild', attachment: { name: 'a.png', mimeType: 'image/png', path: join(dir, 'f') }, location: { lat: 52.1, lon: 8.2, label: 'Treffpunkt' } });
       expect(r.externalId).toMatch(/^wamid\./);
+      await adapter.sendMessage({ windowOpen: true, peer: '+491701234567', number: '+491701234567', text: '', attachment: { name: 'Plan.pdf', mimeType: 'application/pdf', path: join(dir, 'f') }, location: null });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -115,6 +116,7 @@ describe('WhatsApp Cloud API', () => {
     expect(posts).toEqual([
       { messaging_product: 'whatsapp', recipient_type: 'individual', to: '491701234567', type: 'image', image: { id: 'media-1', caption: 'Lagebild' } },
       { messaging_product: 'whatsapp', recipient_type: 'individual', to: '491701234567', type: 'location', location: { latitude: 52.1, longitude: 8.2, name: 'Treffpunkt' } },
+      { messaging_product: 'whatsapp', recipient_type: 'individual', to: '491701234567', type: 'document', document: { id: 'media-1', filename: 'Plan.pdf' } },
     ]);
     await expect(adapter.sendMessage({ windowOpen: true, peer: '+491609999999', number: '+491609999999', text: 'x', attachment: null, location: null })).rejects.toThrow(/nutzt kein WhatsApp/);
     await expect(adapter.sendMessage({ windowOpen: false, peer: '+491701234567', number: '+491701234567', text: 'x', attachment: null, location: null })).rejects.toThrow(/Vorlage/);
