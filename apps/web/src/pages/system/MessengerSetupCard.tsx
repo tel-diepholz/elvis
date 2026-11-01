@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, KeyRound, Link2, LogIn, LogOut, QrCode as QrIcon, X } from 'lucide-react';
+import { ArrowLeft, Copy, KeyRound, LogIn, LogOut, QrCode as QrIcon, Smartphone, X } from 'lucide-react';
 import { copyText } from '../DockerHostsPage';
 import { CHAT_CHANNEL_LABEL, type MessengerId, type MessengerSetupInput, type MessengerState } from '@elvis/shared';
 import { api } from '../../lib/api';
@@ -59,6 +59,8 @@ export function MessengerSetupCard({ id }: { id: MessengerId }) {
   const [code, setCode] = useState('');
   const [pin, setPin] = useState('');
   const [password, setPassword] = useState('');
+  /** Signal: gewählte Variante beim Einrichten (null = Auswahl zeigen) */
+  const [variant, setVariant] = useState<'register' | null>(null);
 
   if (!device || !state || device.driver === 'sim') return null;
   const label = CHAT_CHANNEL_LABEL[id];
@@ -67,7 +69,7 @@ export function MessengerSetupCard({ id }: { id: MessengerId }) {
     run.mutate(input, { onSuccess: reset });
   };
   const cancel = (
-    <button type="button" className="btn" disabled={run.isPending} onClick={() => run.mutate({ action: 'cancel' })}>
+    <button type="button" className="btn" disabled={run.isPending} onClick={() => (setVariant(null), run.mutate({ action: 'cancel' }))}>
       <X size={14} /> Abbrechen
     </button>
   );
@@ -90,7 +92,8 @@ export function MessengerSetupCard({ id }: { id: MessengerId }) {
           </>
         )}
       </dl>
-      {state.setup && <p className="muted">{state.setup.hint}</p>}
+      {/* Bei Signal steht der Hinweis im Kasten der jeweiligen Variante */}
+      {state.setup && !(id === 'signal' && (step === 'start' || step === 'qr' || step === 'code')) && <p className="muted">{state.setup.hint}</p>}
       {state.setup?.error && <p className="tone-alarm">{state.setup.error}</p>}
 
       {info?.webhook && (
@@ -118,37 +121,80 @@ export function MessengerSetupCard({ id }: { id: MessengerId }) {
         </div>
       )}
 
-      {step === 'start' && id === 'signal' && (
+      {step === 'start' && id === 'signal' && !variant && (
         <div className="stack">
-          <div className="btn-row">
-            <button className="btn btn-primary" disabled={run.isPending} onClick={() => run.mutate({ action: 'link' })}>
-              <Link2 size={16} /> Als verknüpftes Gerät koppeln
-            </button>
+          <p>Wie soll ELVIS bei Signal angemeldet werden? Bitte eine der beiden Varianten wählen.</p>
+          <div className="setup-options">
+            <section className="setup-option">
+              <h3>
+                <Smartphone size={18} /> Variante A: Mit einem Handy koppeln
+              </h3>
+              <p>ELVIS wird ein weiteres Gerät einer Signal-Nummer, die schon auf einem Handy läuft – wie Signal am PC.</p>
+              <ul>
+                <li>Kein Captcha, kein Bestätigungscode – nur einen QR-Code scannen</li>
+                <li>Das Handy behält Signal und bleibt das Hauptgerät</li>
+                <li className="tone-warn">Ist das Handy rund 30 Tage offline, trennt Signal die Kopplung</li>
+              </ul>
+              <div className="btn-row">
+                <button className="btn btn-primary" disabled={run.isPending} onClick={() => run.mutate({ action: 'link' })}>
+                  <QrIcon size={16} /> QR-Code anzeigen
+                </button>
+              </div>
+            </section>
+            <section className="setup-option">
+              <h3>
+                <KeyRound size={18} /> Variante B: Eigene Nummer registrieren
+              </h3>
+              <p>ELVIS bekommt eine eigene Signal-Nummer, z. B. die SIM im GSM-Gateway.</p>
+              <ul>
+                <li>Unabhängig von einem Handy</li>
+                <li>Braucht ein Captcha und einen Bestätigungscode per SMS oder Anruf</li>
+                <li className="tone-warn">Die Nummer lässt sich danach in keiner Signal-App auf einem Handy mehr nutzen</li>
+              </ul>
+              <div className="btn-row">
+                <button className="btn" onClick={() => setVariant('register')}>
+                  <KeyRound size={16} /> Nummer registrieren …
+                </button>
+              </div>
+            </section>
           </div>
-          <form className="stack" onSubmit={(e) => submit(e, { action: 'register', number, ...(captcha && { captcha }), voice })}>
-            <p className="muted small">
-              Oder eine eigene Nummer registrieren (z. B. die SIM im GSM-Gateway). Signal verlangt dafür meist ein Captcha: auf{' '}
+        </div>
+      )}
+
+      {step === 'start' && id === 'signal' && variant === 'register' && (
+        <form className="stack setup-variant" onSubmit={(e) => submit(e, { action: 'register', number, ...(captcha && { captcha }), voice })}>
+          <h3>
+            <KeyRound size={18} /> Variante B: Eigene Nummer registrieren – Schritt 1 von 2
+          </h3>
+          <ol className="setup-steps">
+            <li>
+              Captcha lösen auf{' '}
               <a href="https://signalcaptchas.org/registration/generate.html" target="_blank" rel="noreferrer">
                 signalcaptchas.org
-              </a>{' '}
-              lösen, den Link „Open Signal“ kopieren und hier einfügen. Die Nummer ist danach nicht mehr in der Signal-App eines Handys nutzbar.
-            </p>
-            <Field label="Rufnummer">
-              <input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="+49 170 1234567" required />
-            </Field>
-            <Field label="Captcha" hint="signalcaptcha://…">
-              <input value={captcha} onChange={(e) => setCaptcha(e.target.value)} spellCheck={false} />
-            </Field>
-            <label className="check">
-              <input type="checkbox" checked={voice} onChange={(e) => setVoice(e.target.checked)} /> Code per Anruf statt SMS
-            </label>
-            <div className="btn-row">
-              <button className="btn" disabled={run.isPending || !number.trim()}>
-                Registrieren
-              </button>
-            </div>
-          </form>
-        </div>
+              </a>
+              . Danach den Link „Open Signal“ per Rechtsklick kopieren (beginnt mit <code>signalcaptcha://</code>). Er gilt nur wenige Minuten.
+            </li>
+            <li>Rufnummer und Captcha hier eintragen und auf „Registrieren“ drücken.</li>
+            <li>Im nächsten Schritt den Bestätigungscode eingeben, den Signal schickt.</li>
+          </ol>
+          <Field label="Rufnummer" hint="Mit Ländervorwahl">
+            <input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="+49 170 1234567" required autoFocus />
+          </Field>
+          <Field label="Captcha" hint="signalcaptcha://…">
+            <input value={captcha} onChange={(e) => setCaptcha(e.target.value)} spellCheck={false} />
+          </Field>
+          <label className="check">
+            <input type="checkbox" checked={voice} onChange={(e) => setVoice(e.target.checked)} /> Code per Anruf statt SMS (z. B. Festnetz)
+          </label>
+          <div className="btn-row">
+            <button className="btn btn-primary" disabled={run.isPending || !number.trim()}>
+              Registrieren
+            </button>
+            <button type="button" className="btn" onClick={() => setVariant(null)}>
+              <ArrowLeft size={16} /> Andere Variante wählen
+            </button>
+          </div>
+        </form>
       )}
 
       {step === 'start' && id === 'telegram' && (
@@ -160,7 +206,15 @@ export function MessengerSetupCard({ id }: { id: MessengerId }) {
       )}
 
       {step === 'qr' && (
-        <div className="stack">
+        <div className="stack setup-variant">
+          {id === 'signal' && (
+            <>
+              <h3>
+                <Smartphone size={18} /> Variante A: Mit einem Handy koppeln
+              </h3>
+              <p>{state.setup?.hint}</p>
+            </>
+          )}
           {info?.qr ? <QrCode data={info.qr} label={`QR-Code zum Koppeln mit ${label}`} className="messenger-qr" /> : <p className="muted">QR-Code wird geladen …</p>}
           <div className="btn-row">
             <span className="muted small">
@@ -172,7 +226,15 @@ export function MessengerSetupCard({ id }: { id: MessengerId }) {
       )}
 
       {step === 'code' && (
-        <form className="stack" onSubmit={(e) => submit(e, { action: 'code', code, ...(pin && { password: pin }) }, () => (setCode(''), setPin('')))}>
+        <form className="stack setup-variant" onSubmit={(e) => submit(e, { action: 'code', code, ...(pin && { password: pin }) }, () => (setCode(''), setPin('')))}>
+          {id === 'signal' && (
+            <>
+              <h3>
+                <KeyRound size={18} /> Variante B: Eigene Nummer registrieren – Schritt 2 von 2
+              </h3>
+              <p>{state.setup?.hint}</p>
+            </>
+          )}
           <Field label="Bestätigungscode">
             <input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus required />
           </Field>
