@@ -149,6 +149,8 @@ export interface ChatMessage {
   seen: boolean;
   date: string;
   createdBy: string;
+  /** Gespräch, zu dem die Nachricht gehört (siehe ChatThread.key) */
+  thread: string;
 }
 
 export interface ChatList {
@@ -156,8 +158,31 @@ export interface ChatList {
   unread: number;
 }
 
-/** Schlüssel eines Verlaufs: die Rufnummer, ohne Rufnummer Kanal und Gegenstelle */
-export const chatThreadKey = (m: Pick<ChatMessage, 'channel' | 'peer' | 'number'>) => m.number ?? `${m.channel}:${m.peer}`;
+/**
+ * Gespräch mit einer Gegenstelle über alle Kanäle. Schlüssel: „contact:<id>“ für einen Kontakt (alle seine Rufnummern),
+ * sonst die Rufnummer, ohne Rufnummer „<kanal>:<kennung>“ (z. B. Threema-ID).
+ */
+export interface ChatThread {
+  key: string;
+  contactId: number | null;
+  /** Kontaktname bzw. Name aus dem Messenger */
+  name: string | null;
+  /** Rufnummern im Gespräch, die zuletzt genutzte zuerst */
+  numbers: string[];
+  /** Kennung im Kanal, wenn es keine Rufnummer gibt */
+  peer: string | null;
+  /** Genutzte Kanäle, der zuletzt genutzte zuerst */
+  channels: ChatChannel[];
+  last: ChatMessage;
+  unread: number;
+  count: number;
+}
+
+/** Gesprächsschlüssel aus Rufnummer bzw. Kanal und Kennung (Kontakt: contact:<id>) */
+export function chatThreadKey(m: Pick<ChatMessage, 'channel' | 'peer' | 'number'>, contactId?: number | null): string {
+  if (contactId != null) return `contact:${contactId}`;
+  return m.number ?? `${m.channel}:${m.peer}`;
+}
 
 export interface ChatChannelInfo {
   channel: ChatChannel;

@@ -1,29 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Check, CheckCheck, Clock, MailOpen, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, Reply, Trash2, UserPlus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, Search, Trash2, UserPlus } from 'lucide-react';
 import {
   CHAT_CHANNEL_LABEL,
   CHAT_CHANNELS,
   CHAT_STATUS_LABEL,
   MESSAGE_BODY_MAX,
   MESSAGE_PARTY_MAX,
-  chatThreadKey,
   formatPhone,
+  phoneKey,
   type ChatChannel,
-  type ChatFolder,
   type ChatMessage,
+  type ChatThread,
   type Incident,
   type MessageInput,
 } from '@elvis/shared';
 import { api } from '../lib/api';
-import { fmtDateTime } from '../lib/format';
+import { fmtDateTime, fmtTime } from '../lib/format';
 import { useActiveIncident } from '../lib/hooks';
 import { useToast } from '../lib/toast';
-import { Badge, Card, EmptyState, Loading, Modal, PageHeader, Segmented } from '../components/ui';
+import { EmptyState, Loading, Modal, PageHeader } from '../components/ui';
 import { ContactForm, emptyContact } from '../components/contacts/ContactForm';
 import { ChannelIcon } from '../components/chat/ChannelIcon';
 import { ChatComposer, type ChatDraftForm } from '../components/chat/ChatComposer';
+import { ThreadReply, type ReplyTarget } from '../components/chat/ThreadReply';
 import { MessageForm } from '../components/messages/MessageForm';
 import { useMessageContext } from '../components/messages/messageHooks';
 
@@ -35,35 +36,73 @@ const STATUS: Record<Exclude<ChatMessage['status'], 'received'>, { tone: 'ok' | 
   failed: { tone: 'alarm', icon: AlertTriangle },
 };
 
-/** Gegenstelle: Kontaktname, sonst Rufnummer bzw. Kennung */
-const party = (m: Pick<ChatMessage, 'name' | 'number' | 'peer'>) => m.name ?? (m.number ? formatPhone(m.number) : m.peer);
-/** Kurzfassung für die Liste */
+const isChannel = (c: string | null): c is ChatChannel => !!c && (CHAT_CHANNELS as readonly string[]).includes(c);
+
+/** Name eines Gesprächs: Kontakt bzw. Name aus dem Messenger, sonst Rufnummer oder Kennung */
+const threadName = (t: Pick<ChatThread, 'name' | 'numbers' | 'peer'>) => t.name ?? (t.numbers[0] ? formatPhone(t.numbers[0]) : (t.peer ?? 'Unbekannt'));
+/** Kurzfassung einer Nachricht für die Liste */
 const summary = (m: ChatMessage) => m.text || (m.attachment ? 'Bild' : m.location ? `Standort${m.location.label ? `: ${m.location.label}` : ''}` : '');
 const mapLink = (l: NonNullable<ChatMessage['location']>, from: string) =>
   `/karte?lat=${l.lat}&lon=${l.lon}&name=${encodeURIComponent(l.label || `Standort von ${from}`)}&detail=${encodeURIComponent(l.label ? `Standort von ${from}` : '')}`;
 
-const isChannel = (c: string | null): c is ChatChannel => !!c && (CHAT_CHANNELS as readonly string[]).includes(c);
+/** Uhrzeit heute, sonst Datum */
+function listTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toDateString() === new Date().toDateString() ? fmtTime(iso) : fmtDateTime(iso).split(' ')[0]!;
+}
 
-/** Nachrichten: SMS und Messenger in einer Liste, die Herkunft zeigt ein kleines Symbol */
+/** Noch kein Gespräch (z. B. aus den Kontakten geöffnet): leeres Gespräch mit dieser Rufnummer */
+function draftThread(number: string): ChatThread {
+  const n = phoneKey(number);
+  return { key: n, contactId: null, name: null, numbers: [n], peer: null, channels: [], last: null as unknown as ChatMessage, unread: 0, count: 0 };
+}
+
+/**
+ * Nachrichten als Gespräche: links alle Gegenstellen, mit denen es Nachrichten gibt (je Kontakt eine Zeile, egal über
+ * welche Rufnummer und welchen Messenger), rechts der Verlauf mit allen Kanälen und darunter die Antwortzeile.
+ */
 export function ChatPage() {
-  const [folder, setFolder] = useState<ChatFolder>('inbox');
-  const [selected, setSelected] = useState<number | null>(null);
-  // /nachrichten?an=…&kanal=… (z. B. aus den Kontakten) öffnet gleich eine neue Nachricht
+  const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
-  const [draft, setDraft] = useState<Partial<ChatDraftForm> | null>(() => {
-    const to = params.get('an');
-    const channel = params.get('kanal');
-    return to ? { to: `${to}, `, ...(isChannel(channel) && { channel }) } : null;
-  });
-  useEffect(() => {
-    if (params.has('an')) setParams({}, { replace: true });
-  }, [params, setParams]);
-  const { data: incident } = useActiveIncident();
+  const [draft, setDraft] = useState<Partial<ChatDraftForm> | null>(null);
+  const [search, setSearch] = useState('');
   const [asMessage, setAsMessage] = useState<ChatMessage | null>(null);
   const [asContact, setAsContact] = useState<string | null>(null);
+  const { data: incident } = useActiveIncident();
   const { data: avail } = useQuery({ queryKey: ['chat', 'available'], queryFn: api.chatAvailable });
   const available = !!avail?.available;
-  const { data: list } = useQuery({ queryKey: ['chat', 'messages', folder], queryFn: () => api.chatMessages(folder), enabled: available });
+  const { data: threads } = useQuery({ queryKey: ['chat', 'threads'], queryFn: api.chatThreads, enabled: available });
+  const { data: contacts = [] } = useQuery({ queryKey: ['contacts'], queryFn: api.contacts, enabled: available });
+
+  // ?t=<Gespräch>, aus den Kontakten ?an=<Rufnummer>&kanal=<Kanal>
+  const selectedKey = params.get('t');
+  const preset = isChannel(params.get('kanal')) ? (params.get('kanal') as ChatChannel) : null;
+  /** Angeklickte Rufnummer (z. B. „Dienst“ im Adressbuch) vor der zuletzt genutzten */
+  const presetNumber = params.get('nr');
+  useEffect(() => {
+    const an = params.get('an');
+    if (!an || !threads) return;
+    const n = phoneKey(an);
+    const existing = threads.find((t) => t.numbers.includes(n));
+    setParams({ t: existing?.key ?? n, nr: n, ...(preset && { kanal: preset }) }, { replace: true });
+  }, [params, threads, setParams, preset]);
+  const select = (key: string | null) => setParams(key ? { t: key } : {}, { replace: false });
+
+  const selected = useMemo(() => {
+    if (!selectedKey || !threads) return null;
+    const exact = threads.find((t) => t.key === selectedKey);
+    if (exact) return exact;
+    // Rufnummer: inzwischen ggf. Teil eines Kontakts (z. B. gerade als Kontakt angelegt), sonst neues Gespräch
+    if (!/^\+?\d{3,}$/.test(selectedKey)) return null;
+    return threads.find((t) => t.numbers.includes(phoneKey(selectedKey))) ?? draftThread(selectedKey);
+  }, [selectedKey, threads]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q || !threads) return threads ?? [];
+    const digits = q.replace(/\D/g, '').replace(/^0+/, '');
+    return threads.filter((t) => threadName(t).toLowerCase().includes(q) || (digits.length >= 3 && t.numbers.some((n) => n.includes(digits))) || t.peer?.toLowerCase().includes(q));
+  }, [threads, search]);
 
   if (!avail) return <Loading />;
   if (!available)
@@ -78,8 +117,6 @@ export function ChatPage() {
     );
 
   const active = avail.channels.filter((c) => c.available);
-  const disturbed = active.filter((c) => c.status !== 'connected');
-  const current = list?.items.find((m) => m.id === selected);
 
   return (
     <>
@@ -92,7 +129,6 @@ export function ChatPage() {
                 <ChannelIcon channel={c.channel} size={14} /> {c.label}
               </span>
             ))}
-            {disturbed.length > 0 && <span className="tone-alarm">gestört: {disturbed.map((c) => c.label).join(', ')}</span>}
           </span>
         }
         actions={
@@ -101,58 +137,65 @@ export function ChatPage() {
           </button>
         }
       />
-      <Card className="mail-list-card">
-        <Segmented
-          label="Ordner"
-          value={folder}
-          onChange={(f) => (setFolder(f), setSelected(null))}
-          options={[
-            { value: 'inbox', label: `Eingang${list && list.unread ? ` (${list.unread})` : ''}` },
-            { value: 'sent', label: 'Gesendet' },
-          ]}
-        />
-        {!list ? (
-          <Loading />
-        ) : list.items.length === 0 ? (
-          <EmptyState icon={<MessagesSquare size={32} />} title={folder === 'inbox' ? 'Keine Nachrichten' : 'Noch nichts gesendet'} />
-        ) : (
-          <ul className="mail-list">
-            {list.items.map((m) => {
-              const st = m.status !== 'received' ? STATUS[m.status] : null;
-              return (
-                <li key={m.id}>
-                  <button className={`mail-item ${m.id === selected ? 'active' : ''} ${m.seen ? '' : 'unread'}`} onClick={() => setSelected(m.id)}>
-                    <span className="mail-item-from">
-                      <ChannelIcon channel={m.channel} size={14} />
-                      <span>{folder === 'inbox' ? party(m) : `An ${party(m)}`}</span>
+      <div className={`chat-layout ${selected ? 'has-thread' : ''}`}>
+        <section className="chat-threads card" aria-label="Gespräche">
+          <div className="chat-threads-search">
+            <Search size={16} />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name oder Rufnummer" aria-label="Gespräche durchsuchen" />
+          </div>
+          {!threads ? (
+            <Loading />
+          ) : filtered.length === 0 ? (
+            <EmptyState icon={<MessagesSquare size={28} />} title={threads.length ? 'Kein Treffer' : 'Noch keine Nachrichten'} />
+          ) : (
+            <ul className="chat-thread-list">
+              {filtered.map((t) => (
+                <li key={t.key}>
+                  <button className={`chat-thread-item ${t.key === selected?.key ? 'active' : ''} ${t.unread ? 'unread' : ''}`} onClick={() => select(t.key)}>
+                    <span className="chat-thread-name">{threadName(t)}</span>
+                    <span className="chat-thread-time muted">{listTime(t.last.date)}</span>
+                    <span className="chat-thread-snippet muted">
+                      <ChannelIcon channel={t.last.channel} size={12} />
+                      {t.last.folder === 'sent' && <span>Du: </span>}
+                      <span className="chat-thread-text">{summary(t.last)}</span>
                     </span>
-                    <span className="mail-item-subject">
-                      {st && <st.icon size={14} aria-label={CHAT_STATUS_LABEL[m.status]} className={`tone-${st.tone}`} />}
-                      {m.location && <MapPin size={14} aria-label="Standort" />}
-                      <span>{m.name && m.number ? formatPhone(m.number) : ''}</span>
+                    <span className="chat-thread-badges">
+                      {t.channels.length > 1 &&
+                        t.channels.map((c) => (
+                          <ChannelIcon key={c} channel={c} size={12} />
+                        ))}
+                      {t.unread > 0 && <span className="chat-thread-unread">{t.unread}</span>}
                     </span>
-                    <span className="mail-item-snippet muted">{summary(m)}</span>
-                    <span className="mail-item-date muted">{fmtDateTime(m.date)}</span>
                   </button>
                 </li>
-              );
-            })}
-          </ul>
-        )}
-      </Card>
-      <Modal open={selected !== null} title={current ? party(current) : 'Nachricht'} onClose={() => setSelected(null)} wide>
-        {selected !== null && (
-          <Reader
-            id={selected}
-            onReply={(m) => (setSelected(null), setDraft({ to: `${m.number ? formatPhone(m.number) : m.peer}, `, channel: m.channel }))}
-            onClose={() => setSelected(null)}
-            onMessage={incident ? (m) => (setSelected(null), setAsMessage(m)) : undefined}
-            onContact={(number) => (setSelected(null), setAsContact(number))}
-          />
-        )}
-      </Modal>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="chat-thread card" aria-label="Verlauf">
+          {selected ? (
+            <ThreadView
+              key={selected.key}
+              thread={selected}
+              labels={Object.fromEntries((contacts.find((c) => c.id === selected.contactId)?.phones ?? []).map((p) => [phoneKey(p.number), p.label]))}
+              preset={preset}
+              presetNumber={presetNumber}
+              onBack={() => select(null)}
+              onSent={(m) => m[0] && m[0].thread !== selected.key && select(m[0].thread)}
+              onMessage={incident ? setAsMessage : undefined}
+              onContact={setAsContact}
+            />
+          ) : (
+            <EmptyState icon={<MessagesSquare size={32} />} title="Gespräch wählen">
+              Links ein Gespräch öffnen oder mit „Neue Nachricht“ jemanden anschreiben.
+            </EmptyState>
+          )}
+        </section>
+      </div>
+
       <Modal open={draft !== null} title="Neue Nachricht" onClose={() => setDraft(null)} wide>
-        {draft && <ChatComposer initial={draft} onDone={() => setDraft(null)} />}
+        {draft && <ChatComposer initial={draft} onDone={() => setDraft(null)} onSent={() => void qc.invalidateQueries({ queryKey: ['chat'] })} />}
       </Modal>
       <Modal open={asMessage !== null && !!incident} title="Eingangsmeldung aus Nachricht" onClose={() => setAsMessage(null)} wide>
         {asMessage && incident && <ChatToMessage incident={incident} msg={asMessage} onDone={() => setAsMessage(null)} />}
@@ -164,132 +207,130 @@ export function ChatPage() {
   );
 }
 
-/** Bild und Standort einer Nachricht */
-function Extras({ m, from }: { m: ChatMessage; from: string }) {
-  return (
-    <>
-      {m.attachment && (
-        <a className="chat-image" href={api.chatFileUrl(m.attachment.id)} target="_blank" rel="noreferrer" title={m.attachment.name}>
-          <img src={api.chatFileUrl(m.attachment.id)} alt={m.attachment.name} loading="lazy" />
-        </a>
-      )}
-      {m.location && (
-        <Link className="chat-location" to={mapLink(m.location, from)}>
-          <MapPin size={14} /> {m.location.label || `${m.location.lat.toFixed(5)}, ${m.location.lon.toFixed(5)}`} · In Karte zeigen
-        </Link>
-      )}
-    </>
-  );
-}
-
-function Reader({
-  id,
-  onReply,
-  onClose,
+/** Verlauf eines Gesprächs über alle Kanäle, unten die Antwortzeile */
+function ThreadView({
+  thread,
+  labels,
+  preset,
+  presetNumber,
+  onBack,
+  onSent,
   onMessage,
   onContact,
 }: {
-  id: number;
-  onReply: (m: ChatMessage) => void;
-  onClose: () => void;
+  thread: ChatThread;
+  labels: Record<string, string>;
+  preset: ChatChannel | null;
+  presetNumber: string | null;
+  onBack: () => void;
+  onSent: (m: ChatMessage[]) => void;
   /** Nur mit laufendem Einsatz */
   onMessage?: (m: ChatMessage) => void;
   onContact: (number: string) => void;
 }) {
   const toast = useToast();
   const { data: ctx } = useMessageContext();
-  const { data: m } = useQuery({ queryKey: ['chat', 'message', id], queryFn: () => api.chatMessage(id) });
-  const key = m ? chatThreadKey(m) : '';
-  const { data: thread = [] } = useQuery({ queryKey: ['chat', 'thread', key], queryFn: () => api.chatThread(key), enabled: !!m });
-  const seen = useMutation({ mutationFn: (v: boolean) => api.setChatSeen(id, v), onSuccess: (_, v) => !v && onClose() });
-  const remove = useMutation({ mutationFn: () => api.removeChat(id), onSuccess: onClose, onError: (e) => toast('error', e.message) });
+  const exists = thread.count > 0;
+  const { data: messages = [] } = useQuery({ queryKey: ['chat', 'thread', thread.key], queryFn: () => api.chatThread(thread.key), enabled: exists });
+  const seen = useMutation({ mutationFn: () => api.markChatThreadSeen(thread.key) });
+  const remove = useMutation({ mutationFn: (id: number) => api.removeChat(id), onError: (e) => toast('error', e.message) });
+  const endRef = useRef<HTMLDivElement>(null);
+  const name = threadName(thread);
 
+  // Geöffnet = gelesen, auch wenn während des Lesens etwas Neues kommt
   useEffect(() => {
-    if (m && !m.seen && m.folder === 'inbox') seen.mutate(true);
+    if (thread.unread > 0 && !seen.isPending) seen.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m?.id]);
+  }, [thread.key, thread.unread]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages.length, thread.key]);
 
-  if (!m) return <Loading />;
-  const st = m.status !== 'received' ? STATUS[m.status] : null;
-  // Verlauf ohne die geöffnete Nachricht, die letzten zehn – über alle Kanäle
-  const earlier = thread.filter((t) => t.id !== m.id).slice(-10);
-  const from = party(m);
+  const lastChannel = exists ? (thread.last?.channel ?? null) : null;
+  // Angeklickte Rufnummer zuerst, dann die zuletzt genutzten
+  const numbers = presetNumber && thread.numbers.includes(presetNumber) ? [presetNumber, ...thread.numbers.filter((n) => n !== presetNumber)] : thread.numbers;
+  const target: ReplyTarget = { numbers, peer: thread.peer && !thread.numbers.length ? { channel: thread.last.channel, id: thread.peer } : null, labels };
+
+  // Tagesweise trennen
+  let lastDay = '';
 
   return (
-    <div className="mail-reader">
-      <div className="mail-reader-head">
-        <dl className="kv">
-          <dt>{m.folder === 'inbox' ? 'Von' : 'An'}</dt>
-          <dd>
-            {m.name ? `${m.name}, ` : ''}
-            {m.number ? <a href={`tel:${m.number}`}>{formatPhone(m.number)}</a> : <span className="mono">{m.peer}</span>}
-          </dd>
-          <dt>Über</dt>
-          <dd className="chat-via">
-            <ChannelIcon channel={m.channel} size={14} /> {CHAT_CHANNEL_LABEL[m.channel]}
-          </dd>
-          <dt>Datum</dt>
-          <dd>{fmtDateTime(m.date)}</dd>
-          {m.folder === 'sent' && (
-            <>
-              <dt>Gesendet von</dt>
-              <dd>{m.createdBy}</dd>
-            </>
-          )}
-        </dl>
-        <div className="mail-reader-actions btn-row">
-          {onMessage && m.folder === 'inbox' && (
-            <button className="btn btn-sm" disabled={!ctx?.radio} title={ctx?.radio ? 'Als Eingangsmeldung im Einsatz erfassen' : 'Eingangsmeldungen erfassen nur Fernmelder'} onClick={() => onMessage(m)}>
-              <MessageSquarePlus size={16} /> Meldung erstellen
-            </button>
-          )}
-          {!m.name && m.number && (
-            <button className="btn btn-ghost btn-icon" title="Als Kontakt anlegen" aria-label="Als Kontakt anlegen" onClick={() => onContact(m.number!)}>
-              <UserPlus size={18} />
-            </button>
-          )}
-          <button className="btn btn-ghost btn-icon" title="Antworten" aria-label="Antworten" onClick={() => onReply(m)}>
-            <Reply size={18} />
-          </button>
-          {m.folder === 'inbox' && (
-            <button className="btn btn-ghost btn-icon" title="Als ungelesen markieren" aria-label="Als ungelesen markieren" onClick={() => seen.mutate(false)}>
-              <MailOpen size={18} />
-            </button>
-          )}
-          <button className="btn btn-ghost btn-icon" title="Löschen" aria-label="Löschen" onClick={() => window.confirm('Nachricht löschen?') && remove.mutate()}>
-            <Trash2 size={18} />
-          </button>
-        </div>
-      </div>
-      {st && (
-        <p className="mail-badges">
-          <span title={m.error ?? undefined}>
-            <Badge tone={st.tone}>
-              <st.icon size={12} /> {CHAT_STATUS_LABEL[m.status]}
-              {m.error ? `: ${m.error}` : ''}
-            </Badge>
-          </span>
-        </p>
-      )}
-      {m.text && <div className="mail-body">{m.text}</div>}
-      <Extras m={m} from={from} />
-      {earlier.length > 0 && (
-        <section className="sms-thread">
-          <h3 className="section-title">Verlauf mit {from}</h3>
-          <ul>
-            {earlier.map((t) => (
-              <li key={t.id} className={`sms-bubble ${t.folder === 'inbox' ? 'in' : 'out'}`}>
-                {t.text && <span className="sms-bubble-text">{t.text}</span>}
-                <Extras m={t} from={from} />
-                <span className="sms-bubble-meta muted">
-                  <ChannelIcon channel={t.channel} size={12} /> {fmtDateTime(t.date)}
-                  {t.status === 'failed' ? ' · fehlgeschlagen' : ''}
-                </span>
-              </li>
+    <div className="thread-view">
+      <header className="thread-head">
+        <button className="btn btn-ghost btn-icon thread-back" aria-label="Zurück zu den Gesprächen" onClick={onBack}>
+          <ArrowLeft size={18} />
+        </button>
+        <div className="thread-title">
+          <strong>{name}</strong>
+          <span className="muted small">
+            {thread.numbers.map((n, i) => (
+              <span key={n}>
+                {i > 0 && ' · '}
+                <a href={`tel:${n}`}>{formatPhone(n)}</a>
+                {labels[n] ? ` (${labels[n]})` : ''}
+              </span>
             ))}
-          </ul>
-        </section>
-      )}
+            {!thread.numbers.length && thread.peer && <span className="mono">{thread.peer}</span>}
+          </span>
+        </div>
+        {thread.contactId === null && thread.numbers[0] && (
+          <button className="btn btn-ghost btn-icon" title="Als Kontakt anlegen" aria-label="Als Kontakt anlegen" onClick={() => onContact(thread.numbers[0]!)}>
+            <UserPlus size={18} />
+          </button>
+        )}
+      </header>
+
+      <div className="thread-messages">
+        {!exists && <p className="muted thread-empty">Noch keine Nachrichten mit {name}. Unten schreiben und den Messenger wählen.</p>}
+        {messages.map((m) => {
+          const day = new Date(m.date).toDateString();
+          const divider = day !== lastDay ? fmtDateTime(m.date).split(' ')[0] : null;
+          lastDay = day;
+          const st = m.status !== 'received' ? STATUS[m.status] : null;
+          return (
+            <div key={m.id} className="thread-row">
+              {divider && <div className="thread-day muted small">{divider}</div>}
+              <div className={`thread-bubble ${m.folder === 'inbox' ? 'in' : 'out'} ${m.status === 'failed' ? 'failed' : ''}`}>
+                {m.text && <span className="thread-text">{m.text}</span>}
+                {m.attachment && (
+                  <a className="chat-image" href={api.chatFileUrl(m.attachment.id)} target="_blank" rel="noreferrer" title={m.attachment.name}>
+                    <img src={api.chatFileUrl(m.attachment.id)} alt={m.attachment.name} loading="lazy" />
+                  </a>
+                )}
+                {m.location && (
+                  <Link className="chat-location" to={mapLink(m.location, name)}>
+                    <MapPin size={14} /> {m.location.label || `${m.location.lat.toFixed(5)}, ${m.location.lon.toFixed(5)}`} · In Karte zeigen
+                  </Link>
+                )}
+                <span className="thread-meta muted">
+                  <ChannelIcon channel={m.channel} size={12} title={CHAT_CHANNEL_LABEL[m.channel]} />
+                  {fmtTime(m.date)}
+                  {m.folder === 'sent' && m.createdBy && <span> · {m.createdBy}</span>}
+                  {st && (
+                    <span className={`tone-${st.tone}`} title={m.error ?? CHAT_STATUS_LABEL[m.status]}>
+                      <st.icon size={12} aria-label={CHAT_STATUS_LABEL[m.status]} />
+                    </span>
+                  )}
+                  <span className="thread-actions">
+                    {onMessage && m.folder === 'inbox' && (
+                      <button className="btn btn-ghost btn-icon btn-sm" disabled={!ctx?.radio} title={ctx?.radio ? 'Als Eingangsmeldung erfassen' : 'Eingangsmeldungen erfassen nur Fernmelder'} aria-label="Meldung erstellen" onClick={() => onMessage(m)}>
+                        <MessageSquarePlus size={14} />
+                      </button>
+                    )}
+                    <button className="btn btn-ghost btn-icon btn-sm" title="Löschen" aria-label="Löschen" onClick={() => window.confirm('Nachricht löschen?') && remove.mutate(m.id)}>
+                      <Trash2 size={14} />
+                    </button>
+                  </span>
+                </span>
+                {m.status === 'failed' && m.error && <span className="thread-error tone-alarm small">{m.error}</span>}
+              </div>
+            </div>
+          );
+        })}
+        <div ref={endRef} />
+      </div>
+
+      <ThreadReply target={target} lastChannel={lastChannel} preset={preset} onSent={onSent} />
     </div>
   );
 }
@@ -309,7 +350,7 @@ function ChatToMessage({ incident, msg, onDone }: { incident: Incident; msg: Cha
   const unit = number ? units.find((u) => u.mobile === number && u.status !== 'entlassen') : undefined;
   const deployed = new Set(units.filter((u) => u.status !== 'entlassen').map((u) => u.sourceId));
   const force = unit || !number ? undefined : catalog.find((f) => f.mobile === number && !deployed.has(f.id));
-  const name = party(msg);
+  const name = msg.name ?? (number ? formatPhone(number) : msg.peer);
   const body = [msg.text, msg.location ? `Standort: ${msg.location.label ? `${msg.location.label} ` : ''}(${msg.location.lat.toFixed(5)}, ${msg.location.lon.toFixed(5)})` : '', msg.attachment ? `[Bild: ${msg.attachment.name}]` : '']
     .filter(Boolean)
     .join('\n');
@@ -328,7 +369,7 @@ function ChatToMessage({ incident, msg, onDone }: { incident: Incident; msg: Cha
   );
 }
 
-/** Unbekannte Absendernummer als Kontakt übernehmen */
+/** Unbekannte Rufnummer als Kontakt übernehmen */
 function NewContact({ number, onDone }: { number: string; onDone: () => void }) {
   const toast = useToast();
   const qc = useQueryClient();
