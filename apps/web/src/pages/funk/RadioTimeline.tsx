@@ -95,7 +95,16 @@ function duration(item: TimelineItem, now: number): string | null {
  * der Kraft aus dem Einsatz; „Meldung erstellen“ erfasst den Funkspruch als Eingangsmeldung – wählt der Fernmelder
  * dabei eine Kraft, merkt sie sich die ISSI für diesen Einsatz.
  */
-export function RadioTimeline({ devices, live }: { devices: RadioDevice[]; live: RadioActivity[] }) {
+export function RadioTimeline({
+  devices,
+  live,
+  compact = false,
+}: {
+  devices: RadioDevice[];
+  live: RadioActivity[];
+  /** Kachel der Übersicht: ohne Filterleiste, nur Funksprüche, Liste füllt den Platz */
+  compact?: boolean;
+}) {
   const { user } = useAuth();
   const { data: incident } = useActiveIncident();
   const openIncident = incident && !incident.closedAt ? incident : null;
@@ -132,26 +141,28 @@ export function RadioTimeline({ devices, live }: { devices: RadioDevice[]; live:
   }, [activity, filter, deviceFilter]);
 
   return (
-    <div className="radio-timeline">
-      <div className="radio-timeline-toolbar">
-        <Segmented
-          label="Anzeige"
-          value={filter}
-          onChange={setFilter}
-          options={[
-            { value: 'radio', label: 'Funksprüche' },
-            { value: 'all', label: 'Alles', title: 'Auch Positionsmeldungen und sonstige Ereignisse' },
-          ]}
-        />
-        <select value={deviceFilter} onChange={(e) => setDeviceFilter(e.target.value)} aria-label="Funkgerät">
-          <option value="">Alle Funkgeräte</option>
-          {devices.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className={`radio-timeline ${compact ? 'compact' : ''}`}>
+      {!compact && (
+        <div className="radio-timeline-toolbar">
+          <Segmented
+            label="Anzeige"
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: 'radio', label: 'Funksprüche' },
+              { value: 'all', label: 'Alles', title: 'Auch Positionsmeldungen und sonstige Ereignisse' },
+            ]}
+          />
+          <select value={deviceFilter} onChange={(e) => setDeviceFilter(e.target.value)} aria-label="Funkgerät">
+            <option value="">Alle Funkgeräte</option>
+            {devices.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {items.length === 0 ? (
         <p className="muted">Noch kein Funkverkehr{deviceFilter ? ' auf diesem Gerät' : ''}.</p>

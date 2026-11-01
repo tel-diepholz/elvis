@@ -148,7 +148,18 @@ export function GridEditor({
 }
 
 /** Einstellungen der gewählten Kachel */
-export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; onChange: (config: DisplayTile['config']) => void; onRemove: () => void }) {
+export function TileSettings({
+  tile,
+  onChange,
+  onRemove,
+  dashboard = false,
+}: {
+  tile: DisplayTile;
+  onChange: (config: DisplayTile['config']) => void;
+  onRemove: () => void;
+  /** Kachel der Übersicht (bedient mit Maus, angemeldeter Benutzer) statt eines Bildschirms */
+  dashboard?: boolean;
+}) {
   const cams = useDevice('cameras')?.state.cameras ?? [];
   const { data: sources = [] } = useQuery({ queryKey: ['mapSources'], queryFn: api.mapSources, staleTime: Infinity, enabled: tile.type === 'map' });
   const set = (k: string, v: string | number | boolean) => onChange({ ...tile.config, [k]: v });
@@ -197,7 +208,22 @@ export function TileSettings({ tile, onChange, onRemove }: { tile: DisplayTile; 
           <Field label={`Zoomstufe (${Number(tile.config.zoom) || 15})`}>
             <input type="range" min={8} max={19} value={Number(tile.config.zoom) || 15} onChange={(e) => set('zoom', Number(e.target.value))} />
           </Field>
-          <p className="field-hint">Mit „mitführen“ folgt die Karte Fahrzeug bzw. Einsatzort und lässt sich nicht verschieben. Ohne Mitführen lässt sie sich am Bildschirm per Touch und unter „Bildschirme“ in der Vorschau verschieben und zoomen; der Bildschirm behält den zuletzt eingestellten Ausschnitt, auch nach „Neu laden“.</p>
+          <Toggle label="Objektliste anzeigen" checked={tile.config.objectList === true} onChange={(on) => set('objectList', on)} />
+          <Toggle label="Kartenstil in der Karte wählbar" checked={tile.config.styleControl === true} onChange={(on) => set('styleControl', on)} />
+          {dashboard ? (
+            <p className="field-hint">
+              Mit „mitführen“ folgt die Karte Fahrzeug bzw. Einsatzort und lässt sich nicht verschieben. Die Objektliste zeigt die Objekte und Kräfte des Einsatzes wie
+              auf der Karte: anfliegen, ein- und ausblenden, umbenennen, Farbe. Setzen und Formen bearbeiten geht auf der Seite „Karte“. Ein in der Karte gewählter
+              Kartenstil wird für diese Kachel gespeichert.
+            </p>
+          ) : (
+            <p className="field-hint">
+              Mit „mitführen“ folgt die Karte Fahrzeug bzw. Einsatzort und lässt sich nicht verschieben. Ohne Mitführen lässt sie sich am Bildschirm per Touch und unter
+              „Bildschirme“ in der Vorschau verschieben und zoomen; der Bildschirm behält den zuletzt eingestellten Ausschnitt, auch nach „Neu laden“. Die Objektliste
+              zeigt Objekte und Kräfte des Einsatzes zum Anfliegen (am Bildschirm ohne Anmeldung nur lesend). Einen am Bildschirm gewählten Kartenstil behält der
+              Bildschirm bis zur nächsten Änderung hier.
+            </p>
+          )}
         </>
       )}
       {tile.type === 'video' && <VideoTileSettings tile={tile} set={set} />}

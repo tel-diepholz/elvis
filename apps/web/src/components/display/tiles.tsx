@@ -37,10 +37,19 @@ import { TacticalSignImage, tacticalIcon } from '../tactical/TacticalSign';
 import { WindCompass } from '../WindCompass';
 import { WeatherIcon, WindArrow, gustTone } from '../WeatherIcon';
 import { WebRtcPlayer } from './WebRtcPlayer';
-import { MapObjectsLayer, useMapObjects } from '../map/objects';
+import { MapObjectsLayer, objectBounds, useMapObjects } from '../map/objects';
 import { UnitsLayer, useMapUnits } from '../map/units';
 import { WifiQr } from '../WifiQr';
 import { fmtRelative } from '../tasks/taskActions';
+import { useAuth } from '../../lib/auth';
+import { ObjectList } from '../../pages/map/objectlist';
+import { MapStylePicker } from '../../pages/map/toolbar';
+
+/**
+ * Einstellungen einer Kachel aus der Kachel heraus ändern (z. B. Kartenstil in der Kartenkachel). Die Übersicht
+ * speichert sie in der Anordnung des Benutzers; ohne Kontext (Bildschirme) gilt die Wahl nur bis zum Neuladen.
+ */
+export const TileConfigContext = createContext<{ setConfig: (tileId: string, patch: DisplayTile['config']) => void } | null>(null);
 
 export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, forecast: CalendarDays, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users, scenes: Layers, image: ImageIcon };
 
@@ -250,6 +259,21 @@ function Follow({ pos, enabled }: { pos: [number, number] | null; enabled: boole
 }
 
 /**
+ * Waren beim Aufbau weder Fahrzeug- noch Einsatzposition bekannt (und kein Ausschnitt gemerkt), steht die Karte auf
+ * ganz Deutschland: einmal auf die Mitte der Kachel springen, sobald eine Position da ist.
+ */
+function InitialCenter({ pos, zoom, enabled }: { pos: [number, number] | null; zoom: number; enabled: boolean }) {
+  const map = useMap();
+  const done = useRef(!enabled);
+  useEffect(() => {
+    if (done.current || !pos) return;
+    done.current = true;
+    map.setView(pos, zoom);
+  }, [map, pos?.[0], pos?.[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/**
  * Abgleich der Kartenausschnitte zwischen Bildschirm und ELVIS. Auf dem Bildschirm meldet onMove den Ausschnitt an den
  * Server; in der Vorschau unter „Bildschirme“ kommen die gemeldeten Ausschnitte als views herein und onMove steuert den
  * Bildschirm fern. Nur ohne Mitführen – mitgeführte Karten stehen überall gleich. Ohne Kontext (z. B. im Editor) bleibt die Karte für sich.
@@ -321,6 +345,21 @@ function RemoteControl({ tileId, view, onMove }: { tileId: string; view: Display
 
 const mapViewKey = (tileId: string) => `elvis.display.mapView.${tileId}`;
 
+const readLocal = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const writeLocal = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* nur Komfort */
+  }
+};
+
 /**
  * Bedienung der Karte: ohne Mitführen frei verschieben und zoomen, mit Mitführen gesperrt – dann folgt der Ausschnitt
  * nur Fahrzeug bzw. Einsatzort. Die Klasse map-locked lässt in der Vorschau die Eingaben durch die Karte hindurch.
@@ -348,6 +387,15 @@ function AutoResize() {
 
 function MapTile({ tile }: { tile: DisplayTile }) {
   const settings = useSettings().data;
+  const { user } = useAuth();
+  const tileConfig = useContext(TileConfigContext);
+  const map = useRef<L.Map | null>(null);
+  // Bildschirme (ohne Übersicht als Kontext) merken sich den gewählten Kartenstil selbst, solange die Einstellung gleich bleibt
+  const sourceKey = `elvis.display.mapSource.${tile.id}.${String(tile.config.sourceId ?? '')}`;
+  const [localSource, setLocalSource] = useState<string | null>(() => (tileConfig ? null : readLocal(sourceKey)));
+  const [styleMenuPx, setStyleMenuPx] = useState(0);
+  const showList = tile.config.objectList === true;
+  const showStyle = tile.config.styleControl === true;
   const weather = useDevice('weather');
   const { data: sources = [] } = useQuery({ queryKey: ['mapSources'], queryFn: api.mapSources, staleTime: Infinity });
   // Einsatzort: Bildschirme und angemeldete Benutzer dürfen ihn lesen, sonst bleibt er weg
@@ -359,7 +407,16 @@ function MapTile({ tile }: { tile: DisplayTile }) {
   const now = useNow();
   const ws = weather?.state;
   const wind = ws && ws.windSpeedMs !== null && ws.windDirectionDeg !== null ? { windSpeedMs: ws.windSpeedMs, windDirectionDeg: ws.windDirectionDeg } : undefined;
-  const source = sources.find((s) => s.id === tile.config.sourceId) ?? autoSource(sources, true);
+  useEffect(() => {
+    if (!tileConfig) setLocalSource(readLocal(sourceKey));
+  }, [sourceKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sourceId = String(localSource ?? tile.config.sourceId ?? '');
+  const source = sources.find((s) => s.id === sourceId) ?? autoSource(sources, true);
+  const chooseSource = (id: string | null) => {
+    if (tileConfig) return tileConfig.setConfig(tile.id, { sourceId: id ?? '' });
+    setLocalSource(id ?? '');
+    writeLocal(sourceKey, id ?? '');
+  };
   const gps = weather?.state.position;
   const vPos: [number, number] | null = gps ? [gps.lat, gps.lon] : null;
   const iPos: [number, number] | null = incident?.lat != null && incident.lon != null ? [incident.lat, incident.lon] : null;
@@ -373,27 +430,60 @@ function MapTile({ tile }: { tile: DisplayTile }) {
     [tile.id], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const zoom = Number(tile.config.zoom) || 15;
-  const center = (tile.config.center === 'incident' ? iPos ?? vPos : vPos ?? iPos) ?? [51.1657, 10.4515];
+  const target = tile.config.center === 'incident' ? (iPos ?? vPos) : (vPos ?? iPos);
+  const center = target ?? [51.1657, 10.4515];
+  // Nur beim ersten Rendern entschieden: ohne gemerkten Ausschnitt und ohne Position später einmal zentrieren
+  const [startedBlind] = useState(() => !saved && !target);
+  /** Objekt aus der Objektliste anfliegen */
+  const fly = (target: Parameters<Parameters<typeof ObjectList>[0]['onFly']>[0]) => {
+    const m = map.current;
+    if (!m) return;
+    if (target === 'incident') return iPos && m.flyTo(iPos, 16);
+    if (target === 'vehicle') return vPos && m.flyTo(vPos, 16);
+    if ('status' in target) return target.lat !== null && target.lon !== null && m.flyTo([target.lat, target.lon], 17);
+    if (target.kind === 'area' || target.kind === 'line' || target.kind === 'overlay') return m.flyToBounds(objectBounds(target), { maxZoom: target.kind === 'overlay' ? 18 : 16 });
+    m.flyTo([target.lat, target.lon], target.kind === 'point' ? 17 : 14);
+  };
   return (
-    <MapContainer
-      center={saved ? [saved.lat, saved.lon] : center}
-      zoom={saved ? saved.zoom : vPos || iPos ? zoom : 6}
-      className="tile-map"
-      zoomControl={false}
-      attributionControl={false}
-    >
-      {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} maxZoom={source.maxZoom} />}
-      <MapObjectsLayer objects={objects} wind={wind} now={now} />
-      <UnitsLayer units={units} />
-      {vPos && (incident?.vehicleVisible ?? true) && <Marker position={vPos} icon={icon} />}
-      {iPos && <Marker position={iPos} icon={incidentIcon} />}
-      <Follow pos={tile.config.center === 'incident' ? iPos : vPos} enabled={follow} />
-      <Interaction enabled={!follow} />
-      {sync && preview && !follow && <RemoteControl tileId={tile.id} view={sync.views![tile.id]} onMove={sync.onMove} />}
-      {sync && !preview && !follow && <RemoteTarget tileId={tile.id} />}
-      {sync && !preview && !follow && <ReportView tileId={tile.id} sync={sync} />}
-      <AutoResize />
-    </MapContainer>
+    <div className={`tile-map-wrap ${showStyle ? 'with-style' : ''}`}>
+      <MapContainer
+        ref={map}
+        center={saved ? [saved.lat, saved.lon] : center}
+        zoom={saved ? saved.zoom : vPos || iPos ? zoom : 6}
+        className="tile-map"
+        zoomControl={false}
+        attributionControl={false}
+      >
+        {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} maxZoom={source.maxZoom} />}
+        <MapObjectsLayer objects={objects} wind={wind} now={now} />
+        <UnitsLayer units={units} />
+        {vPos && (incident?.vehicleVisible ?? true) && <Marker position={vPos} icon={icon} />}
+        {iPos && <Marker position={iPos} icon={incidentIcon} />}
+        <InitialCenter pos={target} zoom={zoom} enabled={startedBlind} />
+        <Follow pos={tile.config.center === 'incident' ? iPos : vPos} enabled={follow} />
+        <Interaction enabled={!follow} />
+        {sync && preview && !follow && <RemoteControl tileId={tile.id} view={sync.views![tile.id]} onMove={sync.onMove} />}
+        {sync && !preview && !follow && <RemoteTarget tileId={tile.id} />}
+        {sync && !preview && !follow && <ReportView tileId={tile.id} sync={sync} />}
+        <AutoResize />
+      </MapContainer>
+      {showStyle && sources.length > 1 && (
+        <MapStylePicker sources={sources} value={sources.some((s) => s.id === sourceId) ? sourceId : null} auto={autoSource(sources, true)} onChange={chooseSource} onMenuHeight={setStyleMenuPx} />
+      )}
+      {showList && incident && (
+        <ObjectList
+          incident={incident}
+          vehicle={{ name: settings?.vehicle.name ?? 'ELW', pos: vPos }}
+          objects={objects}
+          units={units}
+          wind={wind}
+          now={now}
+          canEdit={!!user && !incident.closedAt}
+          shiftPx={styleMenuPx}
+          onFly={fly}
+        />
+      )}
+    </div>
   );
 }
 

@@ -31,12 +31,12 @@ export function MailPage() {
   const admin = !!useAuth().user?.isAdmin;
   const { data: avail } = useQuery({ queryKey: ['mail', 'available'], queryFn: api.mailAvailable });
   const [folder, setFolder] = useState<MailFolder>('inbox');
-  const [selected, setSelected] = useState<number | null>(null);
-  // /mail?an=… (z. B. aus den Kontakten) öffnet gleich eine neue Mail
+  // /mail?an=… (z. B. aus den Kontakten) öffnet gleich eine neue Mail, /mail?id=… eine Mail aus dem Eingang (Übersicht)
   const [params, setParams] = useSearchParams();
+  const [selected, setSelected] = useState<number | null>(() => (Number(params.get('id')) > 0 ? Number(params.get('id')) : null));
   const [draft, setDraft] = useState<Partial<DraftForm> | null>(() => (params.get('an') ? { to: `${params.get('an')}, ` } : null));
   useEffect(() => {
-    if (params.has('an')) setParams({}, { replace: true });
+    if (params.has('an') || params.has('id')) setParams({}, { replace: true });
   }, [params, setParams]);
   const [keysOpen, setKeysOpen] = useState(false);
   const { data: incident } = useActiveIncident();

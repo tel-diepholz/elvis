@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ComponentType, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Activity,
   BatteryCharging,
@@ -10,9 +10,13 @@ import {
   Cctv,
   Clock,
   CloudSun,
+  History,
   Image as ImageIcon,
   ListChecks,
+  AtSign,
   Mail,
+  MessagesSquare,
+  Plus,
   Map as MapIcon,
   Network,
   Radio,
@@ -23,24 +27,29 @@ import {
   Wifi,
   type LucideIcon,
 } from 'lucide-react';
-import { DASHBOARD_TILE_TYPES, JOURNAL_CATEGORY_LABELS, bluetoothSummary, formatStrength, sumStrength, type DashboardTile, type DashboardTileType, type DisplayTile, type Incident } from '@elvis/shared';
+import { CHAT_CHANNEL_LABEL, DASHBOARD_TILE_TYPES, formatPhone, JOURNAL_CATEGORY_LABELS, bluetoothSummary, formatStrength, sumStrength, type DashboardTile, type DashboardTileType, type DisplayTile, type Incident, type MessageInput } from '@elvis/shared';
 import { api } from '../../lib/api';
-import { fmtAgo, fmtDuration, fmtTime } from '../../lib/format';
+import { fmtAgo, fmtDateTime, fmtDuration, fmtTime } from '../../lib/format';
 import { useActiveIncident, useNow } from '../../lib/hooks';
 import { useDevice } from '../../lib/live';
 import { useAuth } from '../../lib/auth';
 import { LoginButton } from '../auth/Guards';
-import { Badge, Dot, Stat } from '../ui';
+import { Badge, Dot, Modal, Stat } from '../ui';
 import { TileView } from '../display/tiles';
 import { MessageDialog } from '../messages/MessageDialog';
+import { MessageForm } from '../messages/MessageForm';
+import { useToast } from '../../lib/toast';
 import { markdownPreview } from '../messages/Markdown';
 import { MESSAGES_PATH, PENDING_LABEL, useMessageAttention } from '../messages/messageHooks';
 import { deployedUnits } from '../../pages/incident/UnitsView';
+import { RadioTimeline } from '../../pages/funk/RadioTimeline';
 
 export const DASHBOARD_ICONS: Record<DashboardTileType, LucideIcon> = {
   incident: Siren,
   journal: BookOpenText,
   messages: Mail,
+  chat: MessagesSquare,
+  mail: AtSign,
   tasks: ListChecks,
   forces: Users,
   map: MapIcon,
@@ -49,6 +58,7 @@ export const DASHBOARD_ICONS: Record<DashboardTileType, LucideIcon> = {
   clock: Clock,
   alerts: Bell,
   radio: Radio,
+  radioTimeline: History,
   network: Network,
   energy: BatteryCharging,
   monitoring: Activity,
@@ -64,12 +74,15 @@ export const DASHBOARD_LINKS: Partial<Record<DashboardTileType, string>> = {
   incident: '/einsatz',
   journal: '/einsatz/tagebuch',
   messages: MESSAGES_PATH,
+  chat: '/nachrichten',
+  mail: '/mail',
   tasks: '/einsatz/aufgaben',
   forces: '/einsatz/kraefte',
   map: '/karte',
   weather: '/wetter',
   forecast: '/wetter',
   radio: '/funk',
+  radioTimeline: '/funk',
   network: '/netzwerk',
   energy: '/energie',
   monitoring: '/monitoring',
@@ -177,26 +190,131 @@ function MessagesTile() {
   );
 }
 
+/** Kurze Zeitangabe: heute nur Uhrzeit, sonst Datum und Uhrzeit */
+const when = (iso: string, now: Date) => (new Date(iso).toDateString() === now.toDateString() ? fmtTime(iso) : fmtDateTime(iso));
+
+/** Eingang der Nachrichten: Gespräche mit der letzten Nachricht, ungelesene hervorgehoben */
+function ChatTile() {
+  const now = useNow();
+  const { data: avail } = useQuery({ queryKey: ['chat', 'available'], queryFn: api.chatAvailable });
+  const { data: threads } = useQuery({ queryKey: ['chat', 'threads'], queryFn: api.chatThreads, enabled: !!avail?.available });
+  if (!avail) return <Empty>Lade …</Empty>;
+  if (!avail.available) return <Empty>Kein Kanal für Nachrichten eingerichtet</Empty>;
+  if (!threads) return <Empty>Lade Nachrichten …</Empty>;
+  if (!threads.length) return <Empty>Keine Nachrichten</Empty>;
+  return (
+    <ul className="dash-inbox dash-list">
+      {[...threads]
+        .sort((a, b) => b.last.date.localeCompare(a.last.date))
+        .map((t) => (
+          <li key={t.key}>
+            <Link to={`/nachrichten?t=${encodeURIComponent(t.key)}`} className={`dash-inbox-item ${t.unread ? 'unread' : ''}`}>
+              <span className="dash-inbox-head">
+                <strong className="ellipsis">{t.name ?? (t.numbers[0] ? formatPhone(t.numbers[0]) : (t.peer ?? 'Unbekannt'))}</strong>
+                {t.unread > 0 && <Badge tone="info">{t.unread}</Badge>}
+                <span className="muted dash-inbox-date">{when(t.last.date, now)}</span>
+              </span>
+              <span className="cell-sub ellipsis">
+                {CHAT_CHANNEL_LABEL[t.last.channel]} · {t.last.folder === 'sent' ? 'Du: ' : ''}
+                {t.last.text || (t.last.attachment ? 'Anhang' : t.last.location ? 'Standort' : '')}
+              </span>
+            </Link>
+          </li>
+        ))}
+    </ul>
+  );
+}
+
+/** Posteingang: Absender, Betreff, Anfang des Textes; ungelesene hervorgehoben */
+function MailTile() {
+  const now = useNow();
+  const { data: avail } = useQuery({ queryKey: ['mail', 'available'], queryFn: api.mailAvailable });
+  const { data: list } = useQuery({ queryKey: ['mail', 'messages', 'inbox'], queryFn: () => api.mailMessages('inbox'), enabled: !!avail?.available });
+  if (!avail) return <Empty>Lade …</Empty>;
+  if (!avail.available) return <Empty>Kein Postfach eingerichtet</Empty>;
+  if (!list) return <Empty>Lade E-Mails …</Empty>;
+  if (!list.items.length) return <Empty>Keine E-Mails</Empty>;
+  return (
+    <ul className="dash-inbox dash-list">
+      {list.items.map((m) => (
+        <li key={m.id}>
+          <Link to={`/mail?id=${m.id}`} className={`dash-inbox-item ${m.seen ? '' : 'unread'}`}>
+            <span className="dash-inbox-head">
+              <strong className="ellipsis">{m.from}</strong>
+              <span className="muted dash-inbox-date">{when(m.date, now)}</span>
+            </span>
+            <span className="ellipsis dash-inbox-subject">{m.subject || '(ohne Betreff)'}</span>
+            <span className="cell-sub ellipsis">{m.snippet}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Neue Meldung erfassen – wie auf der Seite „Meldungen“ */
+function NewMessageButton() {
+  const toast = useToast();
+  const { data: incident } = useActiveIncident();
+  const [creating, setCreating] = useState(false);
+  const create = useMutation({
+    mutationFn: (input: MessageInput) => api.createMessage(incident!.id, input),
+    onSuccess: () => (setCreating(false), toast('success', 'Meldung erstellt')),
+    onError: (e) => toast('error', e.message),
+  });
+  if (!incident || incident.closedAt) return null;
+  return (
+    <>
+      <button type="button" className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>
+        <Plus size={16} /> Meldung
+      </button>
+      <Modal open={creating} title="Neue Meldung" onClose={() => setCreating(false)} wide>
+        <MessageForm incidentId={incident.id} pending={create.isPending} onSubmit={(input) => create.mutate(input)} />
+      </Modal>
+    </>
+  );
+}
+
+/** Knöpfe rechts in der Kopfzeile einer Kachel (nur angemeldet, nicht beim Bearbeiten der Übersicht) */
+export const DASHBOARD_ACTIONS: Partial<Record<DashboardTileType, ComponentType>> = {
+  messages: NewMessageButton,
+};
+
+/** Alle Funkgeräte des Treibers untereinander – nicht erreichbare rot */
 function RadioTile() {
   const radio = useDevice('radio');
   if (!radio) return <Empty>Funk nicht aktiviert</Empty>;
-  const { devices } = radio.state;
+  const { devices, talkgroups } = radio.state;
   if (!devices.length) return <Empty>Keine Funkgeräte</Empty>;
-  const online = devices.filter((d) => d.online).length;
   return (
-    <div className="dash-status">
-      <div className={`dash-status-head tone-${online === devices.length ? 'ok' : 'warn'}`}>
-        {online} / {devices.length} Funkgeräte erreichbar
-      </div>
-      <ul className="dash-status-list">
-        {devices.map((d) => (
-          <li key={d.id}>
-            <Dot tone={!d.online ? 'alarm' : d.transmitting ? 'warn' : d.receiving ? 'info' : 'ok'} />
-            <span className="ellipsis">{d.name}</span>
-            <span className="muted mono">{d.transmitting ? 'TX' : d.receiving ? 'RX' : d.fmsStatus !== null ? `S${d.fmsStatus}` : ''}</span>
+    <ul className="dash-radio-devices">
+      {devices.map((d) => {
+        const tg = talkgroups.find((t) => t.id === d.talkgroupId)?.name;
+        const act = d.transmitting ? 'TX' : d.receiving ? 'RX' : null;
+        return (
+          <li key={d.id} className={d.online ? undefined : 'offline'} title={d.online ? undefined : 'Nicht erreichbar'}>
+            <Dot tone={d.online ? 'ok' : 'alarm'} />
+            <span className="dash-radio-name">
+              <strong className="ellipsis">{d.name}</strong>
+              <span className="cell-sub ellipsis">{[d.type, d.issi && `ISSI ${d.issi}`, tg, !d.online && 'nicht erreichbar'].filter(Boolean).join(' · ')}</span>
+            </span>
+            <span className="dash-radio-state">
+              {act ? <Badge tone={act === 'TX' ? 'alarm' : 'ok'}>{act}</Badge> : d.fmsStatus !== null ? <span className="mono">S{d.fmsStatus}</span> : null}
+            </span>
           </li>
-        ))}
-      </ul>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Funkverkehr wie auf der Seite „Funk“, ohne Filterleiste */
+function RadioTimelineTile() {
+  const radio = useDevice('radio');
+  if (!radio) return <Empty>Funk nicht aktiviert</Empty>;
+  return (
+    <div className="dash-radio-timeline">
+      <RadioTimeline devices={radio.state.devices} live={radio.state.activity} compact />
     </div>
   );
 }
@@ -255,8 +373,14 @@ export function DashboardTileContent({ tile }: { tile: DashboardTile }) {
       return <JournalTile />;
     case 'messages':
       return <MessagesTile />;
+    case 'chat':
+      return <ChatTile />;
+    case 'mail':
+      return <MailTile />;
     case 'radio':
       return <RadioTile />;
+    case 'radioTimeline':
+      return <RadioTimelineTile />;
     case 'energy':
       return <EnergyTile />;
     case 'monitoring':

@@ -7,7 +7,7 @@ import { DISPLAY_TEXT_MAX, DISPLAY_TILE_TYPES, tilesOverlap, type DisplayTileTyp
  * Viele Kacheln teilt sich die Übersicht mit den Bildschirmen; „Szenenwahl“ gibt es nur dort.
  */
 
-export type DashboardTileType = Exclude<DisplayTileType, 'scenes'> | 'incident' | 'journal' | 'radio' | 'energy' | 'monitoring' | 'messages';
+export type DashboardTileType = Exclude<DisplayTileType, 'scenes'> | 'incident' | 'journal' | 'radio' | 'radioTimeline' | 'energy' | 'monitoring' | 'messages' | 'chat' | 'mail';
 
 export interface DashboardTileTypeInfo extends DisplayTileTypeInfo {
   /** Inhalt nur für angemeldete Benutzer (Einsatzdaten) */
@@ -24,6 +24,8 @@ const fromDisplay = (type: Exclude<DisplayTileType, 'scenes'>, w: number, h: num
 export const DASHBOARD_TILE_TYPES: Record<DashboardTileType, DashboardTileTypeInfo> = {
   incident: { label: 'Laufender Einsatz', description: 'Stichwort, Einsatzort, Einsatzdauer und Stärke der Kräfte', size: { w: 8, h: 3 }, requiresLogin: true },
   journal: { label: 'Einsatztagebuch', description: 'Letzte Einträge im Einsatztagebuch', size: { w: 8, h: 4 }, requiresLogin: true },
+  chat: { label: 'Nachrichten', description: 'Eingang der Nachrichten (SMS und Messenger), neueste Gespräche zuerst', size: { w: 4, h: 5 }, requiresLogin: true },
+  mail: { label: 'E-Mail', description: 'Posteingang des Fahrzeugpostfachs, ungelesene hervorgehoben', size: { w: 4, h: 5 }, requiresLogin: true },
   messages: { label: 'Meldungen im Einsatz', description: 'Meldungen, bei denen Sie gerade etwas tun müssen', size: { w: 4, h: 4 }, requiresLogin: true },
   tasks: fromDisplay('tasks', 4, 5, { requiresLogin: true }),
   forces: fromDisplay('forces', 6, 6, { requiresLogin: true }),
@@ -32,7 +34,8 @@ export const DASHBOARD_TILE_TYPES: Record<DashboardTileType, DashboardTileTypeIn
   forecast: fromDisplay('forecast', 8, 4),
   clock: fromDisplay('clock', 4, 3),
   alerts: fromDisplay('alerts', 4, 4, { label: 'Fahrzeugmeldungen' }),
-  radio: { label: 'Funk', description: 'Funkgeräte, Erreichbarkeit und aktueller Funkverkehr', size: { w: 4, h: 3 } },
+  radio: { label: 'Funkgeräte', description: 'Alle Funkgeräte mit Erreichbarkeit, Rufgruppe und Status – nicht erreichbare rot', size: { w: 4, h: 4 } },
+  radioTimeline: { label: 'Funkverkehr', description: 'Verlauf der Funksprüche auf den eigenen Funkgeräten, wie auf der Seite „Funk“', size: { w: 4, h: 7 } },
   network: fromDisplay('network', 4, 3),
   energy: { label: 'Energie', description: 'Batterien und Ladegeräte (Victron über Bluetooth)', size: { w: 4, h: 3 } },
   monitoring: { label: 'Monitoring', description: 'Erreichbarkeit der überwachten Systeme', size: { w: 4, h: 3 } },
@@ -92,8 +95,9 @@ export const DEFAULT_DASHBOARD: DashboardLayout = {
     { id: 'journal', type: 'journal', x: 0, y: 3, w: 8, h: 4, config: {} },
     { id: 'alerts', type: 'alerts', x: 8, y: 3, w: 4, h: 4, config: {} },
     { id: 'weather', type: 'weather', x: 0, y: 7, w: 4, h: 3, config: {} },
-    { id: 'radio', type: 'radio', x: 4, y: 7, w: 4, h: 3, config: {} },
-    { id: 'network', type: 'network', x: 8, y: 7, w: 4, h: 3, config: {} },
+    { id: 'radio', type: 'radio', x: 4, y: 7, w: 4, h: 4, config: {} },
+    { id: 'radioTimeline', type: 'radioTimeline', x: 8, y: 7, w: 4, h: 7, config: {} },
+    { id: 'network', type: 'network', x: 0, y: 10, w: 4, h: 3, config: {} },
   ],
 };
 
