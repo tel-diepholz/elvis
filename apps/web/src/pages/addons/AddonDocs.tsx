@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { Loading } from '../../components/ui';
-import { Markdown } from '../../components/messages/Markdown';
+import { DocView } from '../../components/docs/DocView';
 
 /** Anleitung eines Addons (manifest.docs) – rohes HTML wird nicht ausgegeben */
 export function AddonDocs({ id }: { id: string }) {
@@ -10,7 +10,7 @@ export function AddonDocs({ id }: { id: string }) {
   if (!data) return <Loading />;
   return (
     <div className="addon-docs">
-      <Markdown text={data.markdown} />
+      <DocView markdown={data.markdown} />
     </div>
   );
 }
