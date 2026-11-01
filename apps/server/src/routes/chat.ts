@@ -22,7 +22,9 @@ export function chatRoutes(app: FastifyInstance, deps: { chat: ChatService; reac
   app.get('/api/chat/unread', async () => ({ count: chat.unread() }));
   app.get('/api/chat/messages', async (req) => chat.list(parse(folderQuery, req.query).folder));
   app.get('/api/chat/messages/:id', async (req) => chat.message(parse(idParam, req.params).id));
+  app.get('/api/chat/threads', async () => chat.threads());
   app.get('/api/chat/thread', async (req) => chat.thread(parse(threadQuery, req.query).key));
+  app.post('/api/chat/thread/seen', async (req) => ({ marked: chat.markThreadSeen(parse(threadQuery, req.body).key) }));
   app.post('/api/chat/messages/:id/seen', async (req, reply) => {
     chat.setSeen(parse(idParam, req.params).id, parse(seenBody, req.body).seen);
     return reply.code(204).send();

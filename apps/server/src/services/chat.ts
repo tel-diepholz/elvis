@@ -11,6 +11,7 @@ import {
   MESSENGER_IDS,
   SMS_MAX_LENGTH,
   chatDraftSchema,
+  chatThreadKey,
   chatPeer,
   chatSettingsSchema,
   isMessenger,
@@ -27,6 +28,7 @@ import {
   type ChatMessage,
   type ChatSettings,
   type ChatStatus,
+  type ChatThread,
   type MessengerId,
   type MessengerSetupInfo,
   type MessengerSetupInput,
@@ -245,18 +247,91 @@ export class ChatService {
     return { items: rows.map((r) => toMessage(r, numbers)), unread: this.unread() };
   }
 
-  /** Verlauf mit einer Rufnummer über alle Kanäle bzw. mit einer Gegenstelle ohne Rufnummer („kanal:kennung“), älteste zuerst */
-  thread(key: string): ChatMessage[] {
+  /** Bedingung für die Nachrichten eines Gesprächs (siehe ChatThread.key) */
+  private threadWhere(key: string, numbers: Map<string, PhoneMatch>): { sql: string; params: string[] } {
     const k = key.trim();
+    const contact = /^contact:(\d+)$/.exec(k);
+    if (contact) {
+      const id = Number(contact[1]);
+      const own = [...numbers].filter(([, m]) => m.contactId === id).map(([n]) => n);
+      // Kontakt ohne Rufnummer (mehr): kein Treffer statt aller Nachrichten
+      return own.length ? { sql: `m.number IN (${own.map(() => '?').join(', ')})`, params: own } : { sql: '0', params: [] };
+    }
     const sep = k.indexOf(':');
-    const byPeer = sep > 0 && (CHAT_CHANNELS as readonly string[]).includes(k.slice(0, sep));
-    const rows = (
-      byPeer
-        ? this.db.prepare(`SELECT * FROM (${SELECT} WHERE m.channel = ? AND m.peer = ? ORDER BY m.date DESC, m.id DESC LIMIT 200) ORDER BY date, id`).all(k.slice(0, sep), k.slice(sep + 1))
-        : this.db.prepare(`SELECT * FROM (${SELECT} WHERE m.number = ? ORDER BY m.date DESC, m.id DESC LIMIT 200) ORDER BY date, id`).all(phoneKey(k))
-    ) as Row[];
+    if (sep > 0 && (CHAT_CHANNELS as readonly string[]).includes(k.slice(0, sep))) return { sql: 'm.channel = ? AND m.peer = ?', params: [k.slice(0, sep), k.slice(sep + 1)] };
+    return { sql: 'm.number = ?', params: [phoneKey(k)] };
+  }
+
+  /** Gespräch über alle Kanäle, älteste Nachricht zuerst (höchstens die letzten 500) */
+  thread(key: string): ChatMessage[] {
     const numbers = this.deps.numbers();
+    const w = this.threadWhere(key, numbers);
+    const rows = this.db.prepare(`SELECT * FROM (${SELECT} WHERE ${w.sql} ORDER BY m.date DESC, m.id DESC LIMIT 500) ORDER BY date, id`).all(...w.params) as Row[];
     return rows.map((r) => toMessage(r, numbers));
+  }
+
+  /** Alle eingegangenen Nachrichten eines Gesprächs als gelesen markieren */
+  markThreadSeen(key: string): number {
+    const w = this.threadWhere(key, this.deps.numbers());
+    const n = this.db.prepare(`UPDATE chat_messages AS m SET seen = 1 WHERE m.folder = 'inbox' AND m.seen = 0 AND ${w.sql}`).run(...w.params).changes;
+    if (n) this.deps.notify(['chat']);
+    return n;
+  }
+
+  /**
+   * Gespräche: je Kontakt (alle seine Rufnummern), sonst je Rufnummer bzw. Kennung im Kanal – das neueste zuerst, mit
+   * letzter Nachricht, Ungelesenen und den genutzten Kanälen
+   */
+  threads(): ChatThread[] {
+    const numbers = this.deps.numbers();
+    // Je Rufnummer bzw. Kennung: letzte Nachricht, Ungelesene, Anzahl
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM (
+           SELECT m.*, f.name AS a_name, f.mime_type AS a_mime_type, f.size AS a_size,
+             ROW_NUMBER() OVER (PARTITION BY COALESCE(m.number, m.channel || ':' || m.peer) ORDER BY m.date DESC, m.id DESC) AS rn,
+             SUM(CASE WHEN m.folder = 'inbox' AND m.seen = 0 THEN 1 ELSE 0 END) OVER (PARTITION BY COALESCE(m.number, m.channel || ':' || m.peer)) AS unread_n,
+             COUNT(*) OVER (PARTITION BY COALESCE(m.number, m.channel || ':' || m.peer)) AS total_n
+           FROM chat_messages m LEFT JOIN chat_files f ON f.id = m.attachment_id
+         ) WHERE rn = 1`,
+      )
+      .all() as (Row & { unread_n: number; total_n: number })[];
+    // Genutzte Kanäle je Rufnummer bzw. Kennung, zuletzt genutzter zuerst
+    const used = new Map<string, ChatChannel[]>();
+    for (const r of this.db
+      .prepare("SELECT COALESCE(number, channel || ':' || peer) AS k, channel, MAX(date) AS last FROM chat_messages GROUP BY k, channel ORDER BY last DESC")
+      .all() as { k: string; channel: ChatChannel }[]) {
+      used.set(r.k, [...(used.get(r.k) ?? []), r.channel]);
+    }
+    const threads = new Map<string, ChatThread>();
+    for (const r of rows) {
+      const last = toMessage(r, numbers);
+      const sub = r.number ?? `${r.channel}:${r.peer}`;
+      const t = threads.get(last.thread);
+      const channels = used.get(sub) ?? [r.channel];
+      if (!t) {
+        threads.set(last.thread, {
+          key: last.thread,
+          contactId: r.number ? (numbers.get(r.number)?.contactId ?? null) : null,
+          name: last.name,
+          numbers: r.number ? [r.number] : [],
+          peer: r.number ? null : r.peer,
+          channels,
+          last,
+          unread: r.unread_n,
+          count: r.total_n,
+        });
+        continue;
+      }
+      // Weitere Rufnummer desselben Kontakts
+      const newer = last.date > t.last.date || (last.date === t.last.date && last.id > t.last.id);
+      if (r.number) t.numbers = newer ? [r.number, ...t.numbers] : [...t.numbers, r.number];
+      t.channels = [...new Set(newer ? [...channels, ...t.channels] : [...t.channels, ...channels])];
+      if (newer) t.last = last;
+      t.unread += r.unread_n;
+      t.count += r.total_n;
+    }
+    return [...threads.values()].sort((a, b) => (a.last.date < b.last.date ? 1 : a.last.date > b.last.date ? -1 : b.last.id - a.last.id));
   }
 
   unread(): number {
@@ -427,6 +502,7 @@ export function smsText(text: string, location: { lat: number; lon: number; labe
 }
 
 function toMessage(r: Row, numbers: Map<string, PhoneMatch>): ChatMessage {
+  const contactId = r.number ? (numbers.get(r.number)?.contactId ?? null) : null;
   return {
     id: r.id,
     channel: r.channel,
@@ -443,5 +519,6 @@ function toMessage(r: Row, numbers: Map<string, PhoneMatch>): ChatMessage {
     seen: r.seen !== 0,
     date: r.date,
     createdBy: r.created_by,
+    thread: chatThreadKey(r, contactId),
   };
 }
