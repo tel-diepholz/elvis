@@ -51,6 +51,7 @@ import { OverpassQueriesCard } from './system/OverpassQueriesCard';
 import { ModuleSection } from './system/ModuleSection';
 import { MonitoringCard } from './system/MonitoringCard';
 import { PhonebookCard } from './system/PhonebookCard';
+import { PhonesCard } from './system/PhonesCard';
 import { ChatSettingsCard } from './system/ChatSettingsCard';
 import { MessengerSetupCard } from './system/MessengerSetupCard';
 import { ChannelIcon } from '../components/chat/ChannelIcon';
@@ -154,6 +155,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="telefonbuch" title="Telefonbuch (DECT)" icon={<Phone {...ICON} />} summary="Kontakte als Remote-Telefonbuch für die DECT-Basis">
             <PhonebookCard />
+          </SettingsSection>
+          <SettingsSection id="telefone" title="Telefone (Snom)" icon={<PhoneCall {...ICON} />} summary="Tischtelefone provisionieren, Tastenvorlage">
+            <PhonesCard />
           </SettingsSection>
           <SettingsSection id="nachrichten" title="Nachrichten" icon={<MessagesSquare {...ICON} />} summary="Reihenfolge der Kanäle (Signal, Threema, WhatsApp, Telegram, SMS)">
             <ChatSettingsCard />

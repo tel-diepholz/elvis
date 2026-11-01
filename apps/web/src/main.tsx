@@ -31,6 +31,7 @@ import { PrintPage } from './pages/PrintPage';
 import { MailPage } from './pages/MailPage';
 import { ChatPage } from './pages/ChatPage';
 import { TelefoniePage } from './pages/TelefoniePage';
+import { PhonesPage } from './pages/PhonesPage';
 import { ContactsPage } from './pages/ContactsPage';
 import { ScanPage } from './pages/ScanPage';
 import { UsersPage } from './pages/UsersPage';
@@ -70,6 +71,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="netzwerk" element={<ViewOnlyUnlessLoggedIn><CommsPage /></ViewOnlyUnlessLoggedIn>} />
                 <Route path="funk" element={<ViewOnlyUnlessLoggedIn><FunkPage /></ViewOnlyUnlessLoggedIn>} />
                 <Route path="telefonie" element={<ViewOnlyUnlessLoggedIn><TelefoniePage /></ViewOnlyUnlessLoggedIn>} />
+                <Route path="telefone" element={<RequireLogin><PhonesPage /></RequireLogin>} />
                 {/* alte Adresse (Lesezeichen) */}
                 <Route path="kommunikation" element={<Navigate to="/netzwerk" replace />} />
                 <Route path="fahrzeug" element={<Navigate to="/" replace />} />

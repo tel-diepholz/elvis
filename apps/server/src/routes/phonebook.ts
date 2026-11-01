@@ -26,6 +26,16 @@ export function phonebookRoutes(app: FastifyInstance, deps: { phonebook: Phonebo
     return reply.type(r.type).header('cache-control', 'no-store').send(r.body);
   });
 
+  app.get('/api/phonebook/:token/snom.xml', async (req, reply) => {
+    const r = xml(phonebook.snomXml(parse(tokenParam, req.params).token));
+    return reply.type(r.type).header('cache-control', 'no-store').send(r.body);
+  });
+  app.get('/api/phonebook/:token/kategorie/:id/snom.xml', async (req, reply) => {
+    const p = parse(categoryParam, req.params);
+    const r = xml(phonebook.snomXml(p.token, p.id));
+    return reply.type(r.type).header('cache-control', 'no-store').send(r.body);
+  });
+
   app.get('/api/system/phonebook', async () => phonebook.status());
   app.post('/api/system/phonebook/token', async (req) => {
     const s = phonebook.regenerate(operatorOf(req));

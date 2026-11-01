@@ -7881,3 +7881,100 @@ fieldset.field {
   border-left: 3px solid var(--border);
   color: var(--text-muted);
 }
+
+/* Tischtelefone: Tastenraster wie am Snom D385 (Tasten links und rechts vom Display) */
+.phone-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.phone-keys-face {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(60px, 0.6fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.phone-keys-display {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+.phone-keys-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.phone-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.phone-key:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.phone-key:disabled {
+  cursor: default;
+}
+.phone-key.set {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.phone-key.override {
+  border-color: var(--warn);
+}
+.phone-key.broken {
+  border-color: var(--alarm);
+}
+.phone-key-no {
+  flex: none;
+  width: 22px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+}
+.phone-key-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.phone-key-label,
+.phone-key-target {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phone-key-target {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.phone-contact-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+.phone-contact-row {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+.phone-contact-row.active {
+  background: var(--info-bg);
+}
+@media (max-width: 640px) {
+  .phone-keys-face {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .phone-keys-display {
+    display: none;
+  }
+}

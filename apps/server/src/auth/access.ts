@@ -35,6 +35,8 @@ export function accessLevel(method: string, rawUrl: string): AccessLevel {
   if (url === '/api/printing' || url === '/api/printing/jobs' || url.startsWith('/api/printing/jobs/')) return 'public';
   // DECT-Basis (Telefonbuch): ruft ohne Sitzung ab, berechtigt über das Token in der URL (prüft der Dienst)
   if (read && url.startsWith('/api/phonebook/')) return 'public';
+  // Tischtelefone (Snom) holen ihre Konfiguration ohne Sitzung, berechtigt über das Token in der URL (prüft der Dienst)
+  if (read && url.startsWith('/api/provisioning/')) return 'public';
   // Gastdrucker des Addons: meldet sich mit eigenem Token (prüft der Druckdienst)
   if (url === '/api/printing/guest/submit') return 'public';
 

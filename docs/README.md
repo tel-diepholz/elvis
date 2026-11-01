@@ -27,6 +27,7 @@
 
 - [Überblick](fahrzeugmodule/README.md) – Module aktivieren, Treiber wählen
 - [ELW-Router Teltonika RUTM59](fahrzeugmodule/router-teltonika.md)
+- [Tischtelefone (Snom D385)](fahrzeugmodule/telefone-snom.md) – Provisionierung, Schnellwahltasten
 - [Wetterstation Airmar 150WX](fahrzeugmodule/wetterstation-airmar.md)
 - [Bluetooth: Victron-Akkus und weitere Geräte](fahrzeugmodule/bluetooth-victron.md)
 - [Kameras (Axis über VAPIX)](fahrzeugmodule/kameras-axis.md)
