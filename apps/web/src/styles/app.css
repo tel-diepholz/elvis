@@ -7328,6 +7328,39 @@ fieldset.field {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
+.chat-unit-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--info-bg);
+  color: var(--info);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.6;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.thread-head-btn {
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .thread-head-btn span {
+    display: none;
+  }
+}
+.assign-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.assign-list .chat-unit-tag {
+  margin-left: 0;
+}
 .chat-file {
   display: inline-flex;
   align-items: center;

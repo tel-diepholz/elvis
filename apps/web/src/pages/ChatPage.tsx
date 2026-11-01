@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, FileText, FolderInput, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, Search, Trash2, UserPlus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, FileText, FolderInput, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, Search, Trash2, Truck, UserPlus } from 'lucide-react';
 import {
   CHAT_CHANNEL_LABEL,
   CHAT_CHANNELS,
@@ -16,6 +16,7 @@ import {
   type ChatThread,
   type Incident,
   type MessageInput,
+  type Unit,
 } from '@elvis/shared';
 import { api } from '../lib/api';
 import { fmtBytes, fmtDateTime, fmtTime } from '../lib/format';
@@ -71,11 +72,19 @@ export function ChatPage() {
   const [asMessage, setAsMessage] = useState<ChatMessage | null>(null);
   const [asContact, setAsContact] = useState<string | null>(null);
   const [asDocument, setAsDocument] = useState<ChatMessage | null>(null);
+  const [asUnit, setAsUnit] = useState<ChatThread | null>(null);
   const { data: incident } = useActiveIncident();
   const { data: avail } = useQuery({ queryKey: ['chat', 'available'], queryFn: api.chatAvailable });
   const available = !!avail?.available;
   const { data: threads } = useQuery({ queryKey: ['chat', 'threads'], queryFn: api.chatThreads, enabled: available });
   const { data: contacts = [] } = useQuery({ queryKey: ['contacts'], queryFn: api.contacts, enabled: available });
+  // Kräfte im laufenden Einsatz mit Rufnummer: ihr Name steht am Gespräch (Zuordnung gilt nur für diesen Einsatz)
+  const { data: units = [] } = useQuery({ queryKey: ['units', incident?.id], queryFn: () => api.units(incident!.id), enabled: available && !!incident });
+  const unitsOf = useMemo(() => {
+    const byNumber = new Map<string, Unit[]>();
+    for (const u of units) if (u.mobile && u.status !== 'entlassen') byNumber.set(u.mobile, [...(byNumber.get(u.mobile) ?? []), u]);
+    return (t: Pick<ChatThread, 'numbers'>) => [...new Set(t.numbers.flatMap((n) => byNumber.get(n) ?? []))];
+  }, [units]);
 
   // ?t=<Gespräch>, aus den Kontakten ?an=<Rufnummer>&kanal=<Kanal>
   const selectedKey = params.get('t');
@@ -104,8 +113,8 @@ export function ChatPage() {
     const q = search.trim().toLowerCase();
     if (!q || !threads) return threads ?? [];
     const digits = q.replace(/\D/g, '').replace(/^0+/, '');
-    return threads.filter((t) => threadName(t).toLowerCase().includes(q) || (digits.length >= 3 && t.numbers.some((n) => n.includes(digits))) || t.peer?.toLowerCase().includes(q));
-  }, [threads, search]);
+    return threads.filter((t) => threadName(t).toLowerCase().includes(q) || unitsOf(t).some((u) => u.name.toLowerCase().includes(q)) || (digits.length >= 3 && t.numbers.some((n) => n.includes(digits))) || t.peer?.toLowerCase().includes(q));
+  }, [threads, search, unitsOf]);
 
   if (!avail) return <Loading />;
   if (!available)
@@ -155,7 +164,10 @@ export function ChatPage() {
               {filtered.map((t) => (
                 <li key={t.key}>
                   <button className={`chat-thread-item ${t.key === selected?.key ? 'active' : ''} ${t.unread ? 'unread' : ''}`} onClick={() => select(t.key)}>
-                    <span className="chat-thread-name">{threadName(t)}</span>
+                    <span className="chat-thread-name">
+                      {threadName(t)}
+                      <UnitTags units={unitsOf(t)} />
+                    </span>
                     <span className="chat-thread-time muted">{listTime(t.last.date)}</span>
                     <span className="chat-thread-snippet muted">
                       <ChannelIcon channel={t.last.channel} size={12} />
@@ -189,6 +201,8 @@ export function ChatPage() {
               onMessage={incident ? setAsMessage : undefined}
               onDocument={incident ? setAsDocument : undefined}
               onContact={setAsContact}
+              units={unitsOf(selected)}
+              onAssign={incident && selected.numbers.length ? () => setAsUnit(selected) : undefined}
             />
           ) : (
             <EmptyState icon={<MessagesSquare size={32} />} title="Gespräch wählen">
@@ -206,6 +220,9 @@ export function ChatPage() {
       </Modal>
       <Modal open={asDocument !== null && !!incident} title="In Dokumente übernehmen" onClose={() => setAsDocument(null)}>
         {asDocument && incident && <ChatToDocumentForm incident={incident} msg={asDocument} onDone={() => setAsDocument(null)} />}
+      </Modal>
+      <Modal open={asUnit !== null && !!incident} title="Kraft zuordnen" onClose={() => setAsUnit(null)}>
+        {asUnit && incident && <AssignUnitForm incident={incident} thread={asUnit} units={units} assigned={unitsOf(asUnit)} onDone={() => setAsUnit(null)} />}
       </Modal>
       <Modal open={asContact !== null} title="Als Kontakt anlegen" onClose={() => setAsContact(null)} wide>
         {asContact !== null && <NewContact number={asContact} onDone={() => setAsContact(null)} />}
@@ -225,6 +242,8 @@ function ThreadView({
   onMessage,
   onDocument,
   onContact,
+  units,
+  onAssign,
 }: {
   thread: ChatThread;
   labels: Record<string, string>;
@@ -237,6 +256,10 @@ function ThreadView({
   /** Bild in die Dokumente des Einsatzes übernehmen; nur mit laufendem Einsatz */
   onDocument?: (m: ChatMessage) => void;
   onContact: (number: string) => void;
+  /** Kräfte im laufenden Einsatz mit einer Rufnummer dieses Gesprächs */
+  units: Unit[];
+  /** Rufnummer einer Kraft im Einsatz zuordnen; nur mit laufendem Einsatz und Rufnummer */
+  onAssign?: () => void;
 }) {
   const toast = useToast();
   const { data: ctx } = useMessageContext();
@@ -275,7 +298,10 @@ function ThreadView({
           <ArrowLeft size={18} />
         </button>
         <div className="thread-title">
-          <strong>{name}</strong>
+          <strong>
+            {name}
+            <UnitTags units={units} />
+          </strong>
           <span className="muted small">
             {thread.numbers.map((n, i) => (
               <span key={n}>
@@ -288,8 +314,13 @@ function ThreadView({
           </span>
         </div>
         {thread.contactId === null && thread.numbers[0] && (
-          <button className="btn btn-ghost btn-icon" title="Als Kontakt anlegen" aria-label="Als Kontakt anlegen" onClick={() => onContact(thread.numbers[0]!)}>
-            <UserPlus size={18} />
+          <button className="btn btn-sm thread-head-btn" title="Unbekannte Rufnummer als Kontakt anlegen" onClick={() => onContact(thread.numbers[0]!)}>
+            <UserPlus size={16} /> <span>Kontakt anlegen</span>
+          </button>
+        )}
+        {onAssign && (
+          <button className="btn btn-sm thread-head-btn" title="Rufnummer einer Kraft im Einsatz zuordnen (nur für diesen Einsatz)" onClick={onAssign}>
+            <Truck size={16} /> <span>Kraft zuordnen</span>
           </button>
         )}
         {exists && (
@@ -421,7 +452,7 @@ function ChatToDocumentForm({ incident, msg, onDone }: { incident: Incident; msg
   const chosen = folderId !== undefined ? folderId : (listing.folders.find((f) => f.parentId === null && f.name === preset)?.id ?? null);
   return (
     <form
-      className="form-grid"
+      className="form"
       onSubmit={(e) => {
         e.preventDefault();
         save.mutate(chosen);
@@ -436,12 +467,113 @@ function ChatToDocumentForm({ incident, msg, onDone }: { incident: Incident; msg
       <Field label="Beschreibung">
         <input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} />
       </Field>
-      <div className="btn-row">
+      <div className="form-actions">
         <button type="submit" className="btn btn-primary" disabled={save.isPending}>
           <FolderInput size={14} /> Übernehmen
         </button>
         <button type="button" className="btn" onClick={onDone}>
           Abbrechen
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Zugeordnete Kräfte als Kennzeichen am Namen */
+function UnitTags({ units }: { units: Unit[] }) {
+  return (
+    <>
+      {units.map((u) => (
+        <span key={u.id} className="chat-unit-tag" title={`Kraft im Einsatz: ${u.name}`}>
+          <Truck size={11} /> {u.name}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Rufnummer des Gesprächs einer Kraft im laufenden Einsatz zuordnen (Feld „Mobil“ der Kraft, nur in diesem Einsatz; der
+ * Kräftekatalog bleibt unberührt). Bestehende Zuordnungen lassen sich lösen.
+ */
+function AssignUnitForm({ incident, thread, units, assigned, onDone }: { incident: Incident; thread: ChatThread; units: Unit[]; assigned: Unit[]; onDone: () => void }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [number, setNumber] = useState(thread.numbers[0] ?? '');
+  const [unitId, setUnitId] = useState<number | null>(null);
+  const patch = useMutation({
+    mutationFn: ({ unit, mobile }: { unit: Unit; mobile: string }) => api.patchUnit(unit.id, { mobile }),
+    onSuccess: (u, v) => {
+      toast('success', v.mobile ? `${formatPhone(v.mobile)} ist jetzt ${u.name} zugeordnet` : `Zuordnung zu ${u.name} gelöst`);
+      void qc.invalidateQueries({ queryKey: ['units', incident.id] });
+      if (v.mobile) onDone();
+    },
+    onError: (e) => toast('error', e.message),
+  });
+  const active = units.filter((u) => u.status !== 'entlassen').sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  const unit = active.find((u) => u.id === unitId);
+  return (
+    <form
+      className="form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (unit && number) patch.mutate({ unit, mobile: number });
+      }}
+    >
+      {assigned.length > 0 && (
+        <div className="field">
+          <span className="field-label">Zugeordnet</span>
+          <ul className="assign-list">
+            {assigned.map((u) => (
+              <li key={u.id}>
+                <span className="chat-unit-tag">
+                  <Truck size={11} /> {u.name}
+                </span>{' '}
+                <span className="muted small">{formatPhone(u.mobile)}</span>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={patch.isPending} onClick={() => patch.mutate({ unit: u, mobile: '' })}>
+                  Lösen
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {thread.numbers.length > 1 && (
+        <Field label="Rufnummer">
+          <select value={number} onChange={(e) => setNumber(e.target.value)}>
+            {thread.numbers.map((n) => (
+              <option key={n} value={n}>
+                {formatPhone(n)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <Field
+        label={`Kraft im Einsatz „${incident.title}“`}
+        hint={
+          unit?.mobile && unit.mobile !== number
+            ? `${unit.name} hat schon ${formatPhone(unit.mobile)} – die Nummer wird ersetzt.`
+            : `Die Kraft merkt sich ${formatPhone(number)} nur für diesen Einsatz – Meldungen an sie lassen sich dann per Nachricht senden.`
+        }
+      >
+        <select value={unitId ?? ''} onChange={(e) => setUnitId(e.target.value ? Number(e.target.value) : null)} autoFocus>
+          <option value="">Kraft wählen …</option>
+          {active.map((u) => (
+            <option key={u.id} value={u.id} disabled={u.mobile === number}>
+              {u.name}
+              {u.mobile === number ? ' (bereits zugeordnet)' : u.mobile ? ` – hat ${formatPhone(u.mobile)}` : ''}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {active.length === 0 && <p className="muted">Im Einsatz sind noch keine Kräfte erfasst.</p>}
+      <div className="form-actions">
+        <button type="submit" className="btn btn-primary" disabled={!unit || !number || patch.isPending}>
+          <Truck size={14} /> Zuordnen
+        </button>
+        <button type="button" className="btn" onClick={onDone}>
+          Schließen
         </button>
       </div>
     </form>
