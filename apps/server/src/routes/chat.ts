@@ -25,6 +25,7 @@ export function chatRoutes(app: FastifyInstance, deps: { chat: ChatService; reac
   app.get('/api/chat/threads', async () => chat.threads());
   app.get('/api/chat/thread', async (req) => chat.thread(parse(threadQuery, req.query).key));
   app.post('/api/chat/thread/seen', async (req) => ({ marked: chat.markThreadSeen(parse(threadQuery, req.body).key) }));
+  app.delete('/api/chat/thread', async (req) => ({ removed: chat.removeThread(parse(threadQuery, req.query).key, operatorOf(req)) }));
   app.post('/api/chat/messages/:id/seen', async (req, reply) => {
     chat.setSeen(parse(idParam, req.params).id, parse(seenBody, req.body).seen);
     return reply.code(204).send();

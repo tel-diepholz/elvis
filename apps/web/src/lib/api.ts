@@ -280,7 +280,7 @@ export const api = {
   chatThread: (key: string) => request<ChatMessage[]>('GET', `/api/chat/thread?key=${encodeURIComponent(key)}`),
   markChatThreadSeen: (key: string) => request<{ marked: number }>('POST', '/api/chat/thread/seen', { key }),
   setChatSeen: (id: number, seen: boolean) => request<void>('POST', `/api/chat/messages/${id}/seen`, { seen }),
-  removeChat: (id: number) => request<void>('DELETE', `/api/chat/messages/${id}`),
+  removeChatThread: (key: string) => request<{ removed: number }>('DELETE', `/api/chat/thread?key=${encodeURIComponent(key)}`),
   sendChat: (draft: ChatDraft) => request<ChatMessage[]>('POST', '/api/chat/send', draft),
   chatSuggest: (q: string) => request<ChatSuggestion[]>('GET', `/api/chat/suggest?q=${encodeURIComponent(q)}`),
   chatReachability: () => request<ChatReachability>('GET', '/api/chat/reachability'),

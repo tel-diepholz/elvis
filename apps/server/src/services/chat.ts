@@ -362,6 +362,19 @@ export class ChatService {
     this.deps.notify(['chat', 'audit']);
   }
 
+  /** Ganzes Gespräch löschen: alle Nachrichten über alle Kanäle und Rufnummern, dazu nicht mehr genutzte Bilder */
+  removeThread(key: string, operator: string): number {
+    const w = this.threadWhere(key, this.deps.numbers());
+    const rows = this.db.prepare(`SELECT m.attachment_id, m.number, m.peer FROM chat_messages AS m WHERE ${w.sql}`).all(...w.params) as Pick<Row, 'attachment_id' | 'number' | 'peer'>[];
+    if (!rows.length) throw new HttpError(404, 'Gespräch nicht gefunden');
+    this.db.prepare(`DELETE FROM chat_messages AS m WHERE ${w.sql}`).run(...w.params);
+    for (const id of new Set(rows.map((r) => r.attachment_id).filter((id): id is string => !!id))) this.dropFileIfUnused(id);
+    const who = [...new Set(rows.map((r) => r.number ?? r.peer))].join(', ');
+    this.audit(operator, 'delete', who, true, `Gespräch mit ${who} gelöscht (${rows.length} Nachrichten)`);
+    this.deps.notify(['chat', 'audit']);
+    return rows.length;
+  }
+
   // --- Bilder ---
 
   async upload(file: { filename: string; mimeType: string; stream: Readable }, operator: string, maxBytes: number): Promise<ChatAttachment> {

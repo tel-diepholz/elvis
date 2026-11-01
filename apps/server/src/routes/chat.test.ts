@@ -277,6 +277,20 @@ describe('Nachrichten: Gespräche', () => {
     expect((await req<ChatThread[]>('GET', '/api/chat/threads')).body.map((t) => t.unread)).toEqual([0, 1]);
     expect((await req<{ count: number }>('GET', '/api/chat/unread')).body.count).toBe(1);
   });
+
+  it('löscht ein ganzes Gespräch über alle Rufnummern und Kanäle', async () => {
+    const contact = (await req<{ id: number }>('POST', '/api/contacts', { kind: 'person', lastName: 'Muster', firstName: 'Max', phones: [{ label: 'Mobil', number: '0171 1234567' }, { label: 'Dienst', number: '0160 7654321' }] })).body;
+    received('+491711234567', 'Per SMS');
+    await app.chat.ingest({ channel: 'signal', peer: '+491607654321', number: '+491607654321', peerName: null, text: 'Per Signal', attachment: null, location: null, externalId: 's1', receivedAt: new Date().toISOString() });
+    await app.chat.ingest({ channel: 'threema', peer: 'ECHOECHO', number: null, peerName: 'Unbekannt', text: 'Bleibt', attachment: null, location: null, externalId: 't1', receivedAt: new Date().toISOString() });
+
+    const res = await req<{ removed: number }>('DELETE', `/api/chat/thread?key=contact:${contact.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body.removed).toBe(2);
+    expect((await req<ChatThread[]>('GET', '/api/chat/threads')).body.map((t) => t.key)).toEqual(['threema:ECHOECHO']);
+    expect((await req('DELETE', `/api/chat/thread?key=contact:${contact.id}`)).status).toBe(404);
+    expect((await req<{ removed: number }>('DELETE', '/api/chat/thread?key=threema:ECHOECHO')).body.removed).toBe(1);
+  });
 });
 
 describe('Einrichtung der Messenger', () => {

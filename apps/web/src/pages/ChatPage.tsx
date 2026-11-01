@@ -233,7 +233,11 @@ function ThreadView({
   const exists = thread.count > 0;
   const { data: messages = [] } = useQuery({ queryKey: ['chat', 'thread', thread.key], queryFn: () => api.chatThread(thread.key), enabled: exists });
   const seen = useMutation({ mutationFn: () => api.markChatThreadSeen(thread.key) });
-  const remove = useMutation({ mutationFn: (id: number) => api.removeChat(id), onError: (e) => toast('error', e.message) });
+  const remove = useMutation({
+    mutationFn: () => api.removeChatThread(thread.key),
+    onSuccess: (r) => (toast('success', `Gespräch gelöscht (${r.removed} ${r.removed === 1 ? 'Nachricht' : 'Nachrichten'})`), onBack()),
+    onError: (e) => toast('error', e.message),
+  });
   const endRef = useRef<HTMLDivElement>(null);
   const name = threadName(thread);
 
@@ -278,6 +282,17 @@ function ThreadView({
             <UserPlus size={18} />
           </button>
         )}
+        {exists && (
+          <button
+            className="btn btn-ghost btn-icon"
+            title="Gespräch löschen"
+            aria-label="Gespräch löschen"
+            disabled={remove.isPending}
+            onClick={() => window.confirm(`Gespräch mit ${name} löschen? Alle ${thread.count} Nachrichten über alle Messenger und Rufnummern werden gelöscht.`) && remove.mutate()}
+          >
+            <Trash2 size={18} />
+          </button>
+        )}
       </header>
 
       <div className="thread-messages">
@@ -317,9 +332,6 @@ function ThreadView({
                         <MessageSquarePlus size={14} />
                       </button>
                     )}
-                    <button className="btn btn-ghost btn-icon btn-sm" title="Löschen" aria-label="Löschen" onClick={() => window.confirm('Nachricht löschen?') && remove.mutate(m.id)}>
-                      <Trash2 size={14} />
-                    </button>
                   </span>
                 </span>
                 {m.status === 'failed' && m.error && <span className="thread-error tone-alarm small">{m.error}</span>}
