@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { phoneKey, smsParts, type AuditEntry, type CallRecord, type ChatAttachment, type ChatAvailability, type ChatList, type ChatMessage, type ChatReachability, type ForceUnit, type Incident, type JournalEntry, type Message, type Role, type Unit } from '@elvis/shared';
+import { phoneKey, smsParts, type AuditEntry, type CallRecord, type ChatAttachment, type ChatAvailability, type ChatList, type ChatMessage, type ChatReachability, type ChatThread, type ForceUnit, type Incident, type JournalEntry, type Message, type Role, type Unit } from '@elvis/shared';
 import { simImage, simPeer } from '../devices/sim/messenger.js';
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
@@ -253,6 +253,29 @@ describe('Nachrichten: Messenger', () => {
     // Frei eingegebene Rufnummer sofort prüfen
     const checked = (await req<ChatReachability>('POST', '/api/chat/reachability/check', { numbers: ['0160 9876543'] })).body;
     expect(checked['+491609876543']).toEqual(expect.arrayContaining(['signal', 'sms']));
+  });
+});
+
+describe('Nachrichten: Gespräche', () => {
+  it('fasst je Kontakt alle Rufnummern und Kanäle zu einem Gespräch zusammen', async () => {
+    const contact = (await req<{ id: number }>('POST', '/api/contacts', { kind: 'person', lastName: 'Muster', firstName: 'Max', phones: [{ label: 'Mobil', number: '0171 1234567' }, { label: 'Dienst', number: '0160 7654321' }] })).body;
+    received('+491711234567', 'Per SMS');
+    await app.chat.ingest({ channel: 'signal', peer: '+491607654321', number: '+491607654321', peerName: null, text: 'Per Signal', attachment: null, location: null, externalId: 's1', receivedAt: new Date(Date.now() + 1000).toISOString() });
+    await app.chat.ingest({ channel: 'threema', peer: 'ECHOECHO', number: null, peerName: 'Unbekannt', text: 'Hallo', attachment: null, location: null, externalId: 't1', receivedAt: new Date(Date.now() - 60_000).toISOString() });
+
+    const threads = (await req<ChatThread[]>('GET', '/api/chat/threads')).body;
+    expect(threads.map((t) => [t.key, t.name, t.numbers, t.channels, t.unread, t.count, t.last.text])).toEqual([
+      [`contact:${contact.id}`, 'Muster, Max', ['+491607654321', '+491711234567'], ['signal', 'sms'], 2, 2, 'Per Signal'],
+      ['threema:ECHOECHO', 'Unbekannt', [], ['threema'], 1, 1, 'Hallo'],
+    ]);
+    const messages = (await req<ChatMessage[]>('GET', `/api/chat/thread?key=contact:${contact.id}`)).body;
+    expect(messages.map((m) => [m.channel, m.text, m.thread])).toEqual([
+      ['sms', 'Per SMS', `contact:${contact.id}`],
+      ['signal', 'Per Signal', `contact:${contact.id}`],
+    ]);
+    expect((await req<{ marked: number }>('POST', '/api/chat/thread/seen', { key: `contact:${contact.id}` })).body.marked).toBe(2);
+    expect((await req<ChatThread[]>('GET', '/api/chat/threads')).body.map((t) => t.unread)).toEqual([0, 1]);
+    expect((await req<{ count: number }>('GET', '/api/chat/unread')).body.count).toBe(1);
   });
 });
 

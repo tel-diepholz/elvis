@@ -39,7 +39,15 @@ class FakeSignalCli {
     return new Promise((r) => this.server.close(() => r()));
   }
 
+  private seq = 0;
+
+  /** Wie signal-cli 0.14 (SseEventBuffer): id, event:receive und {account, envelope} – keine JSON-RPC-Hülle */
   emit(params: unknown): void {
+    for (const s of this.streams) s.write(`id:1700-${++this.seq}\nevent:receive\ndata:${JSON.stringify(params)}\n\n`);
+  }
+
+  /** JSON-RPC-Form (z. B. über --tcp/--socket) */
+  emitRpc(params: unknown): void {
     for (const s of this.streams) s.write(`event:receive\ndata:${JSON.stringify({ jsonrpc: '2.0', method: 'receive', params })}\n\n`);
   }
 
@@ -129,8 +137,8 @@ describe('Signal (signal-cli)', () => {
     fake.emit({ account: '+491700000000', envelope: { sourceNumber: '+491701234567', timestamp: 2, dataMessage: { message: 'Gruppe', groupInfo: { groupId: 'g' } } } });
     fake.emit({ account: '+499999', envelope: { sourceNumber: '+491701234567', timestamp: 3, dataMessage: { message: 'fremd' } } });
     fake.emit({ account: '+491700000000', envelope: { sourceNumber: '+491701234567', timestamp: 4, receiptMessage: { isDelivery: true, timestamps: [1700000000123] } } });
-    // Format im Multi-Account-Modus: in params.result, Konto als ACI
-    fake.emit({ subscription: 0, result: { account: 'aci-elw', envelope: { sourceNumber: '+491609876543', sourceUuid: 'uuid-2', timestamp: 5, dataMessage: { message: 'Über ACI' } } } });
+    // JSON-RPC-Form mit Abonnement (params.result), Konto als ACI
+    fake.emitRpc({ subscription: 0, result: { account: 'aci-elw', envelope: { sourceNumber: '+491609876543', sourceUuid: 'uuid-2', timestamp: 5, dataMessage: { message: 'Über ACI' } } } });
     await until(() => messages.length === 2 && receipts.length === 1);
     expect(messages[1]).toMatchObject({ peer: '+491609876543', text: 'Über ACI', externalId: 'uuid-2:5' });
     expect(fake.calls.find((c) => c.method === 'getAttachment')?.params).toEqual({ account: '+491700000000', id: 'att1', recipient: 'uuid-1' });
