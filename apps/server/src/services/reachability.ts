@@ -95,6 +95,8 @@ export class ReachabilityService {
     const upsert = this.db.prepare(
       'INSERT INTO chat_reachability (channel, number, reachable, peer, checked_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(channel, number) DO UPDATE SET reachable = excluded.reachable, peer = excluded.peer, checked_at = excluded.checked_at',
     );
+    // Frühere Nachrichten, die nur mit der Kennung kamen (z. B. Signal mit verborgener Rufnummer), bekommen die Nummer
+    const adopt = this.db.prepare('UPDATE chat_messages SET number = ? WHERE channel = ? AND peer = ? AND number IS NULL');
     let changed = false;
     for (const channel of MESSENGER_IDS) {
       const adapter = this.deps.devices.adapter(channel as MessengerId);
@@ -107,7 +109,10 @@ export class ReachabilityService {
         const result = await adapter.checkReachable(todo);
         const now = new Date().toISOString();
         this.db.transaction(() => {
-          for (const [n, r] of result) upsert.run(channel, phoneKey(n), r.reachable ? 1 : 0, r.peer, now);
+          for (const [n, r] of result) {
+            upsert.run(channel, phoneKey(n), r.reachable ? 1 : 0, r.peer, now);
+            if (r.reachable && r.peer && r.peer !== phoneKey(n)) adopt.run(phoneKey(n), channel, r.peer);
+          }
         })();
         changed = true;
       } catch {

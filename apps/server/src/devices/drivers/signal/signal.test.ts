@@ -144,11 +144,11 @@ describe('Signal (signal-cli)', () => {
     // JSON-RPC-Form mit Abonnement (params.result), Konto als ACI
     fake.emitRpc({ subscription: 0, result: { account: 'aci-elw', envelope: { sourceNumber: '+491609876543', sourceUuid: 'uuid-2', timestamp: 5, dataMessage: { message: 'Über ACI' } } } });
     await until(() => messages.length === 2 && receipts.length === 1);
-    expect(messages[1]).toMatchObject({ peer: '+491609876543', text: 'Über ACI', externalId: 'uuid-2:5' });
+    expect(messages[1]).toMatchObject({ peer: 'uuid-2', number: '+491609876543', text: 'Über ACI', externalId: 'uuid-2:5' });
     expect(fake.calls.find((c) => c.method === 'getAttachment')?.params).toEqual({ account: '+491700000000', id: 'att1', recipient: 'uuid-1' });
     expect(messages[0]).toMatchObject({
       channel: 'signal',
-      peer: '+491701234567',
+      peer: 'uuid-1',
       number: '+491701234567',
       peerName: 'Max',
       location: { lat: 52.6087, lon: 8.3712 },
@@ -157,6 +157,11 @@ describe('Signal (signal-cli)', () => {
     });
     expect(messages[0]!.attachment!.data.toString()).toBe('PNGDATA');
     expect(receipts).toEqual([{ channel: 'signal', externalId: '1700000000123', status: 'delivered' }]);
+
+    // Rufnummer verborgen: nur die UUID kommt an
+    fake.emit({ account: '+491700000000', envelope: { sourceUuid: 'uuid-3', timestamp: 6, dataMessage: { message: 'Ohne Nummer' } } });
+    await until(() => messages.length === 3);
+    expect(messages[2]).toMatchObject({ peer: 'uuid-3', number: null, text: 'Ohne Nummer' });
   });
 
   it('sendet mit Bild als Daten-URL, prüft Erreichbarkeit und meldet Fehler', async () => {
@@ -175,7 +180,7 @@ describe('Signal (signal-cli)', () => {
     await expect(adapter.sendMessage({ peer: '+491609999999', number: '+491609999999', text: 'x', attachment: null, location: null })).rejects.toThrow(/nutzt kein Signal/);
     const reach = await adapter.checkReachable(['+491701234567', '+491609999998']);
     expect([...reach]).toEqual([
-      ['+491701234567', { reachable: true, peer: '+491701234567' }],
+      ['+491701234567', { reachable: true, peer: 'u' }],
       ['+491609999998', { reachable: false, peer: null }],
     ]);
   });

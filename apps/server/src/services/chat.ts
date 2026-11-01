@@ -225,6 +225,8 @@ export class ChatService {
       this.db
         .prepare('INSERT INTO chat_reachability (channel, number, reachable, peer, checked_at) VALUES (?, ?, 1, ?, ?) ON CONFLICT(channel, number) DO UPDATE SET reachable = 1, peer = excluded.peer, checked_at = excluded.checked_at')
         .run(m.channel, number, m.peer, new Date().toISOString());
+      // Frühere Nachrichten derselben Kennung ohne Rufnummer (z. B. Signal mit verborgener Nummer) zuordnen
+      if (m.peer !== number) this.db.prepare('UPDATE chat_messages SET number = ? WHERE channel = ? AND peer = ? AND number IS NULL').run(number, m.channel, m.peer);
     }
     this.deps.notify(['chat']);
     return this.message(Number(info.lastInsertRowid));
