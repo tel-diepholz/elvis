@@ -8,6 +8,7 @@ id: hello
 name: Hallo ELVIS
 version: 1.0.0
 arch: [amd64, arm64]
+docs: README.md                           # Anleitung (Markdown) im Addon-Ordner
 options:
   port: { type: int, label: Port auf dem Host, default: 8099, min: 1024, max: 65535 }
 containers:
@@ -39,6 +40,18 @@ provides:                                 # Integration in ELVIS
 - Ein Job-Schritt mit `stopContainers: [<name>]` hält diese Container des Addons für die Dauer des Schritts an, etwa
   wenn Job und Dienst dieselbe Datenbank nutzen. Danach (auch nach einem Fehler) laufen sie wieder.
 
+## Anleitung (`docs`)
+
+`docs` verweist auf eine Markdown-Datei im Addon-Ordner (neben `addon.yaml`, z. B. `README.md`). ELVIS zeigt sie im
+Store unter **Anleitung** (schon vor der Installation) und als Karte **Anleitung** beim installierten Addon. Hinein
+gehört, was Admins nach der Installation tun müssen: Module einschalten, Konten einrichten, Fehler beheben.
+
+- ELVIS liest die Datei beim Laden des Repositorys. Bei Online-Repositories wird sie mit dem Manifest
+  zwischengespeichert und steht auch offline zur Verfügung.
+- Höchstens 256 KB. Rohes HTML gibt ELVIS nicht aus. Links öffnen in einem neuen Tab, Bilder aus dem Addon-Ordner
+  werden nicht angezeigt.
+- Die Anleitung gehört zur Version im Repository: Nach einer Änderung die `version` erhöhen.
+
 ## Weitere Manifest-Funktionen
 
 - `builds`: Images aus einem Dockerfile im Addon bauen, Verweis per `image: "build:<name>"`.
@@ -50,3 +63,4 @@ Bei den jeweiligen Addons beschrieben:
 - `provides.printServers` und `provides.guestPrinters`: [Drucken](../funktionen/drucken.md)
 - `provides.workstations` und `apparmor: unconfined`: [Arbeitsplätze (PXE)](arbeitsplaetze-pxe.md)
 - `provides.videoSources`: [NDI-Gateway](ndi-gateway.md)
+- `provides.messengers` (`{ id, name, kind: signal-cli, url, token }`): [Signal](../fahrzeugmodule/signal-cli.md)

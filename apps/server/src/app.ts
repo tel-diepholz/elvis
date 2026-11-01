@@ -54,8 +54,20 @@ import { appLinkRoutes } from './routes/applinks.js';
 import { MailService, type MailFetch } from './services/mail.js';
 import type { WkdFetch } from './services/mailcrypto.js';
 import { mailRoutes } from './routes/mail.js';
+import { chatRoutes } from './routes/chat.js';
+import { telephonyRoutes } from './routes/telephony.js';
+import { ChatService } from './services/chat.js';
+import { ReachabilityService } from './services/reachability.js';
+import { MessengerBus } from './devices/messaging/bus.js';
+import { dbVault } from './devices/messaging/vault.js';
+import { HookService } from './services/hooks.js';
+import { MessengerProvisions } from './devices/messaging/provisions.js';
+import { CallLogService } from './services/telephony.js';
+import { TelephonyBus } from './devices/telephony/bus.js';
 import { contactRoutes } from './routes/contacts.js';
 import { ContactService } from './services/contacts.js';
+import { phonebookRoutes } from './routes/phonebook.js';
+import { PhonebookService } from './services/phonebook.js';
 import { backupRoutes } from './routes/backup.js';
 import { BackupService, type DriverFactory } from './services/backup/service.js';
 import { ElwCloudDriver, type BackupFetch } from './services/backup/elwCloud.js';
@@ -100,6 +112,9 @@ export interface App {
   appLinks: AppLinkService;
   personnel: PersonnelService;
   mail: MailService;
+  chat: ChatService;
+  reachability: ReachabilityService;
+  calls: CallLogService;
   traffic: TrafficService;
   router: RouterService;
   backup: BackupService;
@@ -127,7 +142,14 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   });
   const monitoring = new MonitoringService(db, () => hub.invalidate(['monitoring']), opts.monitoringProbes);
   const bluetooth = new BluetoothService(db, () => hub.invalidate(['bluetooth']));
-  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices), { cameras, wifi, monitoring, bluetooth });
+  // Telefonie- und Messenger-Treiber → Nachrichten und Anrufliste (die Dienste entstehen erst nach den Fahrzeugmodulen)
+  const telephonyBus = new TelephonyBus();
+  const messengerBus = new MessengerBus();
+  // Cloud-Relay vor den Fahrzeugmodulen: WhatsApp und Threema empfangen ihre Webhooks darüber
+  const relay = new RelayClient(db, config.app.relayUrl, opts.relayFetch);
+  const hooks = new HookService(db, relay, server.log);
+  const messengerServices = new MessengerProvisions();
+  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices), { cameras, wifi, monitoring, bluetooth, telephony: telephonyBus, messenger: messengerBus, vault: dbVault(db), hooks, messengerServices });
   const settings = new SettingsService(db, { vehicle: config.vehicle });
   const hub = new LiveHub(devices, () => settings.get().vehicle);
   settings.onChange(() => hub.invalidate(['settings']));
@@ -175,7 +197,17 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     } catch (err) {
       server.log.warn({ err }, 'Personalbögen aufräumen fehlgeschlagen');
     }
+    try {
+      chat.cleanup();
+    } catch (err) {
+      server.log.warn({ err }, 'Nachrichten-Bilder aufräumen fehlgeschlagen');
+    }
     void printing.cleanupGuest().catch((err) => server.log.warn({ err }, 'Gastaufträge aufräumen fehlgeschlagen'));
+    try {
+      calls.cleanup();
+    } catch (err) {
+      server.log.warn({ err }, 'Anrufliste aufräumen fehlgeschlagen');
+    }
   };
   let cleanupTimer: NodeJS.Timeout | null = null;
   const tiles = new TileService(config.map, config.dataDir, db);
@@ -217,10 +249,27 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     opts.trafficFetch,
     opts.aisSocket,
   );
-  const relay = new RelayClient(db, config.app.relayUrl, opts.relayFetch);
   const appLinks = new AppLinkService(db, store, incidents, (t) => hub.invalidate(t), relay);
   const personnel = new PersonnelService(db, store, incidents, (t) => hub.invalidate(t), relay, () => settings.get().vehicle.name);
-  const contacts = new ContactService(db, store, (t) => hub.invalidate(t));
+  const contacts = new ContactService(db, store, (t) => {
+    if (!t.includes('contacts')) return hub.invalidate(t);
+    // Kontaktnamen stehen auch in den Nachrichten; neue oder geänderte Rufnummern gleich bei den Messengern prüfen
+    hub.invalidate([...t, 'chat']);
+    reachability.kick();
+  });
+  const phonebook = new PhonebookService(db, contacts);
+  const trunkName = (port: number | null) => (port === null ? null : (devices.adapter('telephony')?.getState().trunks.find((t) => t.port === port)?.name ?? `GSM ${port}`));
+  const calls = new CallLogService(db, { store, bus: telephonyBus, numbers: () => contacts.numberIndex(), trunkName, self: () => settings.get().vehicle.name, notify: (t) => hub.invalidate(t) });
+  const chat = new ChatService(db, { store, devices, telephony: telephonyBus, messenger: messengerBus, numbers: () => contacts.numberIndex(), notify: (t) => hub.invalidate(t), dataDir: config.dataDir });
+  const reachability = new ReachabilityService(db, {
+    devices,
+    contactNumbers: () => [...contacts.numberIndex().keys()],
+    channels: () => {
+      const a = chat.available();
+      return { order: a.order, available: new Set(a.channels.filter((c) => c.available).map((c) => c.channel)) };
+    },
+    notify: (t) => hub.invalidate(t),
+  });
   const backupDrivers: DriverFactory = (_driver, keys) =>
     new ElwCloudDriver(config.app.relayUrl, keys.vaultId, keys.vaultToken, async () => (await relay.ensureCredentials()).token, opts.backupFetch);
   const backup = new BackupService(db, {
@@ -265,6 +314,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     addons.attachOverpass(overpass);
     addons.attachRouter(router);
     addons.attachOffice(office);
+    addons.attachMessengers(messengerServices);
     addons.attachPrinting(printing);
     addons.attachWorkstations(workstations);
     docker = { hosts, repos, addons };
@@ -316,7 +366,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     });
     authRoutes(api, { users, sessions, limiter, store, roles, notify: (t) => hub.invalidate(t) });
     taskRoutes(api, { tasks, roles, store, notify: (t) => hub.invalidate(t) });
-    messageRoutes(api, { messages, store, incidents, forces, mail, notify: (t) => hub.invalidate(t) });
+    messageRoutes(api, { messages, store, incidents, forces, mail, chat, notify: (t) => hub.invalidate(t) });
     requestRoutes(api, { requests, store, notify: (t) => hub.invalidate(t) });
     deviceRoutes(api, devices, store, (t) => hub.invalidate(t));
     incidentRoutes(api, { incidents, forces, store, notify: (t) => hub.invalidate(t) });
@@ -344,7 +394,10 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     appLinkRoutes(api, appLinks);
     personnelRoutes(api, personnel);
     mailRoutes(api, mail);
+    chatRoutes(api, { chat, reachability, contacts });
+    telephonyRoutes(api, { calls });
     contactRoutes(api, { contacts, personnel });
+    phonebookRoutes(api, { phonebook, store, notify: (t) => hub.invalidate(t) });
     backupRoutes(api, { backup, restore });
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
@@ -385,6 +438,9 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     appLinks,
     personnel,
     mail,
+    chat,
+    reachability,
+    calls,
     traffic,
     router,
     backup,
@@ -401,6 +457,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       personnel.start();
       mail.start();
       backup.start();
+      reachability.start();
       cleanup();
       cleanupTimer = setInterval(cleanup, 3600_000);
       if (docker) {
@@ -423,6 +480,8 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       personnel.stop();
       mail.stop();
       backup.stop();
+      reachability.stop();
+      hooks.stop();
       if (cleanupTimer) clearInterval(cleanupTimer);
       docker?.hosts.stop();
       docker?.addons.stop();

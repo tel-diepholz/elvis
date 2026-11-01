@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { decodeContent } from '../devices/drivers/yeastar/protocol.js';
 
 export type Db = Database.Database;
 
@@ -861,6 +862,93 @@ const MIGRATIONS: Migration[] = [
     force_unit_id INTEGER,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (incident_id, issi)
+  );
+  `,
+  // Telefonie (GSM-Gateway): SMS, Anrufliste und Rufnummer der Kräfte (aus einer SMS gemerkt, für Ausgangsmeldungen per SMS)
+  `
+  CREATE TABLE sms_messages (
+    id INTEGER PRIMARY KEY,
+    folder TEXT NOT NULL CHECK (folder IN ('inbox', 'sent')),
+    port INTEGER,
+    number TEXT NOT NULL,
+    text TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('received', 'sending', 'sent', 'failed')),
+    error TEXT,
+    seen INTEGER NOT NULL DEFAULT 0,
+    date TEXT NOT NULL,
+    created_by TEXT NOT NULL
+  );
+  CREATE INDEX sms_messages_folder ON sms_messages(folder, date);
+  CREATE TABLE calls (
+    id INTEGER PRIMARY KEY,
+    direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),
+    port INTEGER,
+    number TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    answered_at TEXT,
+    ended_at TEXT NOT NULL,
+    incident_id INTEGER REFERENCES incidents(id) ON DELETE SET NULL
+  );
+  CREATE INDEX calls_started ON calls(started_at);
+  ALTER TABLE force_units ADD COLUMN mobile TEXT NOT NULL DEFAULT '';
+  ALTER TABLE units ADD COLUMN mobile TEXT NOT NULL DEFAULT '';
+  `,
+  // Eingegangene SMS, die noch URL-kodiert gespeichert sind (Latin-1 wurde anfangs nicht erkannt), oder mit BOM beginnen
+  (db) => {
+    const rows = db.prepare("SELECT id, text FROM sms_messages WHERE folder = 'inbox'").all() as { id: number; text: string }[];
+    const update = db.prepare('UPDATE sms_messages SET text = ? WHERE id = ?');
+    for (const r of rows) {
+      const encoded = !/\s/.test(r.text) && /%[0-9A-Fa-f]{2}/.test(r.text);
+      const fixed = encoded ? decodeContent(r.text) : r.text.replace(/^\uFEFF/, '');
+      if (fixed !== r.text) update.run(fixed, r.id);
+    }
+  },
+  // Nachrichten: SMS und Messenger (Signal, Threema, WhatsApp, Telegram) in einer Tabelle. external_id ist die Kennung
+  // beim Dienst (doppelte Zustellung, Empfangsbestätigungen). Bilder liegen unter dataDir/chat/<id>.
+  // chat_reachability merkt sich, welche Rufnummer welchen Messenger nutzt (peer = Kennung im Dienst, z. B. Threema-ID).
+  `
+  CREATE TABLE chat_files (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL
+  );
+  CREATE TABLE chat_messages (
+    id INTEGER PRIMARY KEY,
+    channel TEXT NOT NULL,
+    folder TEXT NOT NULL CHECK (folder IN ('inbox', 'sent')),
+    peer TEXT NOT NULL,
+    number TEXT,
+    peer_name TEXT,
+    text TEXT NOT NULL DEFAULT '',
+    attachment_id TEXT REFERENCES chat_files(id) ON DELETE SET NULL,
+    lat REAL,
+    lon REAL,
+    location_label TEXT,
+    port INTEGER,
+    status TEXT NOT NULL CHECK (status IN ('received', 'sending', 'sent', 'delivered', 'read', 'failed')),
+    error TEXT,
+    seen INTEGER NOT NULL DEFAULT 0,
+    date TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    external_id TEXT
+  );
+  CREATE INDEX chat_messages_folder ON chat_messages(folder, date);
+  CREATE INDEX chat_messages_number ON chat_messages(number, date);
+  CREATE INDEX chat_messages_peer ON chat_messages(channel, peer, date);
+  CREATE UNIQUE INDEX chat_messages_external ON chat_messages(channel, external_id) WHERE external_id IS NOT NULL;
+  INSERT INTO chat_messages (id, channel, folder, peer, number, text, port, status, error, seen, date, created_by)
+    SELECT id, 'sms', folder, number, number, text, port, status, error, seen, date, created_by FROM sms_messages;
+  DROP TABLE sms_messages;
+  CREATE TABLE chat_reachability (
+    channel TEXT NOT NULL,
+    number TEXT NOT NULL,
+    reachable INTEGER NOT NULL,
+    peer TEXT,
+    checked_at TEXT NOT NULL,
+    PRIMARY KEY (channel, number)
   );
   `,
 ];

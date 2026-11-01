@@ -25,6 +25,11 @@ Läuft ELVIS im Container, muss das USB-Gerät durchgereicht werden (`devices:` 
 | --- | --- |
 | ELW-Router Teltonika RUTM59 | [router-teltonika.md](router-teltonika.md) |
 | Funk (Simulation, Reichert ZBE) | [funk-reichert-zbe.md](funk-reichert-zbe.md) |
+| Telefonie (Simulation, Yeastar NeoGate TG200) | [telefonie-yeastar-tg.md](telefonie-yeastar-tg.md) |
+| Signal (Simulation, signal-cli) | [signal-cli.md](signal-cli.md) |
+| Telegram (Simulation, Telegram-Konto) | [telegram.md](telegram.md) |
+| WhatsApp (Simulation, Cloud API) | [whatsapp-cloud-api.md](whatsapp-cloud-api.md) |
+| Threema (Simulation, Gateway E2E) | [threema-gateway.md](threema-gateway.md) |
 | Wetterstation Airmar 150WX | [wetterstation-airmar.md](wetterstation-airmar.md) |
 | Bluetooth: Victron-Akkus und weitere Geräte | [bluetooth-victron.md](bluetooth-victron.md) |
 | Kameras (Axis über VAPIX) | [kameras-axis.md](kameras-axis.md) |

@@ -26,7 +26,10 @@ import {
   UserRoundCog,
   Users,
   PackagePlus,
+  Phone,
+  PhoneCall,
   Wifi,
+  MessagesSquare,
 } from 'lucide-react';
 import type { DeviceId } from '@elvis/shared';
 import { api } from '../lib/api';
@@ -47,6 +50,10 @@ import { RequestSettingsCard } from './system/RequestSettingsCard';
 import { OverpassQueriesCard } from './system/OverpassQueriesCard';
 import { ModuleSection } from './system/ModuleSection';
 import { MonitoringCard } from './system/MonitoringCard';
+import { PhonebookCard } from './system/PhonebookCard';
+import { ChatSettingsCard } from './system/ChatSettingsCard';
+import { MessengerSetupCard } from './system/MessengerSetupCard';
+import { ChannelIcon } from '../components/chat/ChannelIcon';
 import { PrintSettingsCard } from './system/PrintSettingsCard';
 import { RolesCard } from './system/RolesCard';
 import { ScanSettingsCard } from './system/ScanSettingsCard';
@@ -74,6 +81,11 @@ const MODULE_PARTS: Partial<Record<DeviceId, { icon: ReactNode; devices?: ReactN
   monitoring: { icon: <Activity {...ICON} />, devices: <MonitoringCard /> },
   bluetooth: { icon: <Bluetooth {...ICON} />, devices: <BluetoothCard /> },
   radio: { icon: <Radio {...ICON} /> },
+  telephony: { icon: <PhoneCall {...ICON} /> },
+  signal: { icon: <ChannelIcon channel="signal" size={18} />, devices: <MessengerSetupCard id="signal" /> },
+  threema: { icon: <ChannelIcon channel="threema" size={18} />, devices: <MessengerSetupCard id="threema" /> },
+  whatsapp: { icon: <ChannelIcon channel="whatsapp" size={18} />, devices: <MessengerSetupCard id="whatsapp" /> },
+  telegram: { icon: <ChannelIcon channel="telegram" size={18} />, devices: <MessengerSetupCard id="telegram" /> },
   network: { icon: <Network {...ICON} /> },
   media: { icon: <MonitorPlay {...ICON} /> },
   weather: { icon: <CloudSun {...ICON} /> },
@@ -139,6 +151,12 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="mail" title="E-Mail" icon={<AtSign {...ICON} />} summary="Verschlüsseltes Postfach des ELW (…@einsatzleitwagen.app)">
             <MailCard />
+          </SettingsSection>
+          <SettingsSection id="telefonbuch" title="Telefonbuch (DECT)" icon={<Phone {...ICON} />} summary="Kontakte als Remote-Telefonbuch für die DECT-Basis">
+            <PhonebookCard />
+          </SettingsSection>
+          <SettingsSection id="nachrichten" title="Nachrichten" icon={<MessagesSquare {...ICON} />} summary="Reihenfolge der Kanäle (Signal, Threema, WhatsApp, Telegram, SMS)">
+            <ChatSettingsCard />
           </SettingsSection>
           <SettingsSection id="backup" title="Backup" icon={<DatabaseBackup {...ICON} />} summary="Verschlüsselte Sicherung, Wiederherstellen bei Neuinstallation">
             <BackupCard />

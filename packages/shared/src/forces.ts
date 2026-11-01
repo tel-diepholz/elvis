@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { tacticalSignSchema, type TacticalSign } from './tactical';
+import { mobileSchema } from './telephony';
 
 /**
  * Kräfte. Admins pflegen in der Kräfteverwaltung Systemeinheiten: ein Fahrzeug, eine Gruppe von
@@ -100,6 +101,8 @@ export interface ForceUnit {
   notes: string;
   /** E-Mail-Adresse (z. B. Leitstelle, aus einer eingegangenen Mail gemerkt); geht bei der Übernahme in den Einsatz mit */
   email: string;
+  /** Rufnummer für SMS und Messenger (z. B. aus einer eingegangenen Nachricht gemerkt); geht bei der Übernahme in den Einsatz mit */
+  mobile: string;
   sign: TacticalSign;
   /** Eigene Stärke (ohne Untereinheiten) */
   strength: Strength;
@@ -116,6 +119,8 @@ export const forceUnitInputSchema = z.object({
   notes: text(1000).default(''),
   /** Fehlt sie (z. B. beim Import), bleibt die gespeicherte Adresse */
   email: email.optional(),
+  /** Fehlt sie, bleibt die gespeicherte Nummer */
+  mobile: mobileSchema.optional(),
   sign: tacticalSignSchema.default(DEFAULT_UNIT_SIGN),
   strength: strengthSchema.default(ZERO_STRENGTH),
   members: z.array(z.object({ unitId: id, role: text(60).default('') })).max(200).default([]),
@@ -173,6 +178,8 @@ export interface Unit {
   notes: string;
   /** E-Mail-Adresse der Kraft (z. B. aus einer eingegangenen Mail übernommen); leer = keine */
   email: string;
+  /** Rufnummer für SMS und Messenger (z. B. aus einer eingegangenen Nachricht übernommen); leer = keine */
+  mobile: string;
   sign: TacticalSign;
   /** Eigene Stärke (ohne Untereinheiten) */
   strength: Strength;
@@ -203,6 +210,7 @@ export const newUnitSchema = z.object({
   organization: text(100).default(''),
   notes: text(1000).default(''),
   email: email.default(''),
+  mobile: mobileSchema.default(''),
   sign: tacticalSignSchema.default(DEFAULT_UNIT_SIGN),
   strength: strengthSchema.default(ZERO_STRENGTH),
   section: text(100).default(''),
@@ -219,6 +227,7 @@ export const unitPatchSchema = z
     organization: text(100).optional(),
     notes: text(1000).optional(),
     email: email.optional(),
+    mobile: mobileSchema.optional(),
     sign: tacticalSignSchema.optional(),
     strength: strengthSchema.optional(),
     section: text(100).optional(),

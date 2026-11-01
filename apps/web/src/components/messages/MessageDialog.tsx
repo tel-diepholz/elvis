@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { AlarmClock, ArrowRight, AtSign, Check, CheckCheck, ListPlus, PackagePlus, Paperclip, Reply, Send, Undo2, UserCheck } from 'lucide-react';
+import { AlarmClock, ArrowRight, AtSign, Check, CheckCheck, ListPlus, MessageSquareText, PackagePlus, Paperclip, Reply, Send, Undo2, UserCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MESSAGE_BODY_MAX, MESSAGE_REMIND_MINUTES, TASK_SUMMARY_MAX, REQUEST_STATUS_LABELS, requestLabel, requestOpen, type Incident, type Message, type MessageInput, type RequestInput, type TaskInput } from '@elvis/shared';
+import { MESSAGE_BODY_MAX, MESSAGE_REMIND_MINUTES, CHAT_TEXT_MAX, formatPhone, TASK_SUMMARY_MAX, REQUEST_STATUS_LABELS, requestLabel, requestOpen, type Incident, type Message, type MessageInput, type RequestInput, type TaskInput } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtTime } from '../../lib/format';
 import { useToast } from '../../lib/toast';
 import { Badge, Field, Modal } from '../ui';
 import { MailComposer } from '../mail/MailComposer';
+import { ChatComposer } from '../chat/ChatComposer';
 import { TaskForm } from '../tasks/TaskForm';
 import { RequestForm } from '../requests/RequestForm';
 import { REQUESTS_PATH, useRequests } from '../requests/requestParts';
@@ -38,7 +39,7 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
   const toast = useToast();
   const { data: ctx } = useMessageContext();
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.roles });
-  const [mode, setMode] = useState<'view' | 'reply' | 'answer' | 'task' | 'request' | 'attach' | 'mail'>('view');
+  const [mode, setMode] = useState<'view' | 'reply' | 'answer' | 'task' | 'request' | 'attach' | 'mail' | 'chat'>('view');
   const navigate = useNavigate();
   const [reply, setReply] = useState('');
   const [routeTo, setRouteTo] = useState<number | null>(null);
@@ -55,6 +56,14 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
     : toUnit
       ? (units.find((u) => u.id === m.recipientUnitId)?.email ?? '')
       : (catalog.find((f) => f.id === m.recipientForceUnitId)?.email ?? '');
+  // Per Nachricht (SMS, Messenger) übermitteln: mit gemerkter Rufnummer der Kraft vorbelegt, sonst Empfänger aus den Kontakten wählen
+  const { data: chat } = useQuery({ queryKey: ['chat', 'available'], queryFn: api.chatAvailable, enabled: m.direction === 'out' });
+  const chatAvailable = !!chat?.available && m.direction === 'out';
+  const recipientMobile = toUnit
+    ? (units.find((u) => u.id === m.recipientUnitId)?.mobile ?? '')
+    : toForce
+      ? (catalog.find((f) => f.id === m.recipientForceUnitId)?.mobile ?? '')
+      : '';
   const mine = m.claimedByUserId === user?.id;
   // Andere aktive Übernahme: der Server meldet dann für mich nichts zu tun
   const claimedByOther = handler && !mine && m.claimedBy !== null && m.pending === null;
@@ -144,6 +153,12 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
     );
   }
 
+  if (mode === 'chat') {
+    return (
+      <ChatComposer initial={{ to: recipientMobile ? `${formatPhone(recipientMobile)}, ` : '', text: m.body.slice(0, CHAT_TEXT_MAX) }} onSent={() => done.mutate()} onDone={() => setMode('view')} />
+    );
+  }
+
   if (mode === 'answer') {
     return (
       <MessageForm
@@ -211,6 +226,16 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
             {recipientEmail && (
               <button className="btn" disabled={busy} onClick={() => setMode('mail')} title={`An ${recipientEmail} senden und als erledigt markieren`}>
                 <AtSign size={16} /> Per E-Mail senden
+              </button>
+            )}
+            {chatAvailable && (
+              <button
+                className="btn"
+                disabled={busy}
+                onClick={() => setMode('chat')}
+                title={recipientMobile ? `An ${formatPhone(recipientMobile)} per SMS oder Messenger senden und als erledigt markieren` : 'Per SMS oder Messenger senden und als erledigt markieren'}
+              >
+                <MessageSquareText size={16} /> Per Nachricht senden
               </button>
             )}
           </>

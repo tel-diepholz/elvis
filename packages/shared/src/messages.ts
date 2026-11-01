@@ -47,6 +47,8 @@ export const messageInputSchema = z.discriminatedUnion('direction', [
     mailId: id.nullable().default(null),
     /** Aus einem Funkspruch erfasst: die Kraft bzw. Systemeinheit (sender) merkt sich im Einsatz die ISSI des Funkgeräts */
     issi: issiSchema.nullable().default(null),
+    /** Aus einer Nachricht (SMS, Messenger) erfasst: die Kraft bzw. Systemeinheit (sender) merkt sich die Rufnummer */
+    chatId: id.nullable().default(null),
   }),
 ]);
 export type MessageInput = z.input<typeof messageInputSchema>;

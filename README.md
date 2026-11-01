@@ -11,7 +11,7 @@ Projekthomepage mit Bildern und Funktionsübersicht: **<https://einsatzleitwagen
 
 | Bereich | Verfügbarkeit | Inhalt |
 | --- | --- | --- |
-| **Fahrzeug** | immer | Übersicht, Karte, Wetter, Funk, Netzwerk, E-Mail (mit Postfach), Kontakte |
+| **Fahrzeug** | immer | Übersicht, Karte, Wetter, Funk, Telefonie, Netzwerk, E-Mail (mit Postfach), SMS (mit Telefonie), Kontakte |
 | **Einsatz** | Unterseiten erst mit aufgelegtem Einsatz | Einsatztagebuch, Kräfteübersicht, Dokumente |
 | **Verwaltung** | immer | Einsatzarchiv (schreibgeschützt); nur Admins: Bedienprotokoll, Einstellungen |
 
@@ -46,7 +46,7 @@ Die vollständige Doku steht in [`docs/`](docs/README.md):
 - **Funktionen:** [Karte](docs/funktionen/karte.md) · [Ausbreitung](docs/funktionen/ausbreitung.md) ·
   [Flugzeuge und Schiffe](docs/funktionen/luft-und-schiffsverkehr.md) · [Wetter](docs/funktionen/wetter.md) ·
   [Kräfte und Personal](docs/funktionen/kraefte-und-personal.md) · [Kontakte](docs/funktionen/kontakte.md) ·
-  [E-Mail](docs/funktionen/email.md) · [Dokumente](docs/funktionen/dokumente.md) ·
+  [E-Mail](docs/funktionen/email.md) · [Nachrichten](docs/funktionen/nachrichten.md) · [Dokumente](docs/funktionen/dokumente.md) ·
   [Drucken](docs/funktionen/drucken.md) · [Scannen](docs/funktionen/scannen.md) ·
   [Bildschirme](docs/funktionen/bildschirme.md)
 - **Fahrzeugmodule:** [Überblick](docs/fahrzeugmodule/README.md) · [Funk](docs/fahrzeugmodule/funk-reichert-zbe.md) · [Router](docs/fahrzeugmodule/router-teltonika.md) ·

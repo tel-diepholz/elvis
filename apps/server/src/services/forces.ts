@@ -22,6 +22,7 @@ interface ForceRow {
   organization: string;
   notes: string;
   email: string;
+  mobile: string;
   sign: string;
   leaders: number;
   sub_leaders: number;
@@ -59,6 +60,7 @@ export class ForceService {
       organization: r.organization,
       notes: r.notes,
       email: r.email,
+      mobile: r.mobile,
       sign: tacticalSignSchema.parse(JSON.parse(r.sign)),
       strength: { leaders: r.leaders, subLeaders: r.sub_leaders, crew: r.crew },
       members: members.filter((m) => m.parent_id === r.id).map((m) => ({ unitId: m.child_id, role: m.role })),
@@ -95,6 +97,7 @@ export class ForceService {
       organization: input.organization,
       notes: input.notes,
       email: input.email ?? null,
+      mobile: input.mobile ?? null,
       sign: JSON.stringify(input.sign),
       leaders: input.strength.leaders,
       subLeaders: input.strength.subLeaders,
@@ -105,15 +108,15 @@ export class ForceService {
     if (target === null) {
       const info = this.db
         .prepare(
-          `INSERT INTO force_units (name, callsign, organization, notes, email, sign, leaders, sub_leaders, crew, created_at, updated_at)
-           VALUES (@name, @callsign, @organization, @notes, COALESCE(@email, ''), @sign, @leaders, @subLeaders, @crew, @ts, @ts)`,
+          `INSERT INTO force_units (name, callsign, organization, notes, email, mobile, sign, leaders, sub_leaders, crew, created_at, updated_at)
+           VALUES (@name, @callsign, @organization, @notes, COALESCE(@email, ''), COALESCE(@mobile, ''), @sign, @leaders, @subLeaders, @crew, @ts, @ts)`,
         )
         .run(params);
       target = Number(info.lastInsertRowid);
     } else {
       this.db
         .prepare(
-          `UPDATE force_units SET name=@name, callsign=@callsign, organization=@organization, notes=@notes, email=COALESCE(@email, email), sign=@sign,
+          `UPDATE force_units SET name=@name, callsign=@callsign, organization=@organization, notes=@notes, email=COALESCE(@email, email), mobile=COALESCE(@mobile, mobile), sign=@sign,
            leaders=@leaders, sub_leaders=@subLeaders, crew=@crew, updated_at=@ts WHERE id=@id`,
         )
         .run({ ...params, id: target });
@@ -141,6 +144,11 @@ export class ForceService {
   /** Adresse aus einer eingegangenen Mail merken (z. B. Leitstelle als Absender einer Meldung) */
   setEmail(id: number, email: string): void {
     this.db.prepare('UPDATE force_units SET email = ?, updated_at = ? WHERE id = ?').run(email, now(), id);
+  }
+
+  /** Rufnummer aus einer eingegangenen Nachricht merken (z. B. Leitstelle als Absender einer Meldung) */
+  setMobile(id: number, mobile: string): void {
+    this.db.prepare('UPDATE force_units SET mobile = ?, updated_at = ? WHERE id = ?').run(mobile, now(), id);
   }
 
   /** Mitgliedschaften fallen weg; Einsätze behalten ihre Kopie (source_id → NULL) */

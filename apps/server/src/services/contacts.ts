@@ -1,4 +1,4 @@
-import { contactName, personName, type Contact, type ContactCategory, type ContactCategoryInput, type ContactData, type ContactPhone, type MailAddressSuggestion, type Person, type Topic } from '@elvis/shared';
+import { contactName, isMobileNumber, personName, phoneKey, type Contact, type ContactCategory, type ContactCategoryInput, type ContactData, type ContactPhone, type MailAddressSuggestion, type Person, type PhoneMatch, type ChatSuggestion, type Topic } from '@elvis/shared';
 import type { Db } from '../db/index.js';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
@@ -245,6 +245,57 @@ export class ContactService {
           : [...(JSON.parse(r.to_json) as string[]), ...(JSON.parse(r.cc_json) as string[])].map(splitAddress);
       for (const c of candidates) {
         if (c.address.includes(q) || c.name.toLowerCase().includes(q)) add({ ...c, source: 'mail' });
+      }
+    }
+    return out;
+  }
+
+  /** Kontakt zu einer Rufnummer (Vergleich im internationalen Format); bei mehreren der erste nach Namen */
+  findByNumber(number: string): PhoneMatch | null {
+    const key = phoneKey(number);
+    if (key.length < 3) return null;
+    return this.numberIndex().get(key) ?? null;
+  }
+
+  /** Alle Rufnummern der Kontakte → Kontakt */
+  numberIndex(): Map<string, PhoneMatch> {
+    const index = new Map<string, PhoneMatch>();
+    for (const r of this.db.prepare("SELECT * FROM contacts WHERE phones <> '[]' ORDER BY last_name COLLATE NOCASE, organization COLLATE NOCASE, id").all() as Row[]) {
+      const c = toContact(r, []);
+      for (const p of c.phones) {
+        const key = phoneKey(p.number);
+        if (key && !index.has(key)) index.set(key, { contactId: c.id, name: contactName(c), label: p.label });
+      }
+    }
+    return index;
+  }
+
+  /** Vorschläge für den Empfänger einer Nachricht: Kontakte (Mobilnummern zuerst), dann bisherige Gegenstellen */
+  chatSuggestions(query: string): ChatSuggestion[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    // Ziffern ohne führende Nullen: „0171 12“ findet „+49 171 12…“, „0049…“ und „0171…“
+    const tail = q.replace(/[^\d]/g, '').replace(/^0+/, '');
+    const qKey = tail.length >= 3 ? tail : null;
+    const matchesNumber = (n: string) => !!qKey && phoneKey(n).replace(/[^\d]/g, '').includes(qKey);
+    const out: ChatSuggestion[] = [];
+    const seen = new Set<string>();
+    const contacts: ChatSuggestion[] = [];
+    for (const c of this.list()) {
+      const name = contactName(c);
+      const byName = name.toLowerCase().includes(q) || `${c.firstName} ${c.lastName}`.toLowerCase().includes(q);
+      for (const p of c.phones) if (byName || matchesNumber(p.number)) contacts.push({ number: phoneKey(p.number), name, label: p.label, source: 'contact' });
+    }
+    contacts.sort((a, b) => Number(isMobileNumber(b.number)) - Number(isMobileNumber(a.number)));
+    const add = (s: ChatSuggestion) => {
+      if (!s.number || seen.has(s.number) || out.length >= MAX_SUGGESTIONS) return;
+      seen.add(s.number);
+      out.push(s);
+    };
+    contacts.forEach(add);
+    if (qKey) {
+      for (const r of this.db.prepare('SELECT DISTINCT number FROM chat_messages WHERE number IS NOT NULL ORDER BY date DESC LIMIT 500').all() as { number: string }[]) {
+        if (matchesNumber(r.number)) add({ number: r.number, name: '', label: '', source: 'chat' });
       }
     }
     return out;

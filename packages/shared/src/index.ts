@@ -34,6 +34,8 @@ export * from './radar';
 export * from './mailrelay';
 export * from './mail';
 export * from './contacts';
+export * from './telephony';
+export * from './chat';
 export * from './backup';
 export * from './routing';
 export * from './georef';

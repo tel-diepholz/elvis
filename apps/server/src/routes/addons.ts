@@ -105,7 +105,14 @@ export function addonRoutes(
 
   app.get('/api/addons/store', async (): Promise<AddonStoreEntry[]> => {
     const installed = addons.installedVersions();
-    return repos.list().map(({ location: _, ...e }) => ({ ...e, installedVersion: e.manifest ? (installed.get(e.manifest.id) ?? null) : null }));
+    return repos.list().map(({ location: _, docs, ...e }) => ({ ...e, hasDocs: docs !== null, installedVersion: e.manifest ? (installed.get(e.manifest.id) ?? null) : null }));
+  });
+
+  // Anleitung eines Addons (manifest.docs, Markdown) – im Store vor der Installation und beim installierten Addon
+  app.get('/api/addons/store/:id/docs', async (req) => {
+    const docs = repos.docs(parse(addonParam, req.params).id);
+    if (docs === null) throw new HttpError(404, 'Dieses Addon hat keine Anleitung');
+    return { markdown: docs };
   });
 
   app.post('/api/addons/store/refresh', async () => {

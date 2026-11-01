@@ -12,6 +12,9 @@ import { evaluateAlerts, sortAlerts, type AlertDraft } from '../alerts.js';
 import { CommandError, type AdapterContext, type DeviceAdapter, type Logger } from './adapter.js';
 import { DeviceConfigStore } from './config-store.js';
 import { DEVICE_DEFINITIONS, type DriverDefinition, type DriverDeps } from './drivers.js';
+import { TelephonyBus } from './telephony/bus.js';
+import { MessengerBus, memoryVault, noHooks } from './messaging/bus.js';
+import { MessengerProvisions } from './messaging/provisions.js';
 
 type Listener<T> = (value: T) => void;
 
@@ -49,6 +52,11 @@ export class DeviceManager {
       wifi: { list: () => [], onChange: () => () => {}, storeClients: () => {}, clearClients: () => {} },
       monitoring: { list: () => [], onChange: () => () => {} },
       bluetooth: { list: () => [], onChange: () => () => {} },
+      telephony: new TelephonyBus(),
+      messenger: new MessengerBus(),
+      vault: memoryVault(),
+      hooks: noHooks,
+      messengerServices: new MessengerProvisions(),
     },
   ) {
     this.ctx = {

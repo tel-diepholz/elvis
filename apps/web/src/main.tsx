@@ -29,6 +29,8 @@ import { TemplatesPage } from './pages/TemplatesPage';
 import { SignGeneratorPage } from './pages/SignGeneratorPage';
 import { PrintPage } from './pages/PrintPage';
 import { MailPage } from './pages/MailPage';
+import { ChatPage } from './pages/ChatPage';
+import { TelefoniePage } from './pages/TelefoniePage';
 import { ContactsPage } from './pages/ContactsPage';
 import { ScanPage } from './pages/ScanPage';
 import { UsersPage } from './pages/UsersPage';
@@ -67,6 +69,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="monitoring" element={<MonitoringPage />} />
                 <Route path="netzwerk" element={<ViewOnlyUnlessLoggedIn><CommsPage /></ViewOnlyUnlessLoggedIn>} />
                 <Route path="funk" element={<ViewOnlyUnlessLoggedIn><FunkPage /></ViewOnlyUnlessLoggedIn>} />
+                <Route path="telefonie" element={<ViewOnlyUnlessLoggedIn><TelefoniePage /></ViewOnlyUnlessLoggedIn>} />
                 {/* alte Adresse (Lesezeichen) */}
                 <Route path="kommunikation" element={<Navigate to="/netzwerk" replace />} />
                 <Route path="fahrzeug" element={<Navigate to="/" replace />} />
@@ -97,6 +100,8 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="drucken" element={<PrintPage />} />
                 <Route path="scans" element={<RequireLogin><ScanPage /></RequireLogin>} />
                 <Route path="mail" element={<RequireLogin><MailPage /></RequireLogin>} />
+                <Route path="nachrichten" element={<RequireLogin><ChatPage /></RequireLogin>} />
+                <Route path="sms" element={<Navigate to="/nachrichten" replace />} />
                 <Route path="kontakte" element={<RequireLogin><ContactsPage /></RequireLogin>} />
                 <Route path="protokoll" element={<RequireLogin admin><AuditPage /></RequireLogin>} />
                 <Route path="einstellungen" element={<RequireLogin admin><SettingsPage /></RequireLogin>} />

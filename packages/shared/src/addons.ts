@@ -254,6 +254,20 @@ const workstationProvision = z.object({
   aptProxy: templated.optional(),
 });
 
+/**
+ * Hilfsdienst für einen Messenger, z. B. signal-cli im Daemon-Modus: das Modul „Signal“ (Treiber signal-cli) nutzt
+ * ihn, wenn in den Moduleinstellungen keine eigene Adresse steht
+ */
+const messengerProvision = z.object({
+  id: slug,
+  name: z.string().min(1),
+  kind: z.enum(['signal-cli']),
+  /** Adresse aus Sicht von ELVIS, z. B. http://{{host.address}}:{{options.port}} */
+  url: templated,
+  /** Token für „Authorization: Bearer …“, meist {{addon.secret}} */
+  token: templated.optional(),
+});
+
 export const addonManifestSchema = z
   .object({
     id: slug,
@@ -262,6 +276,11 @@ export const addonManifestSchema = z
     description: z.string().max(500).default(''),
     icon: z.string().max(40).optional(),
     url: z.string().url().optional(),
+    /** Anleitung als Markdown-Datei im Addon-Ordner (z. B. README.md); ELVIS zeigt sie im Store und beim Addon */
+    docs: z
+      .string()
+      .regex(/^(?!\/)(?!.*\.\.)[\w./-]+\.md$/, 'relativer Pfad zu einer .md-Datei ohne ..')
+      .optional(),
     arch: z.array(z.enum(['amd64', 'arm64'])).min(1).default(['amd64', 'arm64']),
     options: z.record(z.string().regex(/^[a-z][a-zA-Z0-9_]*$/), addonOptionSchema).default({}),
     containers: z.array(containerSchema).min(1),
@@ -277,6 +296,7 @@ export const addonManifestSchema = z
         printServers: z.array(printServerProvision).default([]),
         guestPrinters: z.array(guestPrinterProvision).default([]),
         workstations: z.array(workstationProvision).default([]),
+        messengers: z.array(messengerProvision).default([]),
       })
       .default({}),
     /**
@@ -496,6 +516,8 @@ export interface AddonStoreEntry {
   error: string | null;
   addonDir: string;
   installedVersion: string | null;
+  /** Anleitung vorhanden (GET /api/addons/store/:id/docs) */
+  hasDocs: boolean;
 }
 
 export type AddonStatus = 'installing' | 'running' | 'stopped' | 'partial' | 'waiting' | 'error' | 'updating' | 'removing';

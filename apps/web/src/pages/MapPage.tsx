@@ -3,6 +3,7 @@ import { GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents }
 import L, { type LatLngBoundsExpression, type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { Check, Flag, History, ListPlus, MapPin, Plane, Printer, Ship, Trash2, Undo2, X } from 'lucide-react';
 import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type OverpassFeature, type TacticalSign, type TrackedData, type TrafficHit, type Unit } from '@elvis/shared';
 import { api } from '../lib/api';
@@ -246,6 +247,18 @@ export function MapPage() {
   const fallback: [number, number] = [51.1657, 10.4515];
   const iPos: [number, number] | null = origin ? [origin.lat, origin.lon] : null;
   const fly = (pos: LatLngExpression, extra: Omit<FlyTarget, 'pos' | 'n'> = {}) => setFlyTarget((t) => ({ pos, ...extra, n: (t?.n ?? 0) + 1 }));
+  // /karte?lat=…&lon=…&name=… (z. B. ein Standort aus den Nachrichten) zeigt den Punkt wie einen Suchtreffer
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const lat = Number(params.get('lat'));
+    const lon = Number(params.get('lon'));
+    if (!params.has('lat') || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return;
+    const name = params.get('name') || 'Standort';
+    setSearchHit({ id: `link:${lat},${lon}`, kind: 'coordinate', name: name.slice(0, 120), detail: params.get('detail')?.slice(0, 200) ?? '', lat, lon, bounds: null, osm: null });
+    fly([lat, lon], { zoom: 17 });
+    setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
   /** Suchtreffer anfliegen: Straßen und Orte ganz zeigen, Adressen und Koordinaten nah heran */
   const showHit = (r: GeocodeResult) => {
     setSearchHit(r);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Boxes, FileText, Map as MapIcon, Play, Power, RotateCw, Settings2, Square, Trash2, Wrench } from 'lucide-react';
+import { ArrowLeft, BookOpen, Boxes, FileText, Map as MapIcon, Play, Power, RotateCw, Settings2, Square, Trash2, Wrench } from 'lucide-react';
 import type { InstalledAddon, OptionValues } from '@elvis/shared';
 import { api } from '../lib/api';
 import { fmtDateTime } from '../lib/format';
@@ -10,6 +10,7 @@ import { OptionsForm, validateOptions } from '../components/OptionsForm';
 import { Badge, Card, EmptyState, Loading, Modal, PageHeader, Toggle } from '../components/ui';
 import { AddonStatusBadge, OperationSteps } from './addons/common';
 import { JobCard } from './addons/JobCard';
+import { AddonDocs } from './addons/AddonDocs';
 
 const BUSY = new Set(['installing', 'updating', 'removing']);
 
@@ -224,6 +225,12 @@ export function AddonDetailPage() {
         )}
 
         {target && <LogsCard addon={addon} target={target} setTarget={setLogTarget} />}
+
+        {addon.manifest?.docs && (
+          <Card title="Anleitung" icon={<BookOpen size={18} />} className="span-3">
+            <AddonDocs id={addon.id} />
+          </Card>
+        )}
       </div>
 
       <Modal open={removing} title={`${addon.name} deinstallieren`} onClose={() => setRemoving(false)}>

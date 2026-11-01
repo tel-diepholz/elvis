@@ -17,6 +17,7 @@ const BEFORE_FORCES = `
   CREATE INDEX units_incident ON units(incident_id);
 `;
 
+const UNDO_TELEPHONY = 'DROP TABLE chat_reachability; DROP TABLE chat_messages; DROP TABLE chat_files; DROP TABLE calls; ALTER TABLE force_units DROP COLUMN mobile; ALTER TABLE units DROP COLUMN mobile';
 const UNDO_CONTACTS = 'DROP TABLE contact_category_members; DROP TABLE contacts; DROP TABLE contact_categories; ALTER TABLE personnel DROP COLUMN email';
 /** v37 zurückdrehen: Anforderungen samt Verweisen */
 const UNDO_MAIL = 'DROP TABLE mail_attachments; DROP TABLE mail_messages; DROP TABLE mail_keys';
@@ -35,6 +36,7 @@ describe('Migrationen', () => {
       const legacy = new Database(join(dir, 'elvis.sqlite'));
       legacy.exec('ALTER TABLE addons DROP COLUMN manifest');
       // v19: Rollen und Aufgaben (Spalten mit Fremdschlüssel lassen sich nicht einzeln entfernen)
+      legacy.exec(UNDO_TELEPHONY); // v45, v47
       legacy.exec('ALTER TABLE force_units DROP COLUMN email; ALTER TABLE messages DROP COLUMN sender_force_id; ALTER TABLE messages DROP COLUMN recipient_force_id'); // v41
       legacy.exec('ALTER TABLE units DROP COLUMN email'); // v40
       legacy.exec('DROP TABLE radio_ids; DROP TABLE user_last_roles'); // v44
@@ -82,6 +84,7 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec(UNDO_TELEPHONY);
       legacy.exec('DROP TABLE radio_ids; DROP TABLE user_last_roles');
       legacy.exec(UNDO_CONTACTS);
       legacy.exec(UNDO_MAIL);
@@ -101,6 +104,31 @@ describe('Migrationen', () => {
         { name: 'Florian 1/44-1', sign: '{"text":"HLF 20"}', status: 'eingetroffen', arrived_at: 't1', released_at: null, crew: 8 },
         { name: 'Florian 1/19-1', sign: '{"text":"LF 10 Sonder"}', status: 'entlassen', arrived_at: 't2', released_at: 't3', crew: 5 },
       ]);
+      db.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('übernimmt SMS in die gemeinsamen Nachrichten', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'elvis-mig-'));
+    try {
+      openDb(dir).close();
+      const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec('DROP TABLE chat_reachability; DROP TABLE chat_messages; DROP TABLE chat_files');
+      legacy.exec(`CREATE TABLE sms_messages (id INTEGER PRIMARY KEY, folder TEXT NOT NULL, port INTEGER, number TEXT NOT NULL, text TEXT NOT NULL,
+        status TEXT NOT NULL, error TEXT, seen INTEGER NOT NULL DEFAULT 0, date TEXT NOT NULL, created_by TEXT NOT NULL)`);
+      legacy.exec(`INSERT INTO sms_messages VALUES (7, 'inbox', 1, '+491711234567', 'Hallo', 'received', NULL, 0, 't1', 'Gateway'),
+        (9, 'sent', 2, '+491609999999', 'Rückruf', 'failed', 'Netz', 1, 't2', 'Max Müller')`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 1}`);
+      legacy.close();
+
+      const db = openDb(dir);
+      expect(db.prepare('SELECT id, channel, folder, peer, number, text, port, status, error, seen, date, created_by FROM chat_messages ORDER BY id').all()).toEqual([
+        { id: 7, channel: 'sms', folder: 'inbox', peer: '+491711234567', number: '+491711234567', text: 'Hallo', port: 1, status: 'received', error: null, seen: 0, date: 't1', created_by: 'Gateway' },
+        { id: 9, channel: 'sms', folder: 'sent', peer: '+491609999999', number: '+491609999999', text: 'Rückruf', port: 2, status: 'failed', error: 'Netz', seen: 1, date: 't2', created_by: 'Max Müller' },
+      ]);
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'sms_messages'").get()).toBeUndefined();
       db.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });

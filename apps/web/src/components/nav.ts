@@ -21,6 +21,8 @@ import {
   Radio,
   Cctv,
   MonitorSmartphone,
+  MessagesSquare,
+  Phone,
   Server,
   Shapes,
   Settings,
@@ -44,8 +46,10 @@ export interface NavItem {
   requiresAdmin?: boolean;
   /** Nur mit eingerichtetem Postfach (Einstellungen → E-Mail) */
   requiresMail?: boolean;
+  /** Nur mit einem Kanal für Nachrichten (SMS über die Telefonie oder ein Messenger) */
+  requiresChat?: boolean;
   /** Zähler für Ungelesenes (siehe Layout) */
-  badge?: 'personnelSheets' | 'messages' | 'mail';
+  badge?: 'personnelSheets' | 'messages' | 'mail' | 'chat';
 }
 
 export interface NavGroup {
@@ -62,6 +66,7 @@ export const NAV: NavGroup[] = [
       { to: '/wetter', label: 'Wetter', icon: CloudSun },
       { to: '/energie', label: 'Energie', icon: BatteryCharging },
       { to: '/funk', label: 'Funk', icon: Radio },
+      { to: '/telefonie', label: 'Telefonie', icon: Phone },
       { to: '/netzwerk', label: 'Netzwerk', icon: Network },
       { to: '/monitoring', label: 'Monitoring', icon: Activity },
       { to: '/kameras', label: 'Kameras', icon: Cctv },
@@ -69,6 +74,7 @@ export const NAV: NavGroup[] = [
       { to: '/drucken', label: 'Drucken', icon: Printer },
       { to: '/scans', label: 'Posteingang', icon: ScanLine, requiresLogin: true, badge: 'personnelSheets' },
       { to: '/mail', label: 'E-Mail', icon: AtSign, requiresLogin: true, requiresMail: true, badge: 'mail' },
+      { to: '/nachrichten', label: 'Nachrichten', icon: MessagesSquare, requiresLogin: true, requiresChat: true, badge: 'chat' },
       { to: '/kontakte', label: 'Kontakte', icon: Contact, requiresLogin: true },
     ],
   },

@@ -13,7 +13,12 @@ export interface RepoAddon {
   error: string | null;
   /** Herkunft für mitgelieferte Dateien (nicht an Clients ausliefern). */
   location: { kind: 'local'; dir: string } | { kind: 'remote'; base: string };
+  /** Anleitung (manifest.docs) als Markdown; bei Online-Repos mit zwischengespeichert, damit sie offline bleibt */
+  docs: string | null;
 }
+
+/** Größte Anleitung, die ELVIS übernimmt */
+export const MAX_DOCS_BYTES = 256 * 1024;
 
 const FETCH_TIMEOUT_MS = 10_000;
 
@@ -56,6 +61,13 @@ export class RepoService {
 
   list(): RepoAddon[] {
     return this.entries;
+  }
+
+  /** Anleitung eines Addons (Markdown) oder null */
+  docs(id: string): string | null {
+    const e = this.entries.find((x) => x.manifest?.id === id);
+    if (!e?.manifest) throw new HttpError(404, `Addon „${id}“ in keinem Repository gefunden`);
+    return e.docs;
   }
 
   manifest(id: string): { manifest: AddonManifest; repositoryId: string } {
@@ -104,8 +116,11 @@ export class RepoService {
     return repo.addons.map((addonDir) => {
       const file = join(dir, addonDir, 'addon.yaml');
       const location = { kind: 'local' as const, dir: join(dir, addonDir) };
-      if (!existsSync(file)) return { repository, addonDir, location, manifest: null, error: 'addon.yaml fehlt' };
-      return { repository, addonDir, location, ...parseManifest(readFileSync(file, 'utf8'), addonDir) };
+      if (!existsSync(file)) return { repository, addonDir, location, manifest: null, error: 'addon.yaml fehlt', docs: null };
+      const parsed = parseManifest(readFileSync(file, 'utf8'), addonDir);
+      const docsFile = parsed.manifest?.docs ? join(dir, addonDir, parsed.manifest.docs) : null;
+      const docs = docsFile && existsSync(docsFile) ? readFileSync(docsFile, 'utf8').slice(0, MAX_DOCS_BYTES) : null;
+      return { repository, addonDir, location, ...parsed, docs };
     });
   }
 
@@ -117,7 +132,13 @@ export class RepoService {
       const repoText = await this.fetchText(`${base}/repository.yaml`);
       const repo: AddonRepository = repositorySchema.parse(parseYaml(repoText));
       const files = await Promise.all(
-        repo.addons.map(async (dir) => ({ dir, text: await this.fetchText(`${base}/${dir}/addon.yaml`).catch((e: Error) => ({ error: e.message })) })),
+        repo.addons.map(async (dir) => {
+          const text = await this.fetchText(`${base}/${dir}/addon.yaml`).catch((e: Error) => ({ error: e.message }));
+          // Anleitung gleich mitladen: sie steht dann auch offline im Store
+          const docsPath = typeof text === 'string' ? parseManifest(text, dir).manifest?.docs : undefined;
+          const docs = docsPath ? await this.fetchText(`${base}/${dir}/${docsPath}`).catch(() => null) : null;
+          return { dir, text, docs: docs?.slice(0, MAX_DOCS_BYTES) ?? null };
+        }),
       );
       const snapshot = { repo, files };
       if (cacheFile) {
@@ -127,15 +148,17 @@ export class RepoService {
       return this.fromSnapshot(id, base, snapshot);
     } catch (err) {
       if (cacheFile && existsSync(cacheFile)) return this.fromSnapshot(id, base, JSON.parse(readFileSync(cacheFile, 'utf8')));
-      return [{ repository: { id, name: base, url: base }, addonDir: '', location: { kind: 'remote', base }, manifest: null, error: `Repository nicht erreichbar: ${(err as Error).message}` }];
+      return [{ repository: { id, name: base, url: base }, addonDir: '', location: { kind: 'remote', base }, manifest: null, error: `Repository nicht erreichbar: ${(err as Error).message}`, docs: null }];
     }
   }
 
-  private fromSnapshot(id: string, url: string, s: { repo: AddonRepository; files: { dir: string; text: string | { error: string } }[] }): RepoAddon[] {
+  private fromSnapshot(id: string, url: string, s: { repo: AddonRepository; files: { dir: string; text: string | { error: string }; docs?: string | null }[] }): RepoAddon[] {
     const repository = { id, name: s.repo.name, url };
-    return s.files.map(({ dir, text }) => {
+    return s.files.map(({ dir, text, docs }) => {
       const location = { kind: 'remote' as const, base: `${url}/${dir}` };
-      return typeof text === 'string' ? { repository, addonDir: dir, location, ...parseManifest(text, dir) } : { repository, addonDir: dir, location, manifest: null, error: text.error };
+      return typeof text === 'string'
+        ? { repository, addonDir: dir, location, ...parseManifest(text, dir), docs: docs ?? null }
+        : { repository, addonDir: dir, location, manifest: null, error: text.error, docs: null };
     });
   }
 

@@ -62,6 +62,7 @@ const toUnit = (r: Row): Unit => ({
   organization: r.organization as string,
   notes: r.notes as string,
   email: r.email as string,
+  mobile: r.mobile as string,
   sign: tacticalSignSchema.parse(JSON.parse(r.sign as string)),
   strength: { leaders: r.leaders as number, subLeaders: r.sub_leaders as number, crew: r.crew as number },
   section: r.section as string,
@@ -87,6 +88,7 @@ const unitParams = (u: Omit<Unit, 'id' | 'incidentId' | 'createdAt' | 'updatedAt
   organization: u.organization,
   notes: u.notes,
   email: u.email,
+  mobile: u.mobile,
   sign: JSON.stringify(u.sign),
   leaders: u.strength.leaders,
   subLeaders: u.strength.subLeaders,
@@ -407,9 +409,9 @@ export class Store {
     const ts = now();
     const info = this.db
       .prepare(
-        `INSERT INTO units (incident_id, parent_id, role, source_id, name, callsign, organization, notes, email, sign, leaders, sub_leaders, crew,
+        `INSERT INTO units (incident_id, parent_id, role, source_id, name, callsign, organization, notes, email, mobile, sign, leaders, sub_leaders, crew,
            section, status, lat, lon, position_source, position_at, position_accuracy_m, map_visible, created_at, arrived_at, released_at, updated_at)
-         VALUES (@incidentId, @parentId, @role, @sourceId, @name, @callsign, @organization, @notes, @email, @sign, @leaders, @subLeaders, @crew,
+         VALUES (@incidentId, @parentId, @role, @sourceId, @name, @callsign, @organization, @notes, @email, @mobile, @sign, @leaders, @subLeaders, @crew,
            @section, @status, @lat, @lon, @positionSource, @positionAt, @positionAccuracyM, @mapVisible, @ts, @arrivedAt, @releasedAt, @ts)`,
       )
       .run({ ...unitParams(u), incidentId: u.incidentId, ts });
@@ -422,7 +424,7 @@ export class Store {
     this.db
       .prepare(
         `UPDATE units SET parent_id=@parentId, role=@role, source_id=@sourceId, name=@name, callsign=@callsign, organization=@organization,
-         notes=@notes, email=@email, sign=@sign, leaders=@leaders, sub_leaders=@subLeaders, crew=@crew, section=@section, status=@status, lat=@lat,
+         notes=@notes, email=@email, mobile=@mobile, sign=@sign, leaders=@leaders, sub_leaders=@subLeaders, crew=@crew, section=@section, status=@status, lat=@lat,
          lon=@lon, position_source=@positionSource, position_at=@positionAt, position_accuracy_m=@positionAccuracyM, map_visible=@mapVisible, arrived_at=@arrivedAt, released_at=@releasedAt, updated_at=@ts WHERE id=@id`,
       )
       .run({ ...unitParams(u), id: u.id, ts: now() });
