@@ -1,3 +1,5 @@
+import { createServer, type IncomingHttpHeaders } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -251,6 +253,60 @@ describe('Addon-Lebenszyklus', () => {
     const sources = await req<MapSource[]>('GET', '/api/map/sources');
     expect(sources.body.map((s) => s.id)).toContain('tiles-basic');
     expect(app.docker!.addons.list()[0]!.status).toBe('running');
+    rmSync(repo, { recursive: true, force: true });
+  });
+  it('leitet die eigene Oberfläche eines Addons ohne Sitzungscookie weiter', async () => {
+    const seen: { method?: string; url?: string; headers?: IncomingHttpHeaders; body?: string }[] = [];
+    const upstream = createServer((rq, rs) => {
+      let body = '';
+      rq.on('data', (c) => (body += c));
+      rq.on('end', () => {
+        seen.push({ method: rq.method, url: rq.url, headers: rq.headers, body });
+        if (rq.url === '/') return rs.writeHead(200, { 'content-type': 'text/html' }).end('<h1>UI</h1>');
+        rs.writeHead(201, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true }));
+      });
+    });
+    await new Promise<void>((r) => upstream.listen(0, '127.0.0.1', r));
+    const port = (upstream.address() as AddressInfo).port;
+    const repo = mkdtempSync(join(tmpdir(), 'elvis-repo-'));
+    mkdirSync(join(repo, 'withui'));
+    writeFileSync(join(repo, 'repository.yaml'), 'name: Test\naddons: [withui, hello]\n');
+    writeFileSync(
+      join(repo, 'withui', 'addon.yaml'),
+      [
+        'id: withui',
+        'name: Mit Oberfläche',
+        'version: 1.0.0',
+        'options:',
+        `  port: { type: int, label: Port, default: ${port} }`,
+        'containers:',
+        '  - name: web',
+        '    image: ui:1',
+        'provides:',
+        '  ui: { name: Auswahl, url: "http://{{host.address}}:{{options.port}}" }',
+      ].join('\n'),
+    );
+    mkdirSync(join(repo, 'hello'));
+    writeFileSync(join(repo, 'hello', 'addon.yaml'), 'id: hello\nname: Hallo\nversion: 1.0.0\ncontainers:\n  - name: app\n    image: ui:1\n');
+    await setup({ builtinDir: repo });
+    const host = await addHost('local', '127.0.0.1', new FakeDocker(['ui:1']));
+    await req('POST', '/api/addons', { addonId: 'withui', hostId: host.id, options: {} });
+    await req('POST', '/api/addons', { addonId: 'hello', hostId: host.id, options: {} });
+    const installed = await waitFor('withui', (a) => a.status === 'running');
+    expect(installed.manifest?.provides.ui).toMatchObject({ name: 'Auswahl' });
+
+    const redirect = await app.server.inject({ method: 'GET', url: '/api/addons/withui/ui', headers });
+    expect(redirect.headers.location).toBe('/api/addons/withui/ui/');
+    const page = await req<string>('GET', '/api/addons/withui/ui/');
+    expect(page.status).toBe(200);
+    expect(page.body).toContain('<h1>UI</h1>');
+    const post = await req<{ ok: boolean }>('POST', '/api/addons/withui/ui/api/selection?x=1', { add: ['a'] });
+    expect(post).toEqual({ status: 201, body: { ok: true } });
+    expect(seen[1]).toMatchObject({ method: 'POST', url: '/api/selection?x=1', body: '{"add":["a"]}' });
+    expect(seen.every((s) => !s.headers?.cookie && !s.headers?.authorization)).toBe(true);
+
+    expect((await req('GET', '/api/addons/hello/ui/')).status).toBe(404);
+    upstream.close();
     rmSync(repo, { recursive: true, force: true });
   });
 });

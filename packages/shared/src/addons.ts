@@ -255,8 +255,18 @@ const workstationProvision = z.object({
 });
 
 /**
- * Hilfsdienst für einen Messenger, z. B. signal-cli im Daemon-Modus: das Modul „Signal“ (Treiber signal-cli) nutzt
- * ihn, wenn in den Moduleinstellungen keine eigene Adresse steht
+ * Eigene Bedienseite des Addons: ELVIS leitet /api/addons/<id>/ui/… (nur Admins) an diese Basisadresse weiter
+ * und bettet die Seite auf der Addon-Seite ein.
+ */
+const uiProvision = z.object({
+  name: z.string().min(1).max(80).default('Oberfläche'),
+  /** Basisadresse aus Sicht von ELVIS, z. B. http://{{host.address}}:{{options.port}}/ */
+  url: templated,
+});
+
+/**
+ * Hilfsdienst für einen Messenger, z. B. signal-cli im Daemon-Modus: das Modul „Signal“ (Treiber „signal-cli (Addon)“)
+ * nutzt Adresse und Token von dort
  */
 const messengerProvision = z.object({
   id: slug,
@@ -296,6 +306,7 @@ export const addonManifestSchema = z
         printServers: z.array(printServerProvision).default([]),
         guestPrinters: z.array(guestPrinterProvision).default([]),
         workstations: z.array(workstationProvision).default([]),
+        ui: uiProvision.optional(),
         messengers: z.array(messengerProvision).default([]),
       })
       .default({}),

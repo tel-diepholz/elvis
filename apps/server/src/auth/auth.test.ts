@@ -172,6 +172,7 @@ describe('Zugriffsregeln', () => {
     expect(accessLevel('POST', '/api/docker/setup/abc/done')).toBe('public');
     expect(accessLevel('GET', '/api/docker/hosts')).toBe('admin');
     expect(accessLevel('GET', '/api/addons?x=1')).toBe('admin');
+    expect(accessLevel('POST', '/api/addons/orthophotos/ui/api/selection')).toBe('admin');
     expect(accessLevel('POST', '/api/auth/pin')).toBe('user');
     expect(accessLevel('PUT', '/api/auth/role')).toBe('user');
     expect(accessLevel('POST', '/api/system/task-templates')).toBe('admin');

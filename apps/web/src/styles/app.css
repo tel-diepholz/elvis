@@ -3742,6 +3742,15 @@ select.unit-status.has-children {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.addon-ui {
+  display: block;
+  width: 100%;
+  height: 75vh;
+  min-height: 420px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev);
+}
 .command-box {
   display: flex;
   align-items: center;
