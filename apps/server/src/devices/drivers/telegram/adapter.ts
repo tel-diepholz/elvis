@@ -1,4 +1,4 @@
-import { phoneKey, type MessengerSetup, type MessengerSetupInput, type MessengerState } from '@elvis/shared';
+import { isChatImage, phoneKey, type MessengerSetup, type MessengerSetupInput, type MessengerState } from '@elvis/shared';
 import { BaseAdapter, CommandError, type AdapterContext } from '../../adapter.js';
 import type { DriverVault, MessengerAdapter, MessengerBus, OutgoingChat, ReachabilityResult, SendResult } from '../../messaging/bus.js';
 import { gramjsApi, type TelegramApi, type TgIncoming, type TgPeer } from './api.js';
@@ -40,7 +40,7 @@ export class TelegramAdapter extends BaseAdapter<'telegram'> implements Messenge
       status: 'connecting',
       account: null,
       link: { connected: false, target: 'Telegram (MTProto)', error: null, lastEventAt: null },
-      capabilities: { images: true, location: true, reachability: true },
+      capabilities: { images: true, files: true, location: true, reachability: true },
       setup: null,
     } satisfies MessengerState);
     this.online = false;
@@ -192,7 +192,8 @@ export class TelegramAdapter extends BaseAdapter<'telegram'> implements Messenge
     const api = this.need();
     const peer = await this.resolve(msg);
     let id: number;
-    if (msg.attachment) id = await api.sendPhoto(peer, msg.attachment.path, msg.text);
+    if (msg.attachment && isChatImage(msg.attachment.mimeType)) id = await api.sendPhoto(peer, msg.attachment.path, msg.text);
+    else if (msg.attachment) id = await api.sendDocument(peer, msg.attachment.path, msg.attachment.name, msg.text);
     else if (msg.text) id = await api.sendText(peer, msg.text);
     else id = 0;
     if (msg.location) {

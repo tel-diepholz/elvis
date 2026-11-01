@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Flag, ImagePlus, MapPin, Send, Truck, X } from 'lucide-react';
+import { Flag, MapPin, Send, Truck, X } from 'lucide-react';
 import {
-  CHAT_IMAGE_TYPES,
   CHAT_TEXT_MAX,
   SMS_MAX_LENGTH,
   formatPhone,
@@ -18,6 +17,7 @@ import { useActiveIncident } from '../../lib/hooks';
 import { useDevice } from '../../lib/live';
 import { useToast } from '../../lib/toast';
 import { ChannelIcon } from './ChannelIcon';
+import { AttachmentChip, DocumentAttachButton, attachmentProblem } from './DocumentAttach';
 
 export interface ReplyTarget {
   /** Rufnummern, die zuletzt genutzte zuerst; leer = nur Kennung im Kanal */
@@ -45,7 +45,6 @@ export function ThreadReply({ target, lastChannel, preset, onSent }: { target: R
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const [location, setLocation] = useState<ChatLocation | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
   // Anderes Gespräch: alles zurücksetzen
@@ -72,7 +71,6 @@ export function ThreadReply({ target, lastChannel, preset, onSent }: { target: R
   const count = smsParts(text);
   const outsideWindow = channel === 'whatsapp' && info?.window24h && number && !waWindow[number];
 
-  const upload = useMutation({ mutationFn: api.uploadChatFile, onSuccess: setAttachment, onError: (e) => toast('error', e.message) });
   const send = useMutation({
     mutationFn: () =>
       api.sendChat({
@@ -99,8 +97,8 @@ export function ThreadReply({ target, lastChannel, preset, onSent }: { target: R
       ? null
       : text.length > max
         ? `Höchstens ${max} Zeichen`
-        : attachment && !info?.images
-          ? 'Bilder gehen nicht per SMS'
+        : info
+          ? attachmentProblem(attachment, [info])
           : null;
   const ready = !!channel && !problem && (!!text.trim() || !!attachment || !!location) && !send.isPending;
 
@@ -144,15 +142,7 @@ export function ThreadReply({ target, lastChannel, preset, onSent }: { target: R
       </div>
       {(attachment || location) && (
         <div className="chat-extras">
-          {attachment && (
-            <span className="chat-chip">
-              <img src={api.chatFileUrl(attachment.id)} alt="" />
-              {attachment.name}
-              <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label="Bild entfernen" onClick={() => setAttachment(null)}>
-                <X size={14} />
-              </button>
-            </span>
-          )}
+          {attachment && <AttachmentChip attachment={attachment} onRemove={() => setAttachment(null)} />}
           {location && (
             <span className="chat-chip">
               <MapPin size={14} />
@@ -177,16 +167,7 @@ export function ThreadReply({ target, lastChannel, preset, onSent }: { target: R
           disabled={!channel}
         />
         <div className="thread-reply-actions">
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon"
-            title={info?.images === false ? 'Bilder gehen nicht per SMS' : 'Bild anhängen'}
-            aria-label="Bild anhängen"
-            disabled={upload.isPending || !info?.images}
-            onClick={() => fileRef.current?.click()}
-          >
-            <ImagePlus size={18} />
-          </button>
+          <DocumentAttachButton compact disabledReason={info && !info.images && !info.files ? `Anhänge gehen nicht per ${info.label}` : null} onAttached={setAttachment} />
           {incidentPos && (
             <button type="button" className="btn btn-ghost btn-icon" title="Einsatzort anhängen" aria-label="Einsatzort anhängen" onClick={() => setLocation({ ...incidentPos, label: 'Einsatzort' })}>
               <Flag size={18} />
@@ -201,17 +182,6 @@ export function ThreadReply({ target, lastChannel, preset, onSent }: { target: R
             <Send size={18} />
           </button>
         </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept={CHAT_IMAGE_TYPES.join(',')}
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) upload.mutate(f);
-            e.target.value = '';
-          }}
-        />
       </div>
     </div>
   );

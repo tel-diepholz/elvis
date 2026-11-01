@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { phoneKey, smsParts, type AuditEntry, type CallRecord, type ChatAttachment, type ChatAvailability, type ChatList, type ChatMessage, type ChatReachability, type ChatThread, type ForceUnit, type Incident, type JournalEntry, type Message, type Role, type Unit } from '@elvis/shared';
+import { phoneKey, smsParts, type AuditEntry, type CallRecord, type ChatAttachment, type ChatAvailability, type ChatList, type ChatMessage, type ChatReachability, type ChatThread, type DocumentListing, type ForceUnit, type Incident, type IncidentDocument, type JournalEntry, type Message, type Role, type Unit } from '@elvis/shared';
 import { simImage, simPeer } from '../devices/sim/messenger.js';
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
@@ -41,6 +41,17 @@ afterEach(async () => {
 });
 
 const received = (number: string, text: string) => app.chat.ingestSms({ port: 1, number, text, receivedAt: new Date().toISOString() });
+/** Datei in die Dokumente eines Einsatzes hochladen und als Anhang übernehmen */
+async function fromDocument(file: { name: string; type: string; data: Buffer }): Promise<ChatAttachment> {
+  const incidents = (await req<Incident[]>('GET', '/api/incidents')).body;
+  const inc = incidents.find((i) => i.closedAt === null) ?? (await req<Incident>('POST', '/api/incidents', { title: 'Anhänge' })).body;
+  const doc = await app.server.inject({ method: 'POST', url: `/api/incidents/${inc.id}/documents`, ...multipart(file) });
+  expect(doc.statusCode).toBe(201);
+  const res = await req<ChatAttachment>('POST', '/api/chat/files/from-document', { documentId: doc.json<{ id: number }>().id });
+  expect(res.status).toBe(201);
+  return res.body;
+}
+
 const sentList = async () => (await req<ChatList>('GET', '/api/chat/messages?folder=sent')).body.items;
 const settled = () => until(async () => (await sentList()).every((m) => m.status !== 'sending'));
 
@@ -190,9 +201,7 @@ describe('Nachrichten: Messenger', () => {
   });
 
   it('sendet über mehrere Kanäle mit Bild, Zustellbestätigung und Fehlern', async () => {
-    const up = await app.server.inject({ method: 'POST', url: '/api/chat/files', ...multipart({ name: 'karte.png', type: 'image/png', data: simImage() }) });
-    expect(up.statusCode).toBe(201);
-    const attachment = up.json<ChatAttachment>();
+    const attachment = await fromDocument({ name: 'karte.png', type: 'image/png', data: simImage() });
     const res = await req<ChatMessage[]>('POST', '/api/chat/send', {
       to: [
         { channel: 'signal', to: '0171 1234567' },
@@ -215,9 +224,16 @@ describe('Nachrichten: Messenger', () => {
     expect((await req('POST', '/api/chat/send', { to: [{ channel: 'sms', to: '0171 1234567' }], attachmentId: attachment.id })).status).toBe(400);
     expect((await req('POST', '/api/chat/send', { to: [{ channel: 'whatsapp', to: 'max' }], text: 'x' })).status).toBe(400);
     expect((await req('POST', '/api/chat/send', { to: [{ channel: 'signal', to: '0171 1234567' }] })).status).toBe(400);
-    // Nur Bilder
-    const pdf = await app.server.inject({ method: 'POST', url: '/api/chat/files', ...multipart({ name: 'x.pdf', type: 'application/pdf', data: Buffer.from('%PDF') }) });
-    expect(pdf.statusCode).toBe(415);
+    // Dateien aus den Dokumenten: über Messenger ja, per SMS nicht; Download nur als Anhang
+    const pdf = await fromDocument({ name: 'Lageplan.pdf', type: 'application/pdf', data: Buffer.from('%PDF-1.4') });
+    expect(pdf).toMatchObject({ name: 'Lageplan.pdf', mimeType: 'application/pdf', size: 8 });
+    expect((await req('POST', '/api/chat/send', { to: [{ channel: 'sms', to: '0171 1234567' }], text: 'Plan', attachmentId: pdf.id })).body).toMatchObject({ error: 'SMS kann keine Dateien übertragen' });
+    expect((await req('POST', '/api/chat/send', { to: [{ channel: 'signal', to: '0171 1234567' }], attachmentId: pdf.id })).status).toBe(202);
+    const dl = await app.server.inject({ method: 'GET', url: `/api/chat/files/${pdf.id}`, headers: { cookie: admin } });
+    expect(dl.headers['content-disposition']).toBe("attachment; filename*=UTF-8''Lageplan.pdf");
+    // Vom eigenen Rechner gibt es keine Anhänge mehr
+    expect((await app.server.inject({ method: 'POST', url: '/api/chat/files', ...multipart({ name: 'x.png', type: 'image/png', data: simImage() }) })).statusCode).toBe(404);
+    expect((await req('POST', '/api/chat/files/from-document', { documentId: 99999 })).status).toBe(404);
 
     await req('POST', '/api/chat/send', { to: [{ channel: 'telegram', to: '0171 1234567' }], text: 'Test #fehler' });
     await settled();
@@ -277,6 +293,20 @@ describe('Nachrichten: Gespräche', () => {
     expect((await req<ChatThread[]>('GET', '/api/chat/threads')).body.map((t) => t.unread)).toEqual([0, 1]);
     expect((await req<{ count: number }>('GET', '/api/chat/unread')).body.count).toBe(1);
   });
+
+  it('löscht ein ganzes Gespräch über alle Rufnummern und Kanäle', async () => {
+    const contact = (await req<{ id: number }>('POST', '/api/contacts', { kind: 'person', lastName: 'Muster', firstName: 'Max', phones: [{ label: 'Mobil', number: '0171 1234567' }, { label: 'Dienst', number: '0160 7654321' }] })).body;
+    received('+491711234567', 'Per SMS');
+    await app.chat.ingest({ channel: 'signal', peer: '+491607654321', number: '+491607654321', peerName: null, text: 'Per Signal', attachment: null, location: null, externalId: 's1', receivedAt: new Date().toISOString() });
+    await app.chat.ingest({ channel: 'threema', peer: 'ECHOECHO', number: null, peerName: 'Unbekannt', text: 'Bleibt', attachment: null, location: null, externalId: 't1', receivedAt: new Date().toISOString() });
+
+    const res = await req<{ removed: number }>('DELETE', `/api/chat/thread?key=contact:${contact.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body.removed).toBe(2);
+    expect((await req<ChatThread[]>('GET', '/api/chat/threads')).body.map((t) => t.key)).toEqual(['threema:ECHOECHO']);
+    expect((await req('DELETE', `/api/chat/thread?key=contact:${contact.id}`)).status).toBe(404);
+    expect((await req<{ removed: number }>('DELETE', '/api/chat/thread?key=threema:ECHOECHO')).body.removed).toBe(1);
+  });
 });
 
 describe('Einrichtung der Messenger', () => {
@@ -335,6 +365,28 @@ describe('Anrufliste', () => {
       ['in', 'Muster, Max', 'Telekom 1', null],
     ]);
     expect(calls[1]!.durationS).toBe(125);
+  });
+});
+
+describe('Bild aus einer Nachricht in die Dokumente', () => {
+  it('legt das Bild im gewählten Ordner des Einsatzes ab', async () => {
+    const inc = (await req<Incident>('POST', '/api/incidents', { title: 'Hochwasser' })).body;
+    const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+    await app.chat.ingest({ channel: 'signal', peer: '+491711234567', number: '+491711234567', peerName: 'Max', text: 'Deich', attachment: { name: 'deich.png', mimeType: 'image/png', data: png }, location: null, externalId: 'img1', receivedAt: new Date().toISOString() });
+    const msg = (await req<ChatMessage[]>('GET', '/api/chat/thread?key=%2B491711234567')).body[0]!;
+    const listing = (await req<DocumentListing>('GET', `/api/incidents/${inc.id}/documents`)).body;
+    const fotos = listing.folders.find((f) => f.name === 'Fotos')!;
+
+    const res = await req<IncidentDocument>('POST', `/api/chat/messages/${msg.id}/document`, { incidentId: inc.id, folderId: fotos.id, description: 'Signal von Max' });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ folderId: fotos.id, filename: 'deich.png', mimeType: 'image/png', sizeBytes: png.length, description: 'Signal von Max' });
+    const content = await app.server.inject({ method: 'GET', url: `/api/documents/${res.body.id}/content`, headers: { cookie: admin } });
+    expect(content.rawPayload.equals(png)).toBe(true);
+    // Das Bild bleibt im Chat erhalten
+    expect((await req<ChatMessage>('GET', `/api/chat/messages/${msg.id}`)).body.attachment?.name).toBe('deich.png');
+
+    const text = received('+491711234567', 'Ohne Bild');
+    expect((await req('POST', `/api/chat/messages/${text.id}/document`, { incidentId: inc.id })).status).toBe(400);
   });
 });
 

@@ -94,6 +94,8 @@ export interface MessengerState {
   link: { connected: boolean; target: string; error: string | null; lastEventAt: string | null } | null;
   capabilities: {
     images: boolean;
+    /** Kann andere Dateien als Bilder übertragen (PDF, Office …) */
+    files: boolean;
     location: boolean;
     /** Kann prüfen, ob eine Rufnummer den Messenger nutzt */
     reachability: boolean;
@@ -192,6 +194,8 @@ export interface ChatChannelInfo {
   account: string | null;
   status: MessengerStatus;
   images: boolean;
+  /** Andere Dateien als Bilder (PDF, Office …) */
+  files: boolean;
   location: boolean;
   reachability: boolean;
   /** WhatsApp Cloud API: freie Nachrichten nur bis 24 h nach der letzten Nachricht der Gegenstelle */
@@ -225,6 +229,11 @@ export const CHAT_TEXT_MAX = 4000;
 export const CHAT_ATTACHMENT_MAX_BYTES = 16 * 1024 * 1024;
 /** Bildtypen, die sich verschicken lassen */
 export const CHAT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+/** Als Bild anzeigen und senden; alles andere geht als Datei */
+export const isChatImage = (mimeType: string): boolean => CHAT_IMAGE_TYPES.includes(mimeType);
+
+/** Dokument aus der Dokumentverwaltung als Anhang einer Nachricht */
+export const chatFromDocumentSchema = z.object({ documentId: z.number().int().positive() });
 
 export const chatLocationSchema = z.object({
   lat: z.number().min(-90).max(90),
@@ -239,11 +248,19 @@ export const chatRecipientSchema = z.object({
 });
 export type ChatRecipient = z.output<typeof chatRecipientSchema>;
 
+/** Bild einer Nachricht in die Dokumente eines Einsatzes übernehmen; folderId null = oberste Ebene */
+export const chatToDocumentSchema = z.object({
+  incidentId: z.number().int().positive(),
+  folderId: z.number().int().positive().nullable().default(null),
+  description: z.string().trim().max(500).default(''),
+});
+export type ChatToDocument = z.input<typeof chatToDocumentSchema>;
+
 export const chatDraftSchema = z
   .object({
     to: z.array(chatRecipientSchema).min(1, 'Mindestens ein Empfänger').max(20, 'Höchstens 20 Empfänger'),
     text: z.string().trim().max(CHAT_TEXT_MAX, `Höchstens ${CHAT_TEXT_MAX} Zeichen`).default(''),
-    /** Vorher hochgeladenes Bild */
+    /** Vorher aus den Dokumenten übernommener Anhang (Bild oder Datei) */
     attachmentId: z
       .string()
       .regex(/^[0-9a-f]{32}$/)

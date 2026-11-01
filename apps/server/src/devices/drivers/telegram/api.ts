@@ -45,6 +45,8 @@ export interface TelegramApi {
   onReadOutbox(fn: (peerId: string, maxId: number) => void): void;
   sendText(peer: TgPeer, text: string): Promise<number>;
   sendPhoto(peer: TgPeer, path: string, caption: string): Promise<number>;
+  /** Datei als Dokument; die Datei liegt unter einem internen Namen, daher den Dateinamen mitgeben */
+  sendDocument(peer: TgPeer, path: string, filename: string, caption: string): Promise<number>;
   sendLocation(peer: TgPeer, lat: number, lon: number): Promise<number>;
   /** Rufnummern als Kontakte des Kontos übernehmen: wer Telegram nutzt, kommt mit Kennung zurück */
   importContacts(numbers: string[]): Promise<Map<string, TgPeer>>;
@@ -121,6 +123,8 @@ export function gramjsApi(o: { apiId: number; apiHash: string; session: string }
     },
     sendText: async (p, text) => (await client.sendMessage(input(p), { message: text })).id,
     sendPhoto: async (p, path, caption) => (await client.sendFile(input(p), { file: path, caption, forceDocument: false })).id,
+    sendDocument: async (p, path, filename, caption) =>
+      (await client.sendFile(input(p), { file: path, caption, forceDocument: true, attributes: [new Api.DocumentAttributeFilename({ fileName: filename })] })).id,
     sendLocation: async (p, lat, lon) =>
       sentId(await client.invoke(new Api.messages.SendMedia({ peer: input(p), media: new Api.InputMediaGeoPoint({ geoPoint: new Api.InputGeoPoint({ lat, long: lon }) }), message: '', randomId: generateRandomBigInt() }))),
     importContacts: async (numbers) => {

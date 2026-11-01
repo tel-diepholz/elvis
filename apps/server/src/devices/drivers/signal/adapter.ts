@@ -78,7 +78,7 @@ export class SignalCliAdapter extends BaseAdapter<'signal'> implements Messenger
       status: 'connecting',
       account: null,
       link: { connected: false, target: opts.endpoint()?.url ?? 'signal-cli', error: null, lastEventAt: null },
-      capabilities: { images: true, location: false, reachability: true },
+      capabilities: { images: true, files: true, location: false, reachability: true },
       setup: null,
     } satisfies MessengerState);
     this.online = false;

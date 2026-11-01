@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, Search, Trash2, UserPlus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, FileText, FolderInput, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, Search, Trash2, UserPlus } from 'lucide-react';
 import {
   CHAT_CHANNEL_LABEL,
   CHAT_CHANNELS,
@@ -9,6 +9,7 @@ import {
   MESSAGE_BODY_MAX,
   MESSAGE_PARTY_MAX,
   formatPhone,
+  isChatImage,
   phoneKey,
   type ChatChannel,
   type ChatMessage,
@@ -17,12 +18,13 @@ import {
   type MessageInput,
 } from '@elvis/shared';
 import { api } from '../lib/api';
-import { fmtDateTime, fmtTime } from '../lib/format';
+import { fmtBytes, fmtDateTime, fmtTime } from '../lib/format';
 import { useActiveIncident } from '../lib/hooks';
 import { useToast } from '../lib/toast';
-import { EmptyState, Loading, Modal, PageHeader } from '../components/ui';
+import { EmptyState, Field, Loading, Modal, PageHeader } from '../components/ui';
 import { ContactForm, emptyContact } from '../components/contacts/ContactForm';
 import { ChannelIcon } from '../components/chat/ChannelIcon';
+import { FolderSelect } from '../components/documents/FolderTree';
 import { ChatComposer, type ChatDraftForm } from '../components/chat/ChatComposer';
 import { ThreadReply, type ReplyTarget } from '../components/chat/ThreadReply';
 import { MessageForm } from '../components/messages/MessageForm';
@@ -68,6 +70,7 @@ export function ChatPage() {
   const [search, setSearch] = useState('');
   const [asMessage, setAsMessage] = useState<ChatMessage | null>(null);
   const [asContact, setAsContact] = useState<string | null>(null);
+  const [asDocument, setAsDocument] = useState<ChatMessage | null>(null);
   const { data: incident } = useActiveIncident();
   const { data: avail } = useQuery({ queryKey: ['chat', 'available'], queryFn: api.chatAvailable });
   const available = !!avail?.available;
@@ -184,6 +187,7 @@ export function ChatPage() {
               onBack={() => select(null)}
               onSent={(m) => m[0] && m[0].thread !== selected.key && select(m[0].thread)}
               onMessage={incident ? setAsMessage : undefined}
+              onDocument={incident ? setAsDocument : undefined}
               onContact={setAsContact}
             />
           ) : (
@@ -199,6 +203,9 @@ export function ChatPage() {
       </Modal>
       <Modal open={asMessage !== null && !!incident} title="Eingangsmeldung aus Nachricht" onClose={() => setAsMessage(null)} wide>
         {asMessage && incident && <ChatToMessage incident={incident} msg={asMessage} onDone={() => setAsMessage(null)} />}
+      </Modal>
+      <Modal open={asDocument !== null && !!incident} title="In Dokumente übernehmen" onClose={() => setAsDocument(null)}>
+        {asDocument && incident && <ChatToDocumentForm incident={incident} msg={asDocument} onDone={() => setAsDocument(null)} />}
       </Modal>
       <Modal open={asContact !== null} title="Als Kontakt anlegen" onClose={() => setAsContact(null)} wide>
         {asContact !== null && <NewContact number={asContact} onDone={() => setAsContact(null)} />}
@@ -216,6 +223,7 @@ function ThreadView({
   onBack,
   onSent,
   onMessage,
+  onDocument,
   onContact,
 }: {
   thread: ChatThread;
@@ -226,6 +234,8 @@ function ThreadView({
   onSent: (m: ChatMessage[]) => void;
   /** Nur mit laufendem Einsatz */
   onMessage?: (m: ChatMessage) => void;
+  /** Bild in die Dokumente des Einsatzes übernehmen; nur mit laufendem Einsatz */
+  onDocument?: (m: ChatMessage) => void;
   onContact: (number: string) => void;
 }) {
   const toast = useToast();
@@ -233,7 +243,11 @@ function ThreadView({
   const exists = thread.count > 0;
   const { data: messages = [] } = useQuery({ queryKey: ['chat', 'thread', thread.key], queryFn: () => api.chatThread(thread.key), enabled: exists });
   const seen = useMutation({ mutationFn: () => api.markChatThreadSeen(thread.key) });
-  const remove = useMutation({ mutationFn: (id: number) => api.removeChat(id), onError: (e) => toast('error', e.message) });
+  const remove = useMutation({
+    mutationFn: () => api.removeChatThread(thread.key),
+    onSuccess: (r) => (toast('success', `Gespräch gelöscht (${r.removed} ${r.removed === 1 ? 'Nachricht' : 'Nachrichten'})`), onBack()),
+    onError: (e) => toast('error', e.message),
+  });
   const endRef = useRef<HTMLDivElement>(null);
   const name = threadName(thread);
 
@@ -278,6 +292,17 @@ function ThreadView({
             <UserPlus size={18} />
           </button>
         )}
+        {exists && (
+          <button
+            className="btn btn-ghost btn-icon"
+            title="Gespräch löschen"
+            aria-label="Gespräch löschen"
+            disabled={remove.isPending}
+            onClick={() => window.confirm(`Gespräch mit ${name} löschen? Alle ${thread.count} Nachrichten über alle Messenger und Rufnummern werden gelöscht.`) && remove.mutate()}
+          >
+            <Trash2 size={18} />
+          </button>
+        )}
       </header>
 
       <div className="thread-messages">
@@ -292,11 +317,16 @@ function ThreadView({
               {divider && <div className="thread-day muted small">{divider}</div>}
               <div className={`thread-bubble ${m.folder === 'inbox' ? 'in' : 'out'} ${m.status === 'failed' ? 'failed' : ''}`}>
                 {m.text && <span className="thread-text">{m.text}</span>}
-                {m.attachment && (
-                  <a className="chat-image" href={api.chatFileUrl(m.attachment.id)} target="_blank" rel="noreferrer" title={m.attachment.name}>
-                    <img src={api.chatFileUrl(m.attachment.id)} alt={m.attachment.name} loading="lazy" />
-                  </a>
-                )}
+                {m.attachment &&
+                  (isChatImage(m.attachment.mimeType) ? (
+                    <a className="chat-image" href={api.chatFileUrl(m.attachment.id)} target="_blank" rel="noreferrer" title={m.attachment.name}>
+                      <img src={api.chatFileUrl(m.attachment.id)} alt={m.attachment.name} loading="lazy" />
+                    </a>
+                  ) : (
+                    <a className="chat-file" href={api.chatFileUrl(m.attachment.id)} download={m.attachment.name} title="Herunterladen">
+                      <FileText size={16} /> <span className="chat-file-name">{m.attachment.name}</span> <span className="muted small">{fmtBytes(m.attachment.size)}</span>
+                    </a>
+                  ))}
                 {m.location && (
                   <Link className="chat-location" to={mapLink(m.location, name)}>
                     <MapPin size={14} /> {m.location.label || `${m.location.lat.toFixed(5)}, ${m.location.lon.toFixed(5)}`} · In Karte zeigen
@@ -317,9 +347,11 @@ function ThreadView({
                         <MessageSquarePlus size={14} />
                       </button>
                     )}
-                    <button className="btn btn-ghost btn-icon btn-sm" title="Löschen" aria-label="Löschen" onClick={() => window.confirm('Nachricht löschen?') && remove.mutate(m.id)}>
-                      <Trash2 size={14} />
-                    </button>
+                    {onDocument && m.attachment && m.folder === 'inbox' && (
+                      <button className="btn btn-ghost btn-icon btn-sm" title="In Dokumente übernehmen" aria-label="In Dokumente übernehmen" onClick={() => onDocument(m)}>
+                        <FolderInput size={14} />
+                      </button>
+                    )}
                   </span>
                 </span>
                 {m.status === 'failed' && m.error && <span className="thread-error tone-alarm small">{m.error}</span>}
@@ -366,6 +398,53 @@ function ChatToMessage({ incident, msg, onDone }: { incident: Incident; msg: Cha
       pending={create.isPending}
       onSubmit={(input) => create.mutate(input)}
     />
+  );
+}
+
+/** Anhang einer Nachricht in die Dokumente des Einsatzes übernehmen: Ordner wählen (Vorgabe für Bilder „Fotos“), Beschreibung vorbelegt */
+function ChatToDocumentForm({ incident, msg, onDone }: { incident: Incident; msg: ChatMessage; onDone: () => void }) {
+  const toast = useToast();
+  const { data: listing } = useQuery({ queryKey: ['documents', incident.id], queryFn: () => api.documents(incident.id) });
+  const [folderId, setFolderId] = useState<number | null | undefined>(undefined);
+  const who = msg.name ?? (msg.number ? formatPhone(msg.number) : msg.peer);
+  const [description, setDescription] = useState(() =>
+    [`${CHAT_CHANNEL_LABEL[msg.channel]} ${msg.folder === 'inbox' ? 'von' : 'an'} ${who}, ${fmtDateTime(msg.date)}`, msg.text.trim()].filter(Boolean).join(': ').slice(0, 500),
+  );
+  const save = useMutation({
+    mutationFn: (target: number | null) => api.chatToDocument(msg.id, { incidentId: incident.id, folderId: target, description }),
+    onSuccess: (d) => (toast('success', `${d.filename} in den Dokumenten abgelegt`), onDone()),
+    onError: (e) => toast('error', e.message),
+  });
+  if (!listing) return <Loading />;
+  // Vorgabe: „Fotos“ bzw. „Sonstiges“ auf oberster Ebene, falls vorhanden
+  const preset = msg.attachment && isChatImage(msg.attachment.mimeType) ? 'Fotos' : 'Sonstiges';
+  const chosen = folderId !== undefined ? folderId : (listing.folders.find((f) => f.parentId === null && f.name === preset)?.id ?? null);
+  return (
+    <form
+      className="form-grid"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate(chosen);
+      }}
+    >
+      {msg.attachment && isChatImage(msg.attachment.mimeType) && (
+        <img className="chat-document-preview" src={api.chatFileUrl(msg.attachment.id)} alt={msg.attachment.name} />
+      )}
+      <Field label="Ordner" hint={`Dokumente des Einsatzes „${incident.title}“`}>
+        <FolderSelect folders={listing.folders} value={chosen} onChange={setFolderId} rootLabel="Einsatz (oberste Ebene)" />
+      </Field>
+      <Field label="Beschreibung">
+        <input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} />
+      </Field>
+      <div className="btn-row">
+        <button type="submit" className="btn btn-primary" disabled={save.isPending}>
+          <FolderInput size={14} /> Übernehmen
+        </button>
+        <button type="button" className="btn" onClick={onDone}>
+          Abbrechen
+        </button>
+      </div>
+    </form>
   );
 }
 

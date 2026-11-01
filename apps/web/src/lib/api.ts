@@ -10,6 +10,7 @@ import {
   type ChatSettings,
   type ChatSuggestion,
   type ChatThread,
+  type ChatToDocument,
   type MessengerId,
   type MessengerSetupInfo,
   type MessengerSetupInput,
@@ -280,17 +281,15 @@ export const api = {
   chatThread: (key: string) => request<ChatMessage[]>('GET', `/api/chat/thread?key=${encodeURIComponent(key)}`),
   markChatThreadSeen: (key: string) => request<{ marked: number }>('POST', '/api/chat/thread/seen', { key }),
   setChatSeen: (id: number, seen: boolean) => request<void>('POST', `/api/chat/messages/${id}/seen`, { seen }),
-  removeChat: (id: number) => request<void>('DELETE', `/api/chat/messages/${id}`),
+  chatToDocument: (id: number, input: ChatToDocument) => request<IncidentDocument>('POST', `/api/chat/messages/${id}/document`, input),
+  removeChatThread: (key: string) => request<{ removed: number }>('DELETE', `/api/chat/thread?key=${encodeURIComponent(key)}`),
   sendChat: (draft: ChatDraft) => request<ChatMessage[]>('POST', '/api/chat/send', draft),
   chatSuggest: (q: string) => request<ChatSuggestion[]>('GET', `/api/chat/suggest?q=${encodeURIComponent(q)}`),
   chatReachability: () => request<ChatReachability>('GET', '/api/chat/reachability'),
   whatsappWindow: () => request<Record<string, string>>('GET', '/api/chat/whatsapp-window'),
   checkChatReachability: (numbers: string[]) => request<ChatReachability>('POST', '/api/chat/reachability/check', { numbers }),
-  uploadChatFile: (file: File) => {
-    const form = new FormData();
-    form.append('file', file);
-    return request<ChatAttachment>('POST', '/api/chat/files', form);
-  },
+  /** Dokument aus der Dokumentverwaltung als Anhang übernehmen */
+  chatFileFromDocument: (documentId: number) => request<ChatAttachment>('POST', '/api/chat/files/from-document', { documentId }),
   chatFileUrl: (id: string) => `/api/chat/files/${id}`,
   chatSettings: () => request<ChatSettings>('GET', '/api/system/chat'),
   messengerSetup: (id: MessengerId) => request<MessengerSetupInfo>('GET', `/api/system/messengers/${id}/setup`),

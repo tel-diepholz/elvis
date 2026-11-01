@@ -394,7 +394,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     appLinkRoutes(api, appLinks);
     personnelRoutes(api, personnel);
     mailRoutes(api, mail);
-    chatRoutes(api, { chat, reachability, contacts });
+    chatRoutes(api, { chat, reachability, contacts, documents });
     telephonyRoutes(api, { calls });
     contactRoutes(api, { contacts, personnel });
     phonebookRoutes(api, { phonebook, store, notify: (t) => hub.invalidate(t) });

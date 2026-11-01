@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Flag, ImagePlus, MapPin, Truck, X } from 'lucide-react';
+import { Flag, MapPin, Truck, X } from 'lucide-react';
 import {
   CHAT_CHANNEL_LABEL,
-  CHAT_IMAGE_TYPES,
   CHAT_TEXT_MAX,
   SMS_MAX_LENGTH,
   formatPhone,
@@ -22,6 +21,7 @@ import { useDevice } from '../../lib/live';
 import { useToast } from '../../lib/toast';
 import { Field } from '../ui';
 import { ChannelIcon } from './ChannelIcon';
+import { AttachmentChip, DocumentAttachButton, attachmentProblem } from './DocumentAttach';
 import { NumberInput, splitNumbers } from './NumberInput';
 
 export interface ChatDraftForm {
@@ -56,7 +56,6 @@ export function ChatComposer({ initial, onDone, onSent }: { initial: Partial<Cha
   const [form, setForm] = useState<ChatDraftForm>({ to: '', text: '', location: null, ...initial });
   const [chosen, setChosen] = useState<Record<string, ChatChannel>>({});
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const tokens = splitNumbers(form.to);
 
   // Frei eingegebene Rufnummern, die ELVIS noch nicht kennt, gleich bei den Messengern prüfen
@@ -81,12 +80,12 @@ export function ChatComposer({ initial, onDone, onSent }: { initial: Partial<Cha
   });
   const used = new Set(recipients.map((r) => r.channel));
   const hasSms = used.has('sms');
-  const imagesOk = [...used].every((c) => c && info(c)?.images);
+  const usedInfo = [...used].map((c) => (c ? info(c) : undefined)).filter((i): i is ChatChannelInfo => !!i);
+  const noAttachments = usedInfo.find((i) => !i.images && !i.files);
   const port = form.port ?? avail?.defaultPort ?? undefined;
   const count = smsParts(form.text);
   const max = hasSms ? SMS_MAX_LENGTH : CHAT_TEXT_MAX;
 
-  const upload = useMutation({ mutationFn: api.uploadChatFile, onSuccess: setAttachment, onError: (e) => toast('error', e.message) });
   const send = useMutation({
     mutationFn: () =>
       api.sendChat({
@@ -114,9 +113,7 @@ export function ChatComposer({ initial, onDone, onSent }: { initial: Partial<Cha
           ? 'Text fehlt'
           : form.text.length > max
             ? `Höchstens ${max} Zeichen`
-            : attachment && !imagesOk
-              ? 'Bilder gehen nicht per SMS'
-              : null;
+            : attachmentProblem(attachment, usedInfo);
 
   const place = (label: string, pos: { lat: number; lon: number } | null) =>
     pos && (
@@ -182,29 +179,10 @@ export function ChatComposer({ initial, onDone, onSent }: { initial: Partial<Cha
       </Field>
       <div className="chat-extras">
         {attachment ? (
-          <span className="chat-chip">
-            <img src={api.chatFileUrl(attachment.id)} alt="" />
-            {attachment.name}
-            <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label="Bild entfernen" onClick={() => setAttachment(null)}>
-              <X size={14} />
-            </button>
-          </span>
+          <AttachmentChip attachment={attachment} onRemove={() => setAttachment(null)} />
         ) : (
-          <button type="button" className="btn btn-sm" disabled={upload.isPending || (recipients.length > 0 && !imagesOk)} title={recipients.length > 0 && !imagesOk ? 'Bilder gehen nicht per SMS' : undefined} onClick={() => fileRef.current?.click()}>
-            <ImagePlus size={14} /> {upload.isPending ? 'Lädt …' : 'Bild'}
-          </button>
+          <DocumentAttachButton disabledReason={noAttachments ? `Anhänge gehen nicht per ${noAttachments.label}` : null} onAttached={setAttachment} />
         )}
-        <input
-          ref={fileRef}
-          type="file"
-          accept={CHAT_IMAGE_TYPES.join(',')}
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) upload.mutate(f);
-            e.target.value = '';
-          }}
-        />
         {form.location ? (
           <span className="chat-chip">
             <MapPin size={14} />
