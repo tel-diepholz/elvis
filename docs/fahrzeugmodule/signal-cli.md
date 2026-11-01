@@ -7,7 +7,7 @@ signal-cli kommt immer aus dem Addon **„Signal (signal-cli)“**. Die Nachrich
 ## signal-cli bereitstellen
 
 Unter **Addons** das Addon „Signal (signal-cli)“ auf einem Docker-Host (amd64) installieren. Es baut einmalig ein
-Image mit signal-cli (native Fassung, keine Java-Laufzeit nötig) und nginx. signal-cli lauscht nur im Container; nginx
+Image mit signal-cli (JVM-Fassung mit Java 25; die native Fassung kann `register` über JSON-RPC nicht) und nginx. signal-cli lauscht nur im Container; nginx
 lässt nur Anfragen mit dem Token des Addons durch, denn die Schnittstelle von signal-cli hat keine Anmeldung. Adresse
 und Token meldet das Addon selbst an ELVIS (`provides.messengers`). Konto und Schlüssel liegen im Volume `data` des
 Addons und bleiben bei Updates erhalten. Signal sperrt alte signal-cli-Versionen nach einigen Monaten; neue Fassungen
