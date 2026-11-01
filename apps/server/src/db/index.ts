@@ -954,6 +954,35 @@ const MIGRATIONS: Migration[] = [
   // Signal: Kennung ist jetzt die UUID statt der Rufnummer – alte Prüfungen sofort wiederholen, damit Nachrichten mit
   // verborgener Rufnummer zugeordnet werden
   `UPDATE chat_reachability SET checked_at = '1970-01-01T00:00:00.000Z' WHERE channel = 'signal' AND peer = number;`,
+  // Tischtelefone (Snom): Grundbelegung der Tasten je Telefon, Überschreibungen gelten nur im jeweiligen Einsatz
+  `
+  CREATE TABLE phones (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    mac TEXT NOT NULL UNIQUE,
+    model TEXT NOT NULL,
+    extension TEXT NOT NULL,
+    display_name TEXT NOT NULL DEFAULT '',
+    auth_user TEXT NOT NULL DEFAULT '',
+    sip_password TEXT NOT NULL DEFAULT '',
+    keys_json TEXT NOT NULL DEFAULT '{}',
+    last_seen_at TEXT,
+    last_ip TEXT,
+    firmware TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE phone_key_overrides (
+    phone_id TEXT NOT NULL REFERENCES phones(id) ON DELETE CASCADE,
+    idx INTEGER NOT NULL,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    key_json TEXT NOT NULL,
+    updated_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (phone_id, idx)
+  );
+  CREATE INDEX phone_key_overrides_incident ON phone_key_overrides(incident_id);
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

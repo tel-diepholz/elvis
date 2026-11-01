@@ -39,3 +39,4 @@ export * from './chat';
 export * from './backup';
 export * from './routing';
 export * from './georef';
+export * from './phones';

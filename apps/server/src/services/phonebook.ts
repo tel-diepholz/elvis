@@ -11,12 +11,12 @@ export interface PhonebookEntry {
   number: string;
 }
 
-const xmlEscape = (s: string) => s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!);
+export const xmlEscape = (s: string) => s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!);
 // Steuerzeichen machen das XML ungültig
-const clean = (s: string) => s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/\s+/g, ' ').trim();
+export const clean = (s: string) => s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/\s+/g, ' ').trim();
 
 /**
- * Telefonbuch für DECT-Basen (Yealink W70B, „Remote Phone Book“): die Kontakte als XML im Yealink-Format. Die Basis
+ * Telefonbuch für DECT-Basen (Yealink W70B, „Remote Phone Book“) und Snom-Tischtelefone: die Kontakte als XML. Die Basis
  * ruft ohne Anmeldung ab und weist sich über ein geheimes Token in der URL aus; Admins können es neu erzeugen.
  * Je Telefonnummer ein Eintrag, die Bezeichnung (z. B. „Mobil“) hängt am Namen – so zeigt jedes Mobilteil sie an.
  */
@@ -40,7 +40,8 @@ export class PhonebookService {
     return token;
   }
 
-  private token(): string {
+  /** Aktuelles Token (für die Telefonbuch-URL in der Provisionierung der Tischtelefone) */
+  token(): string {
     const r = this.tokenRow();
     return r ? (JSON.parse(r.value) as string) : this.writeToken('System');
   }
@@ -100,5 +101,14 @@ export class PhonebookService {
       .map((e) => `  <DirectoryEntry>\n    <Name>${xmlEscape(e.name)}</Name>\n    <Telephone>${xmlEscape(e.number)}</Telephone>\n  </DirectoryEntry>\n`)
       .join('');
     return `<?xml version="1.0" encoding="UTF-8"?>\n<YealinkIPPhoneDirectory>\n${body}</YealinkIPPhoneDirectory>\n`;
+  }
+
+  /** XML für Snom-Tischtelefone (SnomIPPhoneDirectory, Verzeichnistaste) – prüft das Token */
+  snomXml(token: string, categoryId: number | null = null): string {
+    this.check(token);
+    const body = this.entries(undefined, categoryId)
+      .map((e) => `  <DirectoryEntry>\n    <Name>${xmlEscape(e.name)}</Name>\n    <Telephone>${xmlEscape(e.number)}</Telephone>\n  </DirectoryEntry>\n`)
+      .join('');
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<SnomIPPhoneDirectory>\n  <Title>Kontakte</Title>\n${body}</SnomIPPhoneDirectory>\n`;
   }
 }

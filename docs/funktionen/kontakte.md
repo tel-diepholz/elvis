@@ -22,3 +22,10 @@ setzen. Mobilteile zeigen das Telefonbuch dann unter *Directory → Remote Phone
   macht die alte URL ungültig, danach muss die neue an der Basis eingetragen werden.
 - Die Basis muss den Fahrzeugserver unter der Adresse in der URL erreichen. Kann sie den Hostnamen nicht auflösen,
   die IP-Adresse eintragen.
+
+## Telefonbuch für die Tischtelefone
+
+Die Snom-Tischtelefone zeigen die Kontakte auf der Taste *Verzeichnis*. ELVIS trägt das bei der Provisionierung selbst
+ein (`…/api/phonebook/<schlüssel>/snom.xml`, Format `SnomIPPhoneDirectory`), mit denselben Einträgen wie für die
+DECT-Basis. Schnellwahltasten können ebenfalls auf Kontakte zeigen und ändern sich mit dem Kontakt. Siehe
+[Tischtelefone (Snom)](../fahrzeugmodule/telefone-snom.md).

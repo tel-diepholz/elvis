@@ -68,6 +68,8 @@ import { contactRoutes } from './routes/contacts.js';
 import { ContactService } from './services/contacts.js';
 import { phonebookRoutes } from './routes/phonebook.js';
 import { PhonebookService } from './services/phonebook.js';
+import { phoneRoutes } from './routes/phones.js';
+import { PhoneService, type PhoneFetch } from './services/phones.js';
 import { backupRoutes } from './routes/backup.js';
 import { BackupService, type DriverFactory } from './services/backup/service.js';
 import { ElwCloudDriver, type BackupFetch } from './services/backup/elwCloud.js';
@@ -109,6 +111,7 @@ export interface App {
   printing: PrintService;
   scanning: ScanService;
   workstations: WorkstationService;
+  phones: PhoneService;
   appLinks: AppLinkService;
   personnel: PersonnelService;
   mail: MailService;
@@ -122,7 +125,7 @@ export interface App {
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; restart?: () => void } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; phoneFetch?: PhoneFetch; phonePushDelayMs?: number; restart?: () => void } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -256,8 +259,21 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     // Kontaktnamen stehen auch in den Nachrichten; neue oder geänderte Rufnummern gleich bei den Messengern prüfen
     hub.invalidate([...t, 'chat']);
     reachability.kick();
+    // Kontakt-Tasten der Telefone zeigen Namen und Nummer des Kontakts
+    phones.contactsChanged();
   });
   const phonebook = new PhonebookService(db, contacts);
+  const phones = new PhoneService(db, {
+    contacts: () => contacts.list(),
+    activeIncident: () => incidents.active(),
+    phonebookToken: () => phonebook.token(),
+    log: server.log,
+    fetch: opts.phoneFetch,
+    pushDelayMs: opts.phonePushDelayMs,
+  });
+  phones.onChange(() => hub.invalidate(['phones']));
+  // Überschreibungen der Tasten gelten nur im Einsatz
+  incidents.onClosed((incident) => phones.incidentClosed(incident.id));
   const trunkName = (port: number | null) => (port === null ? null : (devices.adapter('telephony')?.getState().trunks.find((t) => t.port === port)?.name ?? `GSM ${port}`));
   const calls = new CallLogService(db, { store, bus: telephonyBus, numbers: () => contacts.numberIndex(), trunkName, self: () => settings.get().vehicle.name, notify: (t) => hub.invalidate(t) });
   const chat = new ChatService(db, { store, devices, telephony: telephonyBus, messenger: messengerBus, numbers: () => contacts.numberIndex(), notify: (t) => hub.invalidate(t), dataDir: config.dataDir });
@@ -398,6 +414,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     telephonyRoutes(api, { calls });
     contactRoutes(api, { contacts, personnel });
     phonebookRoutes(api, { phonebook, store, notify: (t) => hub.invalidate(t) });
+    phoneRoutes(api, { phones, store, notify: (t) => hub.invalidate(t) });
     backupRoutes(api, { backup, restore });
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
@@ -435,6 +452,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     printing,
     scanning,
     workstations,
+    phones,
     appLinks,
     personnel,
     mail,
@@ -481,6 +499,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       mail.stop();
       backup.stop();
       reachability.stop();
+      phones.stop();
       hooks.stop();
       if (cleanupTimer) clearInterval(cleanupTimer);
       docker?.hosts.stop();
