@@ -1,173 +1,182 @@
-import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Bell, BookOpenText, Network, Radio, Siren, Wind } from 'lucide-react';
-import { JOURNAL_CATEGORY_LABELS, formatStrength, sumStrength, type Incident } from '@elvis/shared';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowUpToLine, Check, LayoutGrid, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  DASHBOARD_TILE_IDS,
+  DASHBOARD_TILE_TYPES,
+  DEFAULT_DASHBOARD,
+  compactDashboard,
+  findDashboardSpot,
+  type DashboardTile,
+  type DashboardTileType,
+  type DisplayTile,
+} from '@elvis/shared';
 import { api } from '../lib/api';
-import { compass, fmtDuration, fmtOpt, fmtTime } from '../lib/format';
-import { useActiveIncident, useNow } from '../lib/hooks';
-import { useAlerts, useDevice } from '../lib/live';
 import { useAuth } from '../lib/auth';
-import { LoginButton } from '../components/auth/Guards';
-import { UPLINK_KIND } from '../lib/labels';
-import { AlertList } from '../components/AlertPanel';
-import { WindCompass } from '../components/WindCompass';
-import { Badge, Card, Stat } from '../components/ui';
-import { deployedUnits } from './incident/UnitsView';
+import { useMediaQuery } from '../lib/hooks';
+import { useToast } from '../lib/toast';
+import { DashboardGrid } from '../components/dashboard/DashboardGrid';
+import { DASHBOARD_ICONS, HEADLESS } from '../components/dashboard/tiles';
+import { TileSettings } from '../components/display/GridEditor';
+import { Field, Loading, Modal } from '../components/ui';
 
-function IncidentSummary({ incident }: { incident: Incident }) {
-  const now = useNow();
-  const { data: journal = [] } = useQuery({ queryKey: ['journal', incident.id], queryFn: () => api.journal(incident.id) });
-  const { data: units = [] } = useQuery({ queryKey: ['units', incident.id], queryFn: () => api.units(incident.id) });
-  const active = deployedUnits(units);
+/** Anonyme Arbeitsplätze: Grundeinstellung ohne Einsatzdaten (bis auf den Hinweis zur Anmeldung) */
+const ANONYMOUS_TILES = compactDashboard(DEFAULT_DASHBOARD.tiles.filter((t) => t.type === 'incident' || !DASHBOARD_TILE_TYPES[t.type].requiresLogin));
 
-  return (
-    <Card
-      title="Laufender Einsatz"
-      icon={<Siren size={18} />}
-      className="span-2 card-incident"
-      actions={
-        <Link to="/einsatz" className="btn btn-sm">
-          Details
-        </Link>
-      }
-    >
-      <div className="incident-hero">
-        <div>
-          <div className="incident-keyword">{incident.keyword || 'Einsatz'}</div>
-          <div className="incident-title">{incident.title}</div>
-          {incident.location && <div className="muted">{incident.location}</div>}
-        </div>
-        <div className="grid-2">
-          <Stat label="Einsatzdauer" value={<span className="mono">{fmtDuration(incident.startedAt, now)}</span>} />
-          <Stat label="Kräfte" value={active.length} sub={formatStrength(sumStrength(active))} />
-        </div>
-      </div>
-      <h3 className="section-title">
-        <BookOpenText size={16} /> Letzte Einträge
-      </h3>
-      <ul className="mini-journal">
-        {journal
-          .slice(-5)
-          .reverse()
-          .map((e) => (
-            <li key={e.id}>
-              <span className="mono">{fmtTime(e.timestamp)}</span>
-              <Badge tone={e.category === 'system' ? 'muted' : 'info'}>{JOURNAL_CATEGORY_LABELS[e.category]}</Badge>
-              <span className="ellipsis">{e.text}</span>
-            </li>
-          ))}
-      </ul>
-    </Card>
-  );
-}
-
-function NoIncident() {
-  const { user } = useAuth();
-  if (!user) {
-    return (
-      <Card title="Einsatz" icon={<Siren size={18} />} className="span-2">
-        <div className="incident-empty">
-          <p className="muted">Einsatzdaten werden nur angemeldeten Benutzern angezeigt.</p>
-          <LoginButton className="btn btn-primary btn-lg" />
-        </div>
-      </Card>
-    );
-  }
-  return (
-    <Card title="Einsatz" icon={<Siren size={18} />} className="span-2">
-      <div className="incident-empty">
-        <div>
-          <p className="muted">Kein Einsatz aufgelegt. Einsatztagebuch, Kräfteübersicht und Dokumente werden mit dem Eröffnen eines Einsatzes freigeschaltet.</p>
-        </div>
-        <Link to="/einsatz" className="btn btn-primary btn-lg">
-          Einsatz eröffnen
-        </Link>
-      </div>
-    </Card>
-  );
-}
+const newId = (type: DashboardTileType) => `${type}-${Math.random().toString(36).slice(2, 8)}`;
 
 export function DashboardPage() {
-  const { data: incident } = useActiveIncident();
-  const alerts = useAlerts();
-  const weather = useDevice('weather');
-  const radio = useDevice('radio');
-  const network = useDevice('network');
-  const router = useDevice('router');
-  const link = router?.state.failover.members.find((m) => m.active);
+  const { user } = useAuth();
+  const stacked = useMediaQuery('(max-width: 900px)');
+  const toast = useToast();
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['dashboard', user?.id ?? 0], queryFn: api.dashboard, enabled: !!user });
+  const [draft, setDraft] = useState<DashboardTile[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [settingsId, setSettingsId] = useState<string | null>(null);
+  const editing = draft !== null;
 
-  const primary = network?.state.uplinks.find((u) => u.id === network.state.primaryUplinkId);
-  const radiosOnline = radio?.state.devices.filter((d) => d.online).length ?? 0;
-  const radioActive = radio?.state.devices.filter((d) => d.transmitting || d.receiving) ?? [];
+  // Abmelden oder Wechsel auf schmale Ansicht beendet das Bearbeiten
+  useEffect(() => {
+    if (!user || stacked) setDraft(null);
+  }, [user, stacked]);
+
+  const save = useMutation({
+    mutationFn: (tiles: DashboardTile[]) => api.saveDashboard({ tiles }),
+    onSuccess: (res) => {
+      qc.setQueryData(['dashboard', user?.id ?? 0], res);
+      setDraft(null);
+      toast('success', 'Übersicht gespeichert');
+    },
+    onError: (e) => toast('error', e.message),
+  });
+  const reset = useMutation({
+    mutationFn: api.resetDashboard,
+    onSuccess: (res) => {
+      qc.setQueryData(['dashboard', user?.id ?? 0], res);
+      setDraft(null);
+      toast('success', 'Grundeinstellung wiederhergestellt');
+    },
+    onError: (e) => toast('error', e.message),
+  });
+
+  if (user && !data) return <Loading />;
+  const saved = user ? data!.layout.tiles : ANONYMOUS_TILES;
+  const tiles = draft ?? saved;
+  const settingsTile = draft?.find((t) => t.id === settingsId) ?? null;
+
+  const add = (type: DashboardTileType) => {
+    const { w, h } = DASHBOARD_TILE_TYPES[type].size;
+    const spot = findDashboardSpot(tiles, w, h);
+    setDraft([...tiles, { id: newId(type), type, ...spot, w, h, config: {} }]);
+    setAdding(false);
+  };
+  const remove = (id: string) => {
+    setDraft(tiles.filter((t) => t.id !== id));
+    setSettingsId(null);
+  };
+  const setConfig = (id: string, config: DashboardTile['config']) => setDraft(tiles.map((t) => (t.id === id ? { ...t, config } : t)));
 
   return (
-    <div className="grid">
-      {incident ? <IncidentSummary incident={incident} /> : <NoIncident />}
-
-      <Card title="Meldungen" icon={<Bell size={18} />}>
-        <AlertList alerts={alerts.slice(0, 6)} compact />
-      </Card>
-
-      {weather && (
-        <Link to="/wetter" className="card card-link">
-          <h2 className="card-title">
-            <Wind size={18} /> Wetter
-          </h2>
-          <div className="wind-mini">
-            <WindCompass directionDeg={weather.state.windDirectionDeg} size={96} />
-            <div>
-              <Stat
-                label={weather.state.windDirectionDeg === null ? 'Wind' : `Wind aus ${compass(weather.state.windDirectionDeg)}`}
-                value={fmtOpt(weather.state.windSpeedMs)}
-                unit="m/s"
-                sub={`Böen ${fmtOpt(weather.state.windGustMs)} m/s`}
-              />
-              <div className="muted">
-                {fmtOpt(weather.state.temperatureC)} °C
-                {weather.state.humidityPercent !== null && ` · ${weather.state.humidityPercent} % rF`}
-              </div>
-            </div>
-          </div>
-        </Link>
+    <div className="dashboard">
+      {user && !stacked && (
+        <div className={`dash-toolbar ${editing ? 'editing' : ''}`}>
+          {editing ? (
+            <>
+              <strong className="dash-toolbar-title">Übersicht anpassen</strong>
+              <span className="muted dash-toolbar-hint">Kacheln ziehen zum Verschieben, Ecke unten rechts zum Ändern der Größe</span>
+              <button type="button" className="btn btn-sm" onClick={() => setAdding(true)}>
+                <Plus size={16} /> Kachel hinzufügen
+              </button>
+              <button type="button" className="btn btn-sm" onClick={() => setDraft(compactDashboard(tiles))} title="Leere Zeilen über den Kacheln entfernen">
+                <ArrowUpToLine size={16} /> Lücken schließen
+              </button>
+              {data?.custom && (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={reset.isPending}
+                  onClick={() => window.confirm('Eigene Anordnung verwerfen und die Grundeinstellung wiederherstellen?') && reset.mutate()}
+                >
+                  <RotateCcw size={16} /> Grundeinstellung
+                </button>
+              )}
+              <span className="dash-toolbar-spacer" />
+              <button type="button" className="btn btn-sm" onClick={() => setDraft(null)}>
+                Abbrechen
+              </button>
+              <button type="button" className="btn btn-sm btn-primary" disabled={save.isPending} onClick={() => save.mutate(tiles)}>
+                <Check size={16} /> Speichern
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDraft(saved)} title="Kacheln dieser Übersicht für Ihren Benutzer anordnen">
+              <LayoutGrid size={16} /> Anpassen
+            </button>
+          )}
+        </div>
       )}
 
-      {radio && (
-        <Link to="/funk" className="card card-link">
-          <h2 className="card-title">
-            <Radio size={18} /> Funk
-          </h2>
-          <div className="grid-2">
-            <Stat label="Funkgeräte" value={radiosOnline} unit={`/ ${radio.state.devices.length}`} tone={radiosOnline === radio.state.devices.length ? 'ok' : 'warn'} />
-          </div>
-          <div className="muted">{radioActive.length ? `Aktiv: ${radioActive.map((d) => `${d.name} (${d.transmitting ? 'TX' : 'RX'})`).join(', ')}` : 'Kein Funkverkehr'}</div>
-        </Link>
+      {tiles.length ? (
+        <DashboardGrid tiles={tiles} editing={editing} stacked={stacked} onChange={setDraft} onSettings={setSettingsId} onRemove={remove} />
+      ) : (
+        <div className="dash-empty">
+          <p className="muted">Keine Kacheln auf der Übersicht.</p>
+          {editing && (
+            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+              <Plus size={16} /> Kachel hinzufügen
+            </button>
+          )}
+        </div>
       )}
 
-      {(network || router) && (
-        <Link to="/netzwerk" className="card card-link">
-          <h2 className="card-title">
-            <Network size={18} /> Netzwerk
-          </h2>
-          <div className="grid-2">
-            {router ? (
-              <Stat
-                label="Internet"
-                value={!router.online ? '–' : link ? (link.kind === 'wan' ? 'WAN' : `SIM ${link.slot}`) : 'Nein'}
-                tone={!router.online || !link ? 'alarm' : router.state.failover.onBackup ? 'warn' : 'ok'}
-                sub={!router.online ? 'Router nicht erreichbar' : link ? `${link.label}${router.state.failover.onBackup ? ' · Ausweich' : ''}` : undefined}
-              />
-            ) : (
-              network && (
-                <Stat
-                  label="Internet"
-                  value={network.state.internet && primary ? UPLINK_KIND[primary.kind] : network.state.internet ? 'Ja' : 'Nein'}
-                  tone={network.state.internet ? 'ok' : 'alarm'}
-                  sub={primary?.provider}
-                />
-              )
-            )}
-          </div>
-        </Link>
+      <Modal open={adding} title="Kachel hinzufügen" onClose={() => setAdding(false)} wide>
+        <div className="dash-catalog">
+          {DASHBOARD_TILE_IDS.map((type) => {
+            const info = DASHBOARD_TILE_TYPES[type];
+            const Icon = DASHBOARD_ICONS[type];
+            const count = tiles.filter((t) => t.type === type).length;
+            return (
+              <button key={type} type="button" className="dash-catalog-item" onClick={() => add(type)}>
+                <Icon size={22} />
+                <span>
+                  <strong>{info.label}</strong>
+                  {count > 0 && <span className="muted"> · {count}× vorhanden</span>}
+                  <span className="cell-sub">{info.description}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Modal>
+
+      <Modal open={!!settingsTile} title={settingsTile ? DASHBOARD_TILE_TYPES[settingsTile.type].label : ''} onClose={() => setSettingsId(null)}>
+        {settingsTile && <DashboardTileSettings tile={settingsTile} onChange={(c) => setConfig(settingsTile.id, c)} onRemove={() => remove(settingsTile.id)} />}
+      </Modal>
+    </div>
+  );
+}
+
+/** Eigene Kacheln der Übersicht ohne weitere Einstellungen */
+const OWN_TYPES: ReadonlySet<DashboardTileType> = new Set(['incident', 'journal', 'messages', 'radio', 'energy', 'monitoring']);
+
+function DashboardTileSettings({ tile, onChange, onRemove }: { tile: DashboardTile; onChange: (config: DashboardTile['config']) => void; onRemove: () => void }) {
+  return (
+    <div className="tile-settings">
+      {!HEADLESS.has(tile.type) && (
+        <Field label="Überschrift" hint={`leer = „${DASHBOARD_TILE_TYPES[tile.type].label}“`}>
+          <input value={String(tile.config.heading ?? '')} maxLength={60} onChange={(e) => onChange({ ...tile.config, heading: e.target.value.slice(0, 60) })} />
+        </Field>
+      )}
+      {OWN_TYPES.has(tile.type) ? (
+        <>
+          <p className="muted">{DASHBOARD_TILE_TYPES[tile.type].description}</p>
+          <button type="button" className="btn" onClick={onRemove}>
+            <Trash2 size={16} /> Kachel entfernen
+          </button>
+        </>
+      ) : (
+        <TileSettings tile={tile as DisplayTile} onChange={onChange} onRemove={onRemove} />
       )}
     </div>
   );

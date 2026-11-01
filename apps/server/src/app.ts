@@ -69,6 +69,8 @@ import { ContactService } from './services/contacts.js';
 import { phonebookRoutes } from './routes/phonebook.js';
 import { PhonebookService } from './services/phonebook.js';
 import { phoneRoutes } from './routes/phones.js';
+import { dashboardRoutes } from './routes/dashboard.js';
+import { DashboardService } from './services/dashboards.js';
 import { PhoneService, type PhoneFetch } from './services/phones.js';
 import { backupRoutes } from './routes/backup.js';
 import { BackupService, type DriverFactory } from './services/backup/service.js';
@@ -415,6 +417,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     contactRoutes(api, { contacts, personnel });
     phonebookRoutes(api, { phonebook, store, notify: (t) => hub.invalidate(t) });
     phoneRoutes(api, { phones, store, notify: (t) => hub.invalidate(t) });
+    dashboardRoutes(api, { dashboards: new DashboardService(db) });
     backupRoutes(api, { backup, restore });
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
