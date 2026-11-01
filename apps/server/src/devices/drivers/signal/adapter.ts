@@ -13,6 +13,10 @@ export interface SignalOptions {
   account: string | null;
   /** Name als verknüpftes Gerät in der Signal-App */
   deviceName: string;
+  /** Profilname für Empfänger; null = Profil nicht ändern (bei gekoppeltem Handy gehört das Profil dem Handy) */
+  profileName?: string | null;
+  /** Info-Text im Profil (nur zusammen mit profileName) */
+  profileAbout?: string | null;
   reconnectMs: number;
 }
 
@@ -191,6 +195,26 @@ export class SignalCliAdapter extends BaseAdapter<'signal'> implements Messenger
       s.link = { ...s.link!, connected: true, error: null };
     });
     void this.listen();
+    void this.syncProfile();
+  }
+
+  /** Zuletzt gesetztes Profil (Konto + Werte), damit Wiederverbindungen es nicht jedes Mal neu schreiben */
+  private profileKey: string | null = null;
+
+  /** Profilname aus den Moduleinstellungen in Signal setzen; Fehler nur protokollieren */
+  private async syncProfile(): Promise<void> {
+    const name = this.opts.profileName;
+    if (!name || !this.accountId) return;
+    const about = this.opts.profileAbout ?? '';
+    const key = JSON.stringify([this.accountId, name, about]);
+    if (this.profileKey === key) return;
+    try {
+      await this.call('updateProfile', { givenName: name, familyName: '', about });
+      this.profileKey = key;
+      this.ctx.log.info(`Signal: Profilname „${name}“ gesetzt`);
+    } catch (e) {
+      this.ctx.log.warn(`Signal: Profil nicht gesetzt: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   /** Ereignisstrom lesen (Server-Sent Events, je Ereignis eine JSON-RPC-Benachrichtigung) */

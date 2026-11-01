@@ -24,6 +24,7 @@ class FakeSignalCli {
   calls: { method: string; params: Record<string, unknown> }[] = [];
   streams: ServerResponse[] = [];
   linked: (() => void) | null = null;
+  failProfile = false;
 
   constructor() {
     this.server = createServer((req, res) => void this.handle(req, res));
@@ -67,6 +68,9 @@ class FakeSignalCli {
         return { deviceLinkUri: 'sgnl://linkdevice?uuid=abc&pub_key=xyz' };
       case 'finishLink':
         return new Promise((r) => (this.linked = () => (this.accounts.push({ number: '+491711111111' }), r({ number: '+491711111111' }))));
+      case 'updateProfile':
+        if (this.failProfile) throw new Error('Profil kaputt');
+        return {};
       case 'register':
       case 'verify':
         if (method === 'verify') this.accounts.push({ number: params.account as string });
@@ -218,6 +222,37 @@ describe('Signal (signal-cli)', () => {
     expect(adapter.isOnline()).toBe(false);
     expect(adapter.getState().link?.error).toMatch(/nicht erreichbar/);
     fake = new FakeSignalCli();
+  });
+
+  it('setzt den Profilnamen aus den Einstellungen, ohne Namen nicht', async () => {
+    await start();
+    await until(() => adapter.getState().status === 'connected');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fake.calls.some((c) => c.method === 'updateProfile')).toBe(false);
+    await adapter.stop();
+    await fake.close();
+
+    fake = new FakeSignalCli();
+    const url = await fake.listen();
+    adapter = new SignalCliAdapter({ endpoint: () => ({ url, token: null }), account: null, deviceName: 'ELVIS', profileName: 'ELW 1', profileAbout: 'Feuerwehr', reconnectMs: 100 }, new MessengerBus());
+    await adapter.start({ log, getState: () => undefined });
+    await until(() => fake.calls.some((c) => c.method === 'updateProfile'));
+    expect(fake.calls.find((c) => c.method === 'updateProfile')?.params).toEqual({ account: '+491700000000', givenName: 'ELW 1', familyName: '', about: 'Feuerwehr' });
+    // Wiederverbinden schreibt das Profil nicht erneut
+    await adapter.connect();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fake.calls.filter((c) => c.method === 'updateProfile')).toHaveLength(1);
+  });
+
+  it('bleibt verbunden, wenn das Profil nicht gesetzt werden kann', async () => {
+    fake = new FakeSignalCli();
+    fake.failProfile = true;
+    const url = await fake.listen();
+    adapter = new SignalCliAdapter({ endpoint: () => ({ url, token: null }), account: null, deviceName: 'ELVIS', profileName: 'ELW 1', reconnectMs: 100 }, new MessengerBus());
+    await adapter.start({ log, getState: () => undefined });
+    await until(() => fake.calls.some((c) => c.method === 'updateProfile'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(adapter.getState().status).toBe('connected');
   });
 });
 

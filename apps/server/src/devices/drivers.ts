@@ -325,6 +325,8 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
         options: {
           account: { type: 'string', label: 'Rufnummer des Kontos', required: false, default: '', maxLength: 40, help: 'Nur nötig, wenn in signal-cli mehrere Konten liegen; leer = das erste. Eine neue Nummer richtet die Karte „Signal-Konto“ ein.' },
           deviceName: { type: 'string', label: 'Gerätename beim Koppeln', required: false, default: 'ELVIS', maxLength: 50, help: 'So erscheint ELVIS in der Signal-App unter „Verknüpfte Geräte“.' },
+          profileName: { type: 'string', label: 'Profilname', required: false, default: '', maxLength: 50, help: 'So sehen Empfänger den Absender (statt „Unbekannt“). Nur bei eigener Nummer (Weg B) setzen – bei einem gekoppelten Handy würde der Profilname des Handys überschrieben. Leer = Profil nicht ändern.' },
+          profileAbout: { type: 'string', label: 'Profil-Info', required: false, default: '', maxLength: 140, help: 'Kurzer Info-Text im Signal-Profil (nur zusammen mit einem Profilnamen).' },
           reconnectSeconds: { type: 'int', label: 'Neuer Verbindungsversuch nach (Sekunden)', required: false, default: 15, min: 2, max: 600 },
         },
         create: (o, deps) =>
@@ -337,6 +339,8 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
               },
               account: String(o.account ?? '').trim() || null,
               deviceName: String(o.deviceName || 'ELVIS'),
+              profileName: String(o.profileName ?? '').trim() || null,
+              profileAbout: String(o.profileAbout ?? '').trim() || null,
               reconnectMs: Number(o.reconnectSeconds || 15) * 1000,
             },
             deps.messenger,
