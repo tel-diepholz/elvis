@@ -214,11 +214,12 @@ export class SignalCliAdapter extends BaseAdapter<'signal'> implements Messenger
           const lines = event.split('\n');
           const id = lines.find((l) => l.startsWith('id:'))?.slice(3).trim();
           if (id) this.lastEventId = id;
+          const name = lines.find((l) => l.startsWith('event:'))?.slice(6).trim() ?? null;
           const data = lines
             .filter((l) => l.startsWith('data:'))
             .map((l) => l.slice(5).trimStart())
             .join('\n');
-          if (data) await this.handle(data).catch((e) => this.ctx.log.warn(`Signal: Ereignis nicht verarbeitet: ${e instanceof Error ? e.message : String(e)}`));
+          if (data) await this.handle(data, name).catch((e) => this.ctx.log.warn(`Signal: Ereignis nicht verarbeitet: ${e instanceof Error ? e.message : String(e)}`));
         }
       }
       throw new Error('Ereignisstrom beendet');
@@ -232,12 +233,16 @@ export class SignalCliAdapter extends BaseAdapter<'signal'> implements Messenger
     }
   }
 
-  private async handle(data: string): Promise<void> {
+  /**
+   * Ein Ereignis aus /api/v1/events. signal-cli schickt dort keine JSON-RPC-Benachrichtigung, sondern
+   * `event:receive` mit `{"account": …, "envelope": …}` (SseEventBuffer/JsonReceiveMessageHandler). Die JSON-RPC-Form
+   * (`method: receive`, ggf. in params.result) wird ebenfalls angenommen.
+   */
+  async handle(data: string, event: string | null = null): Promise<void> {
     type Received = { envelope?: SignalEnvelope; account?: string };
-    const msg = JSON.parse(data) as { method?: string; params?: Received & { result?: Received } };
-    // Je nach Modus direkt in params oder (Abonnement) in params.result
-    const p = msg.params?.result?.envelope ? msg.params.result : msg.params;
-    if (msg.method !== 'receive' || !p?.envelope) return;
+    const msg = JSON.parse(data) as Received & { method?: string; params?: Received & { result?: Received } };
+    const p = msg.method === 'receive' ? (msg.params?.result?.envelope ? msg.params.result : msg.params) : event === null || event === 'receive' ? msg : null;
+    if (!p?.envelope) return;
     // Konto als Rufnummer oder (Multi-Account-Modus) als ACI
     if (p.account && this.accountId && p.account !== this.accountId && p.account !== this.aci && !(p.account.startsWith('+') && phoneKey(p.account) === this.state.account)) return;
     const env = p.envelope;
