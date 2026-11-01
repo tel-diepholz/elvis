@@ -25,6 +25,11 @@ export function simPeer(channel: MessengerId, number: string): string {
   const h = hash(`${channel}:${number}`);
   if (channel === 'threema') return [...h.subarray(0, 8)].map((b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
   if (channel === 'telegram') return String(100000000 + (h.readUInt32BE(0) % 900000000));
+  // Signal kennt Absender über die UUID (ACI) – die Rufnummer kann verborgen sein
+  if (channel === 'signal') {
+    const x = h.toString('hex');
+    return `${x.slice(0, 8)}-${x.slice(8, 12)}-4${x.slice(13, 16)}-8${x.slice(17, 20)}-${x.slice(20, 32)}`;
+  }
   return number;
 }
 

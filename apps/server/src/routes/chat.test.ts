@@ -266,9 +266,26 @@ describe('Nachrichten: Messenger', () => {
     expect((await req<ChatReachability>('GET', '/api/chat/reachability')).body['+491701234567']).toEqual(['sms', 'telegram', 'signal', 'threema']);
     expect((await req('PUT', '/api/system/chat', { order: ['sms', 'sms'] })).status).toBe(400);
 
+    // Signal mit verborgener Rufnummer: nur die UUID kommt an; die Prüfung kennt sie und ordnet zu – auch nachträglich
+    const hidden = await app.chat.ingest({ channel: 'signal', peer: simPeer('signal', '+491609876543'), number: null, peerName: null, text: 'Vorher', attachment: null, location: null, externalId: 'sg1', receivedAt: new Date().toISOString() });
+    expect(hidden).toMatchObject({ number: null, thread: `signal:${simPeer('signal', '+491609876543')}` });
+    const after = await incoming({ channel: 'signal', peer: simPeer('signal', '+491701234567'), number: null, peerName: null, externalId: 'sg2' });
+    expect(after).toMatchObject({ number: '+491701234567', name: 'Muster, Max' });
+
     // Frei eingegebene Rufnummer sofort prüfen
     const checked = (await req<ChatReachability>('POST', '/api/chat/reachability/check', { numbers: ['0160 9876543'] })).body;
     expect(checked['+491609876543']).toEqual(expect.arrayContaining(['signal', 'sms']));
+    expect((await req<ChatMessage>('GET', `/api/chat/messages/${hidden!.id}`)).body).toMatchObject({ number: '+491609876543', thread: '+491609876543' });
+  });
+
+  it('ordnet frühere Signal-Nachrichten ohne Rufnummer zu, sobald eine mit Nummer kommt', async () => {
+    const first = await app.chat.ingest({ channel: 'signal', peer: 'aci-1', number: null, peerName: null, text: 'Erst ohne', attachment: null, location: null, externalId: 'a1', receivedAt: new Date().toISOString() });
+    expect(first?.number).toBeNull();
+    await app.chat.ingest({ channel: 'signal', peer: 'aci-1', number: '+491701111111', peerName: null, text: 'Dann mit', attachment: null, location: null, externalId: 'a2', receivedAt: new Date().toISOString() });
+    expect((await req<ChatMessage>('GET', `/api/chat/messages/${first!.id}`)).body.number).toBe('+491701111111');
+    const later = await app.chat.ingest({ channel: 'signal', peer: 'aci-1', number: null, peerName: null, text: 'Wieder ohne', attachment: null, location: null, externalId: 'a3', receivedAt: new Date().toISOString() });
+    expect(later?.number).toBe('+491701111111');
+    expect((await req<ChatThread[]>('GET', '/api/chat/threads')).body.map((t) => [t.key, t.count])).toEqual([['+491701111111', 3]]);
   });
 });
 

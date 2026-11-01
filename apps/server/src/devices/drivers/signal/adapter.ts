@@ -290,7 +290,9 @@ export class SignalCliAdapter extends BaseAdapter<'signal'> implements Messenger
     const image = dm.attachments?.find((a) => CHAT_IMAGE_TYPES.includes(a.contentType));
     if (!text && !image) return;
     const number = env.sourceNumber ? phoneKey(env.sourceNumber) : env.source?.startsWith('+') ? phoneKey(env.source) : null;
-    const peer = number ?? env.sourceUuid ?? env.source ?? 'unbekannt';
+    // Kennung ist die UUID (ACI): Bei verborgener Rufnummer ist sie das Einzige, was ankommt; ist die Nummer dabei, lernt
+    // ELVIS so die Zuordnung UUID → Rufnummer für spätere Nachrichten ohne Nummer
+    const peer = env.sourceUuid ?? number ?? env.source ?? 'unbekannt';
     let attachment: { name: string; mimeType: string; data: Buffer } | null = null;
     if (image) {
       try {
@@ -332,7 +334,8 @@ export class SignalCliAdapter extends BaseAdapter<'signal'> implements Messenger
     const out: ReachabilityResult = new Map();
     for (const r of res ?? []) {
       const n = phoneKey(r.number ?? r.recipient);
-      out.set(n, { reachable: r.isRegistered, peer: r.isRegistered ? n : null });
+      // UUID merken: Nachrichten ohne Rufnummer (Nummer verborgen) lassen sich darüber der Nummer zuordnen
+      out.set(n, { reachable: r.isRegistered, peer: r.isRegistered ? (r.uuid ?? n) : null });
     }
     return out;
   }

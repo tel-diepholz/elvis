@@ -951,6 +951,9 @@ const MIGRATIONS: Migration[] = [
     PRIMARY KEY (channel, number)
   );
   `,
+  // Signal: Kennung ist jetzt die UUID statt der Rufnummer – alte Prüfungen sofort wiederholen, damit Nachrichten mit
+  // verborgener Rufnummer zugeordnet werden
+  `UPDATE chat_reachability SET checked_at = '1970-01-01T00:00:00.000Z' WHERE channel = 'signal' AND peer = number;`,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

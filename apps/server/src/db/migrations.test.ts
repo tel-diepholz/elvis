@@ -120,7 +120,8 @@ describe('Migrationen', () => {
         status TEXT NOT NULL, error TEXT, seen INTEGER NOT NULL DEFAULT 0, date TEXT NOT NULL, created_by TEXT NOT NULL)`);
       legacy.exec(`INSERT INTO sms_messages VALUES (7, 'inbox', 1, '+491711234567', 'Hallo', 'received', NULL, 0, 't1', 'Gateway'),
         (9, 'sent', 2, '+491609999999', 'Rückruf', 'failed', 'Netz', 1, 't2', 'Max Müller')`);
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 1}`);
+      // Stand vor der SMS-Migration (danach: Signal-Kennungen neu prüfen)
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 2}`);
       legacy.close();
 
       const db = openDb(dir);
@@ -129,6 +130,28 @@ describe('Migrationen', () => {
         { id: 9, channel: 'sms', folder: 'sent', peer: '+491609999999', number: '+491609999999', text: 'Rückruf', port: 2, status: 'failed', error: 'Netz', seen: 1, date: 't2', created_by: 'Max Müller' },
       ]);
       expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'sms_messages'").get()).toBeUndefined();
+      db.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('gibt alte Signal-Prüfungen (Kennung = Rufnummer) zur sofortigen Neuprüfung frei', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'elvis-mig-'));
+    try {
+      openDb(dir).close();
+      const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec(`INSERT INTO chat_reachability VALUES ('signal', '+491711234567', 1, '+491711234567', '2099-01-01'),
+        ('signal', '+491609999999', 1, 'uuid-x', '2099-01-01'), ('threema', '+491711234567', 1, 'ABCD1234', '2099-01-01')`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 1}`);
+      legacy.close();
+
+      const db = openDb(dir);
+      expect(db.prepare('SELECT channel, number, checked_at FROM chat_reachability ORDER BY channel, number').all()).toEqual([
+        { channel: 'signal', number: '+491609999999', checked_at: '2099-01-01' },
+        { channel: 'signal', number: '+491711234567', checked_at: '1970-01-01T00:00:00.000Z' },
+        { channel: 'threema', number: '+491711234567', checked_at: '2099-01-01' },
+      ]);
       db.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });
