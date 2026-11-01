@@ -64,6 +64,10 @@ class FakeTelegram implements TelegramApi {
     this.sent.push({ kind: 'photo', peer, value: [path, caption] });
     return this.nextId++;
   }
+  async sendDocument(peer: TgPeer, path: string, filename: string, caption: string) {
+    this.sent.push({ kind: 'document', peer, value: [path, filename, caption] });
+    return this.nextId++;
+  }
   async sendLocation(peer: TgPeer, lat: number, lon: number) {
     this.sent.push({ kind: 'location', peer, value: [lat, lon] });
     return this.nextId++;
@@ -143,6 +147,9 @@ describe('Telegram', () => {
     await expect(adapter.sendMessage({ peer: '+491609999999', number: '+491609999999', text: 'x', attachment: null, location: null })).rejects.toThrow(/nutzt kein Telegram/);
     await adapter.sendMessage({ peer: 'max', number: null, text: 'Hallo', attachment: { name: 'a.jpg', mimeType: 'image/jpeg', path: '/tmp/a.jpg' }, location: null });
     expect(api.sent.at(-1)).toMatchObject({ kind: 'photo', peer: { id: '888' }, value: ['/tmp/a.jpg', 'Hallo'] });
+    // Dateien als Dokument mit ihrem Namen (sie liegen unter einem internen Namen)
+    await adapter.sendMessage({ peer: 'max', number: null, text: 'Plan', attachment: { name: 'Lageplan.pdf', mimeType: 'application/pdf', path: '/tmp/0123abcd' }, location: null });
+    expect(api.sent.at(-1)).toMatchObject({ kind: 'document', peer: { id: '888' }, value: ['/tmp/0123abcd', 'Lageplan.pdf', 'Plan'] });
 
     api.readFn!('777', 101);
     expect(t.receipts).toEqual([{ channel: 'telegram', externalId: '777:101', status: 'read' }]);

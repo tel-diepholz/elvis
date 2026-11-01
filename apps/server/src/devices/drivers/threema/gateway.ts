@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import nacl from 'tweetnacl';
-import { CHAT_IMAGE_TYPES, phoneKey, type MessengerState, type RelayHookEvent } from '@elvis/shared';
+import { CHAT_IMAGE_TYPES, isChatImage, phoneKey, type MessengerState, type RelayHookEvent } from '@elvis/shared';
 import { BaseAdapter, CommandError, type AdapterContext } from '../../adapter.js';
 import type { HookSource, MessengerAdapter, MessengerBus, OutgoingChat, ReachabilityResult, SendResult } from '../../messaging/bus.js';
 
@@ -71,7 +71,7 @@ export class ThreemaGatewayAdapter extends BaseAdapter<'threema'> implements Mes
       status: 'connecting',
       account: null,
       link: { connected: false, target: 'Threema Gateway', error: null, lastEventAt: null },
-      capabilities: { images: true, location: true, reachability: true },
+      capabilities: { images: true, files: true, location: true, reachability: true },
       setup: null,
     } satisfies MessengerState);
     this.online = false;
@@ -203,8 +203,8 @@ export class ThreemaGatewayAdapter extends BaseAdapter<'threema'> implements Mes
       const blob = nacl.secretbox(new Uint8Array(data), FILE_NONCE, key);
       const form = new FormData();
       form.append('blob', new Blob([Buffer.from(blob)]), 'blob');
-      const blobId = (await (await this.ok(await this.request('/upload_blob', { method: 'POST', body: form }), 'Bild hochladen')).text()).trim();
-      const file = { b: blobId, k: hex(key), m: msg.attachment.mimeType, n: msg.attachment.name, s: data.length, i: 0, j: 1, ...(msg.text && { d: msg.text }) };
+      const blobId = (await (await this.ok(await this.request('/upload_blob', { method: 'POST', body: form }), 'Anhang hochladen')).text()).trim();
+      const file = { b: blobId, k: hex(key), m: msg.attachment.mimeType, n: msg.attachment.name, s: data.length, i: 0, j: isChatImage(msg.attachment.mimeType) ? 1 : 0, ...(msg.text && { d: msg.text }) };
       id = await this.sendBox(to, TYPE.file, new TextEncoder().encode(JSON.stringify(file)));
     } else if (msg.text) id = await this.sendBox(to, TYPE.text, new TextEncoder().encode(msg.text));
     if (msg.location) {
