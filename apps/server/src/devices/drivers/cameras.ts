@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { IncomingMessage } from 'node:http';
+import type { PassThrough } from 'node:stream';
 import { z } from 'zod';
 import { DOORBELL_RING_SECONDS, type CameraCaps, type CameraStatus, type CamerasState, type DoorbellRing } from '@elvis/shared';
 import type { CameraSecretConfig } from '../../services/cameras.js';
@@ -7,6 +7,7 @@ import { HttpError } from '../../errors.js';
 import { BaseAdapter, CommandError, command, type AdapterContext } from '../adapter.js';
 import { AxisCamera, DemoCamera, NO_CAPS, type CameraClient } from './axis/camera.js';
 import { TwoNIntercom } from './2n/intercom.js';
+import { HUB_CONTENT_TYPE, MjpegHub } from './mjpeg-hub.js';
 
 /** Quelle der Kameraliste (Einstellungen) */
 export interface CameraSource {
@@ -58,8 +59,10 @@ export class CamerasAdapter extends BaseAdapter<'cameras'> {
   private timer: NodeJS.Timeout | null = null;
   private unsubscribe: (() => void) | null = null;
   private stopped = false;
-  /** Offene Livebilder, damit sie beim Stoppen geschlossen werden */
-  private readonly streams = new Set<IncomingMessage>();
+  /** Livebilder je Kamera und Bildart („cam-1:live“): eine Verbindung zur Kamera für alle Zuschauer */
+  private readonly hubs = new Map<string, MjpegHub>();
+  /** So lange bleibt ein Livebild nach dem letzten Zuschauer verbunden */
+  streamLingerMs = 5_000;
   private readonly ringTimers = new Set<NodeJS.Timeout>();
 
   protected readonly commands = {
@@ -150,19 +153,34 @@ export class CamerasAdapter extends BaseAdapter<'cameras'> {
     for (const e of this.entries.values()) this.close(e);
     for (const t of this.ringTimers) clearTimeout(t);
     this.ringTimers.clear();
-    for (const s of this.streams) s.destroy();
+    for (const h of this.hubs.values()) h.close();
+    this.hubs.clear();
   }
 
-  /** MJPEG-Livebild einer Kamera (null = Kamera liefert kein Bild) */
-  async openStream(cameraId: string, kind: 'live' | 'thumb'): Promise<IncomingMessage | null> {
+  /**
+   * MJPEG-Livebild einer Kamera für einen Zuschauer (null = Kamera liefert kein Bild). Alle Zuschauer teilen sich
+   * eine Verbindung zur Kamera; der Strom endet, wenn die Kamera trennt – der Browser verbindet dann neu.
+   */
+  async openStream(cameraId: string, kind: 'live' | 'thumb'): Promise<{ contentType: string; stream: PassThrough } | null> {
     const e = this.entries.get(cameraId);
     if (!e) throw new CommandError(`Kamera ${cameraId} unbekannt oder deaktiviert`, 404);
-    const stream = await e.client.openStream(kind, e.config.resolution);
-    if (stream) {
-      this.streams.add(stream);
-      stream.on('close', () => this.streams.delete(stream));
+    const key = `${cameraId}:${kind}`;
+    let hub = this.hubs.get(key);
+    if (!hub) {
+      hub = new MjpegHub(() => e.client.openStream(kind, e.config.resolution), this.streamLingerMs);
+      this.hubs.set(key, hub);
     }
-    return stream;
+    const stream = await hub.subscribe();
+    return stream && { contentType: HUB_CONTENT_TYPE, stream };
+  }
+
+  /** Livebilder einer Kamera schließen (entfernt, neu verbunden oder Auflösung geändert) */
+  private closeStreams(cameraId: string): void {
+    for (const [key, hub] of this.hubs) {
+      if (!key.startsWith(`${cameraId}:`)) continue;
+      hub.close();
+      this.hubs.delete(key);
+    }
   }
 
   private require(id: string, cap?: keyof CameraCaps): Entry {
@@ -193,8 +211,10 @@ export class CamerasAdapter extends BaseAdapter<'cameras'> {
       const c = configs.find((x) => x.id === id);
       if (!c || connectionKey(c) !== connectionKey(e.config)) {
         this.close(e);
+        this.closeStreams(id);
         this.entries.delete(id);
       } else {
+        if (c.resolution !== e.config.resolution) this.closeStreams(id);
         e.config = c;
         e.status = { ...e.status, name: c.name };
       }

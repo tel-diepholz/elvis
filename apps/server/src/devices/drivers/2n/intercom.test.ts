@@ -139,10 +139,10 @@ describe('2N-Türstation', () => {
     await expect(a.execute('zoom', { cameraId: 'cam-tuer', direction: 1 })).rejects.toThrow(/unterstützt das nicht/);
 
     const live = (await a.openStream('cam-tuer', 'live'))!;
-    expect(live.headers['content-type']).toContain('multipart/x-mixed-replace');
-    expect((await new Promise<Buffer>((r) => live.once('data', r))).toString('latin1')).toContain('--frame');
-    live.destroy();
-    (await a.openStream('cam-tuer', 'thumb'))!.destroy();
+    expect(live.contentType).toBe('multipart/x-mixed-replace; boundary=elvisframe');
+    expect((await new Promise<Buffer>((r) => live.stream.once('data', r))).toString('latin1')).toContain('Content-Type: image/jpeg');
+    live.stream.destroy();
+    (await a.openStream('cam-tuer', 'thumb'))!.stream.destroy();
     expect(f.calls.filter((c) => c.startsWith('/api/camera/snapshot'))).toEqual(['/api/camera/snapshot?width=1280&height=960&fps=10', '/api/camera/snapshot?width=320&height=240&fps=2']);
     await a.stop();
   });

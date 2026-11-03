@@ -203,10 +203,10 @@ describe('Kameramodul', () => {
     await expect(a.execute('zoom', { cameraId: 'gibtsnicht', direction: 1 })).rejects.toThrow(/unbekannt/);
 
     // Livebild kommt als MJPEG durch
-    const stream = await a.openStream('cam-1', 'live');
-    const first = await new Promise<Buffer>((r) => stream!.once('data', r));
-    expect(first.toString('latin1')).toContain('--myboundary');
-    stream!.destroy();
+    const { stream } = (await a.openStream('cam-1', 'live'))!;
+    const first = await new Promise<Buffer>((r) => stream.once('data', r));
+    expect(first.toString('latin1')).toContain('--elvisframe');
+    stream.destroy();
 
     // Kamera wird deaktiviert → verschwindet
     src.set([config(f, { enabled: false })]);

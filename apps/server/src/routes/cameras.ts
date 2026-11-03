@@ -78,27 +78,23 @@ export function cameraRoutes(app: FastifyInstance, d: Deps): void {
   app.get<{ Params: { id: string }; Querystring: { kind?: string } }>('/api/cameras/:id/stream', async (req, reply) => {
     const a = adapter();
     if (!a) throw new HttpError(404, 'Modul Kameras ist nicht aktiviert');
-    let upstream;
+    let view;
     try {
-      upstream = await a.openStream(req.params.id, req.query.kind === 'thumb' ? 'thumb' : 'live');
+      view = await a.openStream(req.params.id, req.query.kind === 'thumb' ? 'thumb' : 'live');
     } catch (err) {
       if (err instanceof HttpError) throw err;
       // Fehler der Kamera (Ablehnung, nicht erreichbar) – kein interner Fehler von ELVIS
       req.log.warn({ camera: req.params.id }, (err as Error).message);
       throw new HttpError(502, (err as Error).message);
     }
-    if (!upstream) throw new HttpError(404, 'Diese Kamera liefert kein Videobild');
+    if (!view) throw new HttpError(404, 'Diese Kamera liefert kein Videobild');
+    // Zuschauer am gemeinsamen Livebild der Kamera (eine Verbindung zur Kamera für alle Browser)
+    const { stream } = view;
     reply.hijack();
-    reply.raw.writeHead(200, {
-      'content-type': upstream.headers['content-type'] ?? 'multipart/x-mixed-replace',
-      'cache-control': 'no-store',
-      connection: 'close',
-    });
-    upstream.pipe(reply.raw);
-    const close = () => upstream.destroy();
-    req.raw.on('close', close);
-    upstream.on('error', () => reply.raw.destroy());
-    upstream.on('end', () => reply.raw.end());
+    reply.raw.writeHead(200, { 'content-type': view.contentType, 'cache-control': 'no-store', connection: 'close' });
+    stream.pipe(reply.raw);
+    req.raw.on('close', () => stream.destroy());
+    stream.on('error', () => reply.raw.destroy());
   });
 
   // --- Gespeicherte Positionen: gehören zum laufenden Einsatz ---
