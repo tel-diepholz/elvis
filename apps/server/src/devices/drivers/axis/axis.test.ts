@@ -170,6 +170,7 @@ describe('Kameramodul', () => {
     password: 'pass',
     verifyTls: false,
     resolution: '1280x720',
+    bells: [],
     enabled: true,
     sort: 0,
     ...p,

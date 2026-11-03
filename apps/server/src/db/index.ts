@@ -991,6 +991,8 @@ const MIGRATIONS: Migration[] = [
     updated_at TEXT NOT NULL
   );
   `,
+  // Klingeltasten der Türstationen (2N) und Bildschirme, auf denen das Klingeln erscheint
+  `ALTER TABLE cameras ADD COLUMN bells TEXT NOT NULL DEFAULT '[]';`,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

@@ -25,6 +25,8 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
   Szenenwahl (Szenen und Hell/Dunkel per Touch am Bildschirm). Eine mitgeführte Karte folgt Fahrzeug bzw. Einsatzort und
   lässt sich nicht verschieben. Ohne Mitführen lässt sie sich am Bildschirm per Touch und unter „Bildschirme“ direkt in
   der Vorschau verschieben und zoomen – der Bildschirm folgt und behält den Ausschnitt, auch nach „Neu laden“.
+- **Klingel:** Klingelt es an einer [2N-Türstation](../fahrzeugmodule/kameras-2n.md), erscheint auf den dafür eingestellten
+  Bildschirmen ein Dialog mit Livebild und leisem Ton (abschaltbar, schließt nach 90 s von selbst).
 - **Design:** Jeder Bildschirm ist hell oder dunkel (Standard), umschaltbar unter „Bildschirme“ oder am Bildschirm über
   die Kachel „Szenenwahl“. Im dunklen Design ist der Hintergrund hinter den Kacheln schwarz.
 - **Rechte:** Gekoppelte Bildschirme dürfen ohne Benutzeranmeldung zusätzlich den laufenden Einsatz lesen (für den

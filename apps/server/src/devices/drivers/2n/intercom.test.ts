@@ -16,6 +16,18 @@ class Fake2N {
   server!: Server;
   port = 0;
   readonly calls: string[] = [];
+  /** Wartende log/pull-Anfragen und noch nicht abgeholte Ereignisse */
+  private waiting: ((events: unknown[]) => void)[] = [];
+  private queue: unknown[] = [];
+  subscription = 1000;
+
+  /** Taste an der Türstation drücken (KeyPressed wie am echten Gerät) */
+  press(key: string): void {
+    const e = { id: 1, event: 'KeyPressed', params: { key } };
+    const w = this.waiting.shift();
+    if (w) w([e]);
+    else this.queue.push(e);
+  }
 
   private authorized(req: IncomingMessage): boolean {
     const h = req.headers.authorization ?? '';
@@ -34,6 +46,17 @@ class Fake2N {
       this.calls.push(`${url.pathname}${url.search}`);
       if (url.pathname === '/api/camera/caps')
         return json({ success: true, result: { jpegResolution: [{ width: 160, height: 120 }, { width: 320, height: 240 }, { width: 640, height: 480 }, { width: 1280, height: 960 }], sources: [{ source: 'internal' }] } });
+      if (url.pathname === '/api/log/subscribe') return json({ success: true, result: { id: ++this.subscription } });
+      if (url.pathname === '/api/log/unsubscribe') return json({ success: true });
+      if (url.pathname === '/api/log/pull') {
+        if (Number(url.searchParams.get('id')) !== this.subscription) return json({ success: false, error: { code: 12, param: 'id', description: 'invalid subscription id' } });
+        const reply = (events: unknown[]) => json({ success: true, result: { events } });
+        if (this.queue.length) return reply(this.queue.splice(0));
+        const t = setTimeout(() => ((this.waiting = this.waiting.filter((w) => w !== done)), reply([])), Number(url.searchParams.get('timeout') ?? 0) * 1000);
+        const done = (events: unknown[]) => (clearTimeout(t), reply(events));
+        this.waiting.push(done);
+        return;
+      }
       if (url.pathname === '/api/camera/snapshot') {
         if (url.searchParams.get('width') === '999') return json({ success: false, error: { code: 12, param: 'width', description: 'invalid parameter value' } });
         res.writeHead(200, { 'content-type': 'multipart/x-mixed-replace; boundary=frame' });
@@ -74,6 +97,7 @@ const config = (f: Fake2N, p: Partial<CameraSecretConfig> = {}): CameraSecretCon
   verifyTls: false,
   resolution: '640x480',
   enabled: true,
+  bells: [],
   sort: 0,
   ...p,
 });
@@ -126,5 +150,55 @@ describe('2N-Türstation', () => {
     // Größe, die die Türstation ablehnt
     (cam as unknown as { resolutions: { width: number; height: number }[] }).resolutions = [{ width: 999, height: 999 }];
     await expect(cam.openStream('live', '999x999')).rejects.toThrow('Videobild abgelehnt (invalid parameter value (width); Anfrage: 999x999)');
+  });
+});
+
+describe('Klingeln', () => {
+  const until = async (cond: () => boolean) => {
+    for (let i = 0; i < 150 && !cond(); i++) await new Promise((r) => setTimeout(r, 20));
+    expect(cond()).toBe(true);
+  };
+  const ctx = { log: { info: () => {}, warn: () => {}, error: () => {} }, getState: () => undefined };
+
+  it('meldet Kurzwahltasten, abonniert nach Ablauf neu und ignoriert den Ziffernblock', async () => {
+    const f = await fake();
+    const cam = new TwoNIntercom({ host: `127.0.0.1:${f.port}`, protocol: 'http', username: 'elvis', password: 'geheim', verifyTls: false });
+    cam.pullSeconds = 1;
+    const keys: string[] = [];
+    const stop = cam.watchRings((k) => keys.push(k), () => {});
+    await until(() => f.calls.some((c) => c.startsWith('/api/log/pull')));
+    f.press('%1');
+    f.press('5');
+    await until(() => keys.length === 1);
+    // Türstation neu gestartet: altes Abo ungültig
+    f.subscription += 10;
+    await until(() => f.calls.filter((c) => c.startsWith('/api/log/subscribe')).length >= 2);
+    await new Promise((r) => setTimeout(r, 50));
+    f.press('%2');
+    await until(() => keys.length === 2);
+    expect(keys).toEqual(['1', '2']);
+    expect(f.calls.find((c) => c.startsWith('/api/log/subscribe'))).toBe('/api/log/subscribe?include=new&filter=KeyPressed&duration=4');
+    stop();
+  });
+
+  it('zeigt das Klingeln für die eingestellten Bildschirme und fasst mehrfaches Drücken zusammen', async () => {
+    const f = await fake();
+    const bells = [
+      { key: '1', label: 'Haupteingang', displays: ['disp-lage'] },
+      { key: '*', label: 'Nebeneingang', displays: ['disp-lage', 'disp-fuehrung'] },
+    ];
+    const a = new CamerasAdapter({ list: () => [config(f, { bells })], onChange: () => () => {} });
+    await a.start(ctx);
+    await until(() => f.calls.some((c) => c.startsWith('/api/log/pull')));
+    f.press('%1');
+    await until(() => a.getState().rings.length === 1);
+    expect(a.getState().rings[0]).toMatchObject({ cameraId: 'cam-tuer', cameraName: 'Tür', key: '1', label: 'Haupteingang', displays: ['disp-lage'] });
+    const first = a.getState().rings[0]!.id;
+    f.press('%1');
+    f.press('%3');
+    await until(() => a.getState().rings.length === 2);
+    expect(a.getState().rings[0]!.id).toBe(first);
+    expect(a.getState().rings[1]).toMatchObject({ key: '3', label: 'Nebeneingang', displays: ['disp-lage', 'disp-fuehrung'] });
+    await a.stop();
   });
 });

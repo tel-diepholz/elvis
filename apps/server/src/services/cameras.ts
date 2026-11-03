@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
-import type { CameraConfig, CameraConfigInput, CameraPosition, CameraPreset, CameraType } from '@elvis/shared';
+import type { CameraConfig, CameraConfigInput, CameraPosition, CameraPreset, CameraType, DoorbellButton } from '@elvis/shared';
 import type { Db } from '../db/index.js';
 import { HttpError } from '../errors.js';
 
@@ -8,6 +8,12 @@ import { HttpError } from '../errors.js';
 export interface CameraSecretConfig extends Omit<CameraConfig, 'passwordSet'> {
   password: string;
 }
+
+const bellSchema = z.object({
+  key: z.string().regex(/^(\*|\d{1,2})$/, 'Taste: Nummer der Kurzwahltaste oder „*“'),
+  label: z.string().trim().min(1, 'Bezeichnung der Klingel fehlt').max(60),
+  displays: z.array(z.string().max(100)).max(50),
+});
 
 export const cameraInputSchema = z.object({
   name: z.string().trim().min(1, 'Name fehlt').max(60),
@@ -19,6 +25,7 @@ export const cameraInputSchema = z.object({
   verifyTls: z.boolean(),
   resolution: z.string().regex(/^\d{2,4}x\d{2,4}$/, 'Auflösung im Format 1280x720'),
   enabled: z.boolean(),
+  bells: z.array(bellSchema).max(20).default([]),
 });
 
 interface Row {
@@ -33,6 +40,7 @@ interface Row {
   resolution: string;
   enabled: number;
   sort: number;
+  bells: string;
 }
 
 const fromRow = (r: Row): CameraSecretConfig => ({
@@ -47,6 +55,7 @@ const fromRow = (r: Row): CameraSecretConfig => ({
   resolution: r.resolution,
   enabled: !!r.enabled,
   sort: r.sort,
+  bells: JSON.parse(r.bells || '[]') as DoorbellButton[],
 });
 
 export const publicCamera = ({ password, ...c }: CameraSecretConfig): CameraConfig => ({ ...c, passwordSet: password !== '' });
@@ -77,6 +86,8 @@ export class CameraConfigStore {
       id: current?.id ?? `cam-${randomBytes(4).toString('hex')}`,
       sort: current?.sort ?? this.list().length,
       ...v,
+      // Klingeln gibt es nur bei Türstationen
+      bells: v.type === '2n' ? v.bells : [],
       // leeres Passwort = unverändert
       password: v.password === '' && current ? current.password : v.password,
     };
@@ -90,15 +101,15 @@ export class CameraConfigStore {
   create(input: CameraConfigInput): CameraSecretConfig {
     const c = this.validate(input);
     this.db!.prepare(
-      'INSERT INTO cameras (id, name, type, host, protocol, username, password, verify_tls, resolution, enabled, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    ).run(c.id, c.name, c.type, c.host, c.protocol, c.username, c.password, c.verifyTls ? 1 : 0, c.resolution, c.enabled ? 1 : 0, c.sort, new Date().toISOString());
+      'INSERT INTO cameras (id, name, type, host, protocol, username, password, verify_tls, resolution, enabled, sort, created_at, bells) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(c.id, c.name, c.type, c.host, c.protocol, c.username, c.password, c.verifyTls ? 1 : 0, c.resolution, c.enabled ? 1 : 0, c.sort, new Date().toISOString(), JSON.stringify(c.bells));
     this.changed();
     return c;
   }
 
   update(id: string, input: CameraConfigInput): CameraSecretConfig {
     const c = this.validate(input, this.get(id));
-    this.db!.prepare('UPDATE cameras SET name = ?, type = ?, host = ?, protocol = ?, username = ?, password = ?, verify_tls = ?, resolution = ?, enabled = ? WHERE id = ?').run(
+    this.db!.prepare('UPDATE cameras SET name = ?, type = ?, host = ?, protocol = ?, username = ?, password = ?, verify_tls = ?, resolution = ?, enabled = ?, bells = ? WHERE id = ?').run(
       c.name,
       c.type,
       c.host,
@@ -108,6 +119,7 @@ export class CameraConfigStore {
       c.verifyTls ? 1 : 0,
       c.resolution,
       c.enabled ? 1 : 0,
+      JSON.stringify(c.bells),
       id,
     );
     this.changed();
