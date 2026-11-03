@@ -11,7 +11,7 @@ export interface CameraSecretConfig extends Omit<CameraConfig, 'passwordSet'> {
 
 export const cameraInputSchema = z.object({
   name: z.string().trim().min(1, 'Name fehlt').max(60),
-  type: z.enum(['axis', 'demo']),
+  type: z.enum(['axis', '2n', 'demo']),
   host: z.string().trim().max(200).regex(/^[\w.\-:[\]]*$/, 'Nur Hostname oder IP-Adresse, ggf. mit :Port'),
   protocol: z.enum(['http', 'https']),
   username: z.string().max(100),
@@ -72,7 +72,7 @@ export class CameraConfigStore {
     const parsed = cameraInputSchema.safeParse(input);
     if (!parsed.success) throw new HttpError(400, parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
     const v = parsed.data;
-    if (v.type === 'axis' && !v.host) throw new HttpError(400, 'host: Adresse der Kamera fehlt');
+    if (v.type !== 'demo' && !v.host) throw new HttpError(400, 'host: Adresse der Kamera fehlt');
     return {
       id: current?.id ?? `cam-${randomBytes(4).toString('hex')}`,
       sort: current?.sort ?? this.list().length,

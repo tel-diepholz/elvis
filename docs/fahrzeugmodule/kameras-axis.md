@@ -1,7 +1,7 @@
 # Kameras (Axis über VAPIX)
 
 Modul „Kameras“: beliebig viele Kameras, angelegt unter **Einstellungen → Kameras** (nur Admins). Je Kamera gibt es Name,
-Typ (Axis oder Demo ohne Hardware), Adresse, Benutzer, Passwort und die Auflösung des Livebilds. „Verbindung testen“
+Typ (Axis, 2N-Türstation – siehe [kameras-2n.md](kameras-2n.md) – oder Demo ohne Hardware), Adresse, Benutzer, Passwort und die Auflösung des Livebilds. „Verbindung testen“
 zeigt Modell und Funktionen der Kamera.
 
 - **Livebild:** ELVIS holt das MJPEG-Bild von der Kamera (Digest-Anmeldung, MD5 oder SHA-256) und reicht es an den
