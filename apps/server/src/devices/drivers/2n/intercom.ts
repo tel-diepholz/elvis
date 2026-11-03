@@ -98,11 +98,14 @@ export class TwoNIntercom implements CameraClient {
   /** Wartezeit je Abruf des Ereignisprotokolls (Long-Polling) und Pause nach Störungen – in Tests verkürzbar */
   pullSeconds = 25;
   retryMs = 5_000;
+  /** Pause nach Netzwerkfehlern beim Abholen; das Abo bleibt, die Türstation hält die Ereignisse so lange vor */
+  pullRetryMs = 1_000;
 
   /**
    * Klingeltasten über das Ereignisprotokoll der Türstation (log/subscribe, log/pull). Ein Druck auf eine
    * Kurzwahltaste kommt als KeyPressed mit key „%1“, „%2“ … – andere Tasten (Ziffernblock) zählen nicht.
-   * Verfällt das Abo (z. B. Neustart der Türstation), wird neu abonniert.
+   * Verfällt das Abo (z. B. Neustart der Türstation), wird neu abonniert. Bei Netzwerkfehlern bleibt das Abo
+   * bestehen (die Türstation sammelt die Ereignisse weiter), damit kein Klingeln in der Lücke verloren geht.
    */
   watchRings(onRing: (key: string) => void, onError: (message: string) => void): () => void {
     let stopped = false;
@@ -128,9 +131,11 @@ export class TwoNIntercom implements CameraClient {
           }
         } catch (err) {
           if (stopped) return;
-          id = null;
+          // Ablehnung der Türstation: neu abonnieren; Netzwerkfehler: mit demselben Abo erneut abholen
+          const rejected = err instanceof AxisError;
+          if (rejected) id = null;
           onError((err as Error).message);
-          await pause(this.retryMs);
+          await pause(rejected || id === null ? this.retryMs : this.pullRetryMs);
         }
       }
     };
