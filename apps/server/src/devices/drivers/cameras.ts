@@ -5,6 +5,7 @@ import type { CameraSecretConfig } from '../../services/cameras.js';
 import { HttpError } from '../../errors.js';
 import { BaseAdapter, CommandError, command, type AdapterContext } from '../adapter.js';
 import { AxisCamera, DemoCamera, NO_CAPS, type CameraClient } from './axis/camera.js';
+import { TwoNIntercom } from './2n/intercom.js';
 
 /** Quelle der Kameraliste (Einstellungen) */
 export interface CameraSource {
@@ -14,8 +15,11 @@ export interface CameraSource {
 
 export type CameraFactory = (c: CameraSecretConfig) => CameraClient;
 
-export const defaultFactory: CameraFactory = (c) =>
-  c.type === 'demo' ? new DemoCamera() : new AxisCamera({ host: c.host, protocol: c.protocol, username: c.username, password: c.password, verifyTls: c.verifyTls });
+export const defaultFactory: CameraFactory = (c) => {
+  if (c.type === 'demo') return new DemoCamera();
+  const connection = { host: c.host, protocol: c.protocol, username: c.username, password: c.password, verifyTls: c.verifyTls };
+  return c.type === '2n' ? new TwoNIntercom(connection) : new AxisCamera(connection);
+};
 
 interface Entry {
   config: CameraSecretConfig;
@@ -42,7 +46,7 @@ const connectionKey = (c: CameraSecretConfig) => JSON.stringify([c.type, c.host,
 
 /**
  * Alle Kameras aus den Einstellungen: Status, Fähigkeiten und Bedienung. Der Typ (Axis, Demo) ist je Kamera
- * eingestellt; weitere Hersteller kommen als weiterer CameraClient dazu.
+ * eingestellt (2N-Türstationen nur mit Bild); weitere Hersteller kommen als weiterer CameraClient dazu.
  */
 export class CamerasAdapter extends BaseAdapter<'cameras'> {
   private readonly entries = new Map<string, Entry>();

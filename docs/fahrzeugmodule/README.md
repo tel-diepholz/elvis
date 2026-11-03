@@ -34,6 +34,7 @@ Läuft ELVIS im Container, muss das USB-Gerät durchgereicht werden (`devices:` 
 | Wetterstation Airmar 150WX | [wetterstation-airmar.md](wetterstation-airmar.md) |
 | Bluetooth: Victron-Akkus und weitere Geräte | [bluetooth-victron.md](bluetooth-victron.md) |
 | Kameras (Axis über VAPIX) | [kameras-axis.md](kameras-axis.md) |
+| Türstation 2N (Kamerabild) | [kameras-2n.md](kameras-2n.md) |
 | WLAN (OpenWrt-Accesspoints) | [wlan-openwrt.md](wlan-openwrt.md) |
 | Monitoring (SNMP, Node Exporter) | [monitoring.md](monitoring.md) |
 

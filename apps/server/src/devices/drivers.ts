@@ -136,7 +136,7 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
     drivers: {
       standard: {
         label: 'Kameras aus den Einstellungen',
-        description: 'Zeigt und bedient die unter „Kameras“ eingetragenen Kameras (z. B. Axis über VAPIX). Kameratyp und Zugangsdaten werden je Kamera eingestellt.',
+        description: 'Zeigt und bedient die unter „Kameras“ eingetragenen Kameras (z. B. Axis über VAPIX, 2N-Türstationen). Kameratyp und Zugangsdaten werden je Kamera eingestellt.',
         options: {},
         create: (_o, deps) => new CamerasAdapter(deps.cameras),
       },

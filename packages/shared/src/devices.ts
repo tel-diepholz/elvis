@@ -194,9 +194,9 @@ export interface RouterState {
   leases: DhcpLease[] | null;
 }
 
-// --- Kameras (z. B. Axis über VAPIX) ---
+// --- Kameras (z. B. Axis über VAPIX, 2N-Türstationen) ---
 
-export type CameraType = 'axis' | 'demo';
+export type CameraType = 'axis' | '2n' | 'demo';
 export type DayNightMode = 'auto' | 'day' | 'night';
 
 /** Was die Kamera kann – daraus ergeben sich die Bedienelemente. */
