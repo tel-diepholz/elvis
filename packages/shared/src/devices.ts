@@ -235,7 +235,33 @@ export interface CameraStatus {
 
 export interface CamerasState {
   cameras: CameraStatus[];
+  /** Laufende Klingeln (Türstationen); verschwinden nach DOORBELL_RING_SECONDS */
+  rings: DoorbellRing[];
 }
+
+/** Klingeltaste einer Türstation und wo das Klingeln erscheint */
+export interface DoorbellButton {
+  /** Nummer der Kurzwahltaste der Türstation („1“, „2“ …) oder „*“ für jede Taste */
+  key: string;
+  /** z. B. „Haupteingang“ */
+  label: string;
+  /** IDs der Bildschirme, die das Klingeln zeigen */
+  displays: string[];
+}
+
+/** Ein Klingeln an einer Türstation */
+export interface DoorbellRing {
+  id: string;
+  cameraId: string;
+  cameraName: string;
+  key: string;
+  label: string;
+  displays: string[];
+  at: string;
+}
+
+/** So lange bleibt ein Klingeln sichtbar */
+export const DOORBELL_RING_SECONDS = 90;
 
 /** Kamera in den Einstellungen (Passwort wird nie ausgeliefert). */
 export interface CameraConfig {
@@ -251,6 +277,8 @@ export interface CameraConfig {
   enabled: boolean;
   sort: number;
   passwordSet: boolean;
+  /** Klingeltasten (nur Türstationen) */
+  bells: DoorbellButton[];
 }
 
 export interface CameraConfigInput {
@@ -264,6 +292,7 @@ export interface CameraConfigInput {
   verifyTls: boolean;
   resolution: string;
   enabled: boolean;
+  bells: DoorbellButton[];
 }
 
 export interface CameraTestResult {

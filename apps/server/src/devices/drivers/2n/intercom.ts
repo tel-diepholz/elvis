@@ -95,6 +95,53 @@ export class TwoNIntercom implements CameraClient {
   async home(): Promise<void> {}
   async goto(): Promise<void> {}
 
+  /** Wartezeit je Abruf des Ereignisprotokolls (Long-Polling) und Pause nach Störungen – in Tests verkürzbar */
+  pullSeconds = 25;
+  retryMs = 5_000;
+
+  /**
+   * Klingeltasten über das Ereignisprotokoll der Türstation (log/subscribe, log/pull). Ein Druck auf eine
+   * Kurzwahltaste kommt als KeyPressed mit key „%1“, „%2“ … – andere Tasten (Ziffernblock) zählen nicht.
+   * Verfällt das Abo (z. B. Neustart der Türstation), wird neu abonniert.
+   */
+  watchRings(onRing: (key: string) => void, onError: (message: string) => void): () => void {
+    let stopped = false;
+    let id: number | null = null;
+    let wake: (() => void) | null = null;
+    const pause = (ms: number) => new Promise<void>((r) => ((wake = r), setTimeout(r, ms)));
+
+    const loop = async () => {
+      while (!stopped) {
+        try {
+          if (id === null) id = (await this.api<{ id: number }>(`/api/log/subscribe?include=new&filter=KeyPressed&duration=${this.pullSeconds * 4}`)).id;
+          const r = await this.http.send('GET', `/api/log/pull?id=${id}&timeout=${this.pullSeconds}`, undefined, undefined, (this.pullSeconds + 10) * 1000);
+          const data = JSON.parse(r.body.toString('utf8')) as ApiReply<{ events?: { event: string; params?: { key?: string } }[] }>;
+          if (!data.success) {
+            // abgelaufenes oder unbekanntes Abo: neu abonnieren
+            id = null;
+            if (data.error?.code !== 12) throw new AxisError(`Ereignisse: ${describe(data.error)}`, 400);
+            continue;
+          }
+          for (const e of data.result?.events ?? []) {
+            const m = e.event === 'KeyPressed' ? /^%(\d+)$/.exec(e.params?.key ?? '') : null;
+            if (m && !stopped) onRing(m[1]!);
+          }
+        } catch (err) {
+          if (stopped) return;
+          id = null;
+          onError((err as Error).message);
+          await pause(this.retryMs);
+        }
+      }
+    };
+    void loop();
+    return () => {
+      stopped = true;
+      wake?.();
+      if (id !== null) void this.http.send('GET', `/api/log/unsubscribe?id=${id}`).catch(() => {});
+    };
+  }
+
   async openStream(kind: 'live' | 'thumb', resolution: string): Promise<IncomingMessage> {
     const wanted = kind === 'thumb' ? THUMB : (parseResolution(resolution) ?? { width: 640, height: 480 });
     const { width, height } = nearestResolution(wanted, this.resolutions);

@@ -109,8 +109,8 @@ export class AxisHttp {
     throw new AxisError('Anmeldung an der Kamera abgelehnt – Benutzer/Passwort prüfen', 401);
   }
 
-  async send(method: 'GET' | 'POST', path: string, body?: Buffer, contentType?: string): Promise<AxisResponse> {
-    const res = await this.stream(method, path, body, contentType);
+  async send(method: 'GET' | 'POST', path: string, body?: Buffer, contentType?: string, timeoutMs?: number): Promise<AxisResponse> {
+    const res = await this.stream(method, path, body, contentType, timeoutMs);
     const chunks: Buffer[] = [];
     for await (const chunk of res) chunks.push(chunk as Buffer);
     return { status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks) };

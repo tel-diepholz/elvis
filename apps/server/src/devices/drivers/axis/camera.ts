@@ -34,6 +34,11 @@ export interface CameraClient {
   goto(p: CameraPosition): Promise<void>;
   /** MJPEG-Livebild; null = kein Bild (z. B. Demo-Kamera) */
   openStream(kind: 'live' | 'thumb', resolution: string): Promise<IncomingMessage | null>;
+  /**
+   * Klingeltasten beobachten (nur Türstationen): ruft onRing mit der Nummer der Taste auf, bis die zurückgegebene
+   * Funktion aufgerufen wird. Störungen meldet onError; der Treiber verbindet selbst neu.
+   */
+  watchRings?(onRing: (key: string) => void, onError: (message: string) => void): () => void;
 }
 
 export const NO_CAPS: CameraCaps = { panTilt: false, zoom: false, continuousZoom: false, focus: false, autofocus: false, dayNight: false, home: false, zoomUnit: null };

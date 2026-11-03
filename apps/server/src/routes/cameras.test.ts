@@ -33,6 +33,7 @@ const input = (p: Record<string, unknown> = {}) => ({
   password: 'pass',
   verifyTls: false,
   resolution: '1280x720',
+  bells: [],
   enabled: true,
   ...p,
 });
