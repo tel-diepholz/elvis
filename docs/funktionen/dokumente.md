@@ -31,3 +31,5 @@
     den gemischten Inhalt.
   - Ohne laufendes Addon bleiben Hochladen, Anzeigen und Herunterladen möglich; „Neues Dokument“ und die Bearbeitung
     im Browser sind dann gesperrt.
+- **Einsatzbericht:** Beim Beenden legt ELVIS den [Einsatzbericht](einsatzbericht.md) als PDF unter „Protokolle“ ab.
+  Er enthält alle Dokumente des Einsatzes.

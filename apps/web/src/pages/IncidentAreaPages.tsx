@@ -1,5 +1,6 @@
 import { PageHeader } from '../components/ui';
 import { RequireIncident } from '../components/RequireIncident';
+import { DamageView } from './incident/DamageView';
 import { DocumentsView } from './incident/DocumentsView';
 import { JournalView } from './incident/JournalView';
 import { MessagesView } from './incident/MessagesView';
@@ -55,6 +56,19 @@ export function RequestsPage() {
         <>
           <PageHeader title="Anforderungen" subtitle={subtitle(incident)} />
           <RequestsView incident={incident} />
+        </>
+      )}
+    </RequireIncident>
+  );
+}
+
+export function DamagePage() {
+  return (
+    <RequireIncident>
+      {(incident) => (
+        <>
+          <PageHeader title="Schadenkonten" subtitle={subtitle(incident)} />
+          <DamageView incident={incident} />
         </>
       )}
     </RequireIncident>

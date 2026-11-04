@@ -114,7 +114,6 @@ export function UnitDetailPage() {
     onError,
   });
 
-  const sections = useMemo(() => [...new Set(units.map((u) => u.section).filter(Boolean))].sort(), [units]);
   const roles = useMemo(() => units.map((u) => u.role), [units]);
 
   if (isLoading) return <Loading />;
@@ -166,7 +165,7 @@ export function UnitDetailPage() {
               {unit.section && (
                 <>
                   <dt>Abschnitt</dt>
-                  <dd>{unit.section}</dd>
+                  <dd>{readOnly ? unit.section : <Link to="/einsatz/schadenkonten">{unit.section}</Link>}</dd>
                 </>
               )}
               {parent && (
@@ -290,9 +289,9 @@ export function UnitDetailPage() {
       <Modal open={editingUnit} title={`${unit.name} bearbeiten`} onClose={() => setEditingUnit(false)} wide>
         {editingUnit && (
           <UnitForm
+            incidentId={unit.incidentId}
             initial={unit}
             units={units}
-            sections={sections}
             roles={roles}
             pending={patch.isPending}
             onSubmit={(p: NewUnit & UnitPatch) => patch.mutate({ ...p, status: undefined })}

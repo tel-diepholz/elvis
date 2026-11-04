@@ -65,7 +65,8 @@ const toUnit = (r: Row): Unit => ({
   mobile: r.mobile as string,
   sign: tacticalSignSchema.parse(JSON.parse(r.sign as string)),
   strength: { leaders: r.leaders as number, subLeaders: r.sub_leaders as number, crew: r.crew as number },
-  section: r.section as string,
+  accountId: (r.account_id as number | null) ?? null,
+  section: (r.account_name as string | null) ?? '',
   status: r.status as UnitStatus,
   lat: (r.lat as number | null) ?? null,
   lon: (r.lon as number | null) ?? null,
@@ -93,7 +94,7 @@ const unitParams = (u: Omit<Unit, 'id' | 'incidentId' | 'createdAt' | 'updatedAt
   leaders: u.strength.leaders,
   subLeaders: u.strength.subLeaders,
   crew: u.strength.crew,
-  section: u.section,
+  accountId: u.accountId,
   status: u.status,
   lat: u.lat,
   lon: u.lon,
@@ -104,6 +105,9 @@ const unitParams = (u: Omit<Unit, 'id' | 'incidentId' | 'createdAt' | 'updatedAt
   arrivedAt: u.arrivedAt,
   releasedAt: u.releasedAt,
 });
+
+/** Einheiten mit dem Namen ihres Abschnitts (Schadenkonto) */
+const UNIT_SELECT = 'SELECT u.*, a.name AS account_name FROM units u LEFT JOIN damage_accounts a ON a.id = u.account_id';
 
 const toMapObject = (r: Row): MapObject =>
   ({
@@ -397,11 +401,11 @@ export class Store {
   // --- Kräfte ---
 
   units(incidentId: number): Unit[] {
-    return (this.db.prepare('SELECT * FROM units WHERE incident_id = ? ORDER BY id').all(incidentId) as Row[]).map(toUnit);
+    return (this.db.prepare(`${UNIT_SELECT} WHERE u.incident_id = ? ORDER BY u.id`).all(incidentId) as Row[]).map(toUnit);
   }
 
   unit(id: number): Unit | null {
-    const r = this.db.prepare('SELECT * FROM units WHERE id = ?').get(id) as Row | undefined;
+    const r = this.db.prepare(`${UNIT_SELECT} WHERE u.id = ?`).get(id) as Row | undefined;
     return r ? toUnit(r) : null;
   }
 
@@ -410,9 +414,9 @@ export class Store {
     const info = this.db
       .prepare(
         `INSERT INTO units (incident_id, parent_id, role, source_id, name, callsign, organization, notes, email, mobile, sign, leaders, sub_leaders, crew,
-           section, status, lat, lon, position_source, position_at, position_accuracy_m, map_visible, created_at, arrived_at, released_at, updated_at)
+           account_id, status, lat, lon, position_source, position_at, position_accuracy_m, map_visible, created_at, arrived_at, released_at, updated_at)
          VALUES (@incidentId, @parentId, @role, @sourceId, @name, @callsign, @organization, @notes, @email, @mobile, @sign, @leaders, @subLeaders, @crew,
-           @section, @status, @lat, @lon, @positionSource, @positionAt, @positionAccuracyM, @mapVisible, @ts, @arrivedAt, @releasedAt, @ts)`,
+           @accountId, @status, @lat, @lon, @positionSource, @positionAt, @positionAccuracyM, @mapVisible, @ts, @arrivedAt, @releasedAt, @ts)`,
       )
       .run({ ...unitParams(u), incidentId: u.incidentId, ts });
     const created = this.unit(Number(info.lastInsertRowid))!;
@@ -424,13 +428,21 @@ export class Store {
     this.db
       .prepare(
         `UPDATE units SET parent_id=@parentId, role=@role, source_id=@sourceId, name=@name, callsign=@callsign, organization=@organization,
-         notes=@notes, email=@email, mobile=@mobile, sign=@sign, leaders=@leaders, sub_leaders=@subLeaders, crew=@crew, section=@section, status=@status, lat=@lat,
+         notes=@notes, email=@email, mobile=@mobile, sign=@sign, leaders=@leaders, sub_leaders=@subLeaders, crew=@crew, account_id=@accountId, status=@status, lat=@lat,
          lon=@lon, position_source=@positionSource, position_at=@positionAt, position_accuracy_m=@positionAccuracyM, map_visible=@mapVisible, arrived_at=@arrivedAt, released_at=@releasedAt, updated_at=@ts WHERE id=@id`,
       )
       .run({ ...unitParams(u), id: u.id, ts: now() });
     const saved = this.unit(u.id)!;
     this.recordHistory(saved.incidentId, 'unit', saved.id, unitMapState(saved));
     return saved;
+  }
+
+  /** Schadenkonto als Abschnitt einer Einheit (Prüfung und Anzeigename) */
+  damageAccountRef(id: number): { id: number; incidentId: number; name: string; closedAt: string | null } | null {
+    const r = this.db.prepare('SELECT id, incident_id, name, closed_at FROM damage_accounts WHERE id = ?').get(id) as
+      | { id: number; incident_id: number; name: string; closed_at: string | null }
+      | undefined;
+    return r ? { id: r.id, incidentId: r.incident_id, name: r.name, closedAt: r.closed_at } : null;
   }
 
   // --- Kartenobjekte ---
@@ -547,6 +559,16 @@ export class Store {
       .run({ templateId: null, createdByUserId: null, ...d, draft: d.draft ? 1 : 0, ts });
     const { storageName: _, ...doc } = this.document(Number(info.lastInsertRowid))!;
     return doc;
+  }
+
+  /** Von ELVIS erzeugtes Dokument kennzeichnen (z. B. 'report') */
+  markGenerated(id: number, kind: string): void {
+    this.db.prepare('UPDATE documents SET generated = ? WHERE id = ?').run(kind, id);
+  }
+
+  /** Ids der von ELVIS erzeugten Dokumente einer Art */
+  generatedDocumentIds(incidentId: number, kind: string): Set<number> {
+    return new Set((this.db.prepare('SELECT id FROM documents WHERE incident_id = ? AND generated = ?').all(incidentId, kind) as { id: number }[]).map((r) => r.id));
   }
 
   patchDocument(id: number, p: { folderId?: number | null; filename?: string; description?: string }): void {
