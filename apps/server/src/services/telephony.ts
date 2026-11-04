@@ -96,6 +96,13 @@ export class CallLogService {
     return this.toRecord(this.db.prepare('SELECT * FROM calls WHERE id = ?').get(Number(info.lastInsertRowid)) as CallRow, this.deps.numbers());
   }
 
+  /** Gespräche eines Einsatzes, älteste zuerst (Einsatzbericht) */
+  forIncident(incidentId: number): CallRecord[] {
+    const rows = this.db.prepare('SELECT * FROM calls WHERE incident_id = ? ORDER BY started_at').all(incidentId) as CallRow[];
+    const numbers = this.deps.numbers();
+    return rows.map((r) => this.toRecord(r, numbers));
+  }
+
   /** Gespräche der letzten Stunden, neueste zuerst */
   list(hours = 24, limit = 300): CallRecord[] {
     const since = new Date(Date.now() - hours * 3600_000).toISOString();

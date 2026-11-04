@@ -16,7 +16,7 @@ import { CommsPage } from './pages/CommsPage';
 import { FunkPage } from './pages/FunkPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { DockerHostsPage } from './pages/DockerHostsPage';
-import { DocumentsPage, JournalPage, MessagesPage, RequestsPage, TasksPage, UnitsPage } from './pages/IncidentAreaPages';
+import { DamagePage, DocumentsPage, JournalPage, MessagesPage, RequestsPage, TasksPage, UnitsPage } from './pages/IncidentAreaPages';
 import { IncidentPage } from './pages/IncidentPage';
 import { UnitDetailPage } from './pages/incident/UnitDetailPage';
 import { MapPage } from './pages/MapPage';
@@ -84,6 +84,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="einsatz/aufgaben" element={<RequireLogin><TasksPage /></RequireLogin>} />
                 <Route path="einsatz/meldungen" element={<RequireLogin><MessagesPage /></RequireLogin>} />
                 <Route path="einsatz/anforderungen" element={<RequireLogin><RequestsPage /></RequireLogin>} />
+                <Route path="einsatz/schadenkonten" element={<RequireLogin><DamagePage /></RequireLogin>} />
                 <Route path="einsatz/kraefte" element={<RequireLogin><UnitsPage /></RequireLogin>} />
                 {/* auch für abgeschlossene Einsätze (aus dem Archiv) */}
                 <Route path="einsatz/kraefte/:id" element={<RequireLogin><UnitDetailPage /></RequireLogin>} />

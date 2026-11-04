@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpToLine, Check, LayoutGrid, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import {
@@ -18,6 +18,7 @@ import { useToast } from '../lib/toast';
 import { DashboardGrid } from '../components/dashboard/DashboardGrid';
 import { DASHBOARD_ICONS, HEADLESS } from '../components/dashboard/tiles';
 import { TileSettings } from '../components/display/GridEditor';
+import { TileConfigContext } from '../components/display/tiles';
 import { Field, Loading, Modal } from '../components/ui';
 
 /** Anonyme Arbeitsplätze: Grundeinstellung ohne Einsatzdaten (bis auf den Hinweis zur Anmeldung) */
@@ -50,6 +51,12 @@ export function DashboardPage() {
     },
     onError: (e) => toast('error', e.message),
   });
+  // Einstellung aus einer Kachel heraus (z. B. Kartenstil) – ohne Rückmeldung speichern
+  const quietSave = useMutation({
+    mutationFn: (tiles: DashboardTile[]) => api.saveDashboard({ tiles }),
+    onSuccess: (res) => qc.setQueryData(['dashboard', user?.id ?? 0], res),
+    onError: (e) => toast('error', e.message),
+  });
   const reset = useMutation({
     mutationFn: api.resetDashboard,
     onSuccess: (res) => {
@@ -59,6 +66,21 @@ export function DashboardPage() {
     },
     onError: (e) => toast('error', e.message),
   });
+
+  const tileConfig = useMemo(() => {
+    if (!user || !data) return null;
+    return {
+      setConfig: (id: string, patch: DashboardTile['config']) => {
+        const apply = (list: DashboardTile[]) => list.map((t) => (t.id === id ? { ...t, config: { ...t.config, ...patch } } : t));
+        if (draft) setDraft(apply(draft));
+        else {
+          const next = apply(data.layout.tiles);
+          qc.setQueryData(['dashboard', user.id], { ...data, layout: { tiles: next } });
+          quietSave.mutate(next);
+        }
+      },
+    };
+  }, [user, data, draft]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (user && !data) return <Loading />;
   const saved = user ? data!.layout.tiles : ANONYMOUS_TILES;
@@ -118,7 +140,9 @@ export function DashboardPage() {
       )}
 
       {tiles.length ? (
-        <DashboardGrid tiles={tiles} editing={editing} stacked={stacked} onChange={setDraft} onSettings={setSettingsId} onRemove={remove} />
+        <TileConfigContext.Provider value={tileConfig}>
+          <DashboardGrid tiles={tiles} editing={editing} stacked={stacked} onChange={setDraft} onSettings={setSettingsId} onRemove={remove} />
+        </TileConfigContext.Provider>
       ) : (
         <div className="dash-empty">
           <p className="muted">Keine Kacheln auf der Übersicht.</p>
@@ -158,7 +182,7 @@ export function DashboardPage() {
 }
 
 /** Eigene Kacheln der Übersicht ohne weitere Einstellungen */
-const OWN_TYPES: ReadonlySet<DashboardTileType> = new Set(['incident', 'journal', 'messages', 'radio', 'energy', 'monitoring']);
+const OWN_TYPES: ReadonlySet<DashboardTileType> = new Set(['incident', 'journal', 'messages', 'chat', 'mail', 'radio', 'radioTimeline', 'energy', 'monitoring']);
 
 function DashboardTileSettings({ tile, onChange, onRemove }: { tile: DashboardTile; onChange: (config: DashboardTile['config']) => void; onRemove: () => void }) {
   return (
@@ -176,7 +200,7 @@ function DashboardTileSettings({ tile, onChange, onRemove }: { tile: DashboardTi
           </button>
         </>
       ) : (
-        <TileSettings tile={tile as DisplayTile} onChange={onChange} onRemove={onRemove} />
+        <TileSettings tile={tile as DisplayTile} onChange={onChange} onRemove={onRemove} dashboard />
       )}
     </div>
   );

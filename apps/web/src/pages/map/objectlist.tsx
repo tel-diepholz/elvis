@@ -222,10 +222,11 @@ export function ObjectList({
   /** Nach unten rücken, solange darüber ein Menü offen ist (Kartenstil) */
   shiftPx?: number;
   onFly: (target: MapObject | Unit | 'incident' | 'vehicle') => void;
-  onMoveIncident: () => void;
-  onPlaceUnit: (u: Unit) => void;
+  /** Setzen und Bearbeiten in der Karte – ohne (z. B. in der Kartenkachel der Übersicht) entfallen die Knöpfe */
+  onMoveIncident?: () => void;
+  onPlaceUnit?: (u: Unit) => void;
   /** Gezeichnete Fläche oder Linie auf der Karte bearbeiten */
-  onEditShape: (o: MapObject) => void;
+  onEditShape?: (o: MapObject) => void;
   /** Routenbox offen: Objekt als nächsten Halt anhängen */
   onRouteStop?: (stop: { lat: number; lon: number; name: string }) => void;
 }) {
@@ -332,9 +333,11 @@ export function ObjectList({
           </button>
           {canEdit && (
             <span className="map-object-actions">
-              <button type="button" className="icon-btn" onClick={onMoveIncident} title={hasLocation ? 'Verschieben' : 'Setzen'} aria-label="Einsatzort setzen">
-                <MapPin size={16} />
-              </button>
+              {onMoveIncident && (
+                <button type="button" className="icon-btn" onClick={onMoveIncident} title={hasLocation ? 'Verschieben' : 'Setzen'} aria-label="Einsatzort setzen">
+                  <MapPin size={16} />
+                </button>
+              )}
               {hasLocation && (
                 <button type="button" className="icon-btn" onClick={() => window.confirm('Einsatzort von der Karte entfernen?') && clearLocation.mutate()} title="Entfernen" aria-label="Einsatzort entfernen">
                   <Trash2 size={16} />
@@ -410,7 +413,7 @@ export function ObjectList({
                 )}
                 {canEdit && (
                   <>
-                    {isEditable(o) && (
+                    {isEditable(o) && onEditShape && (
                       <button type="button" className="icon-btn" onClick={() => onEditShape(o)} aria-label={`Form von ${o.name} bearbeiten`} title="Form bearbeiten">
                         <PenTool size={16} />
                       </button>
@@ -495,7 +498,7 @@ export function ObjectList({
               const placed = u.lat !== null && u.lon !== null;
               return (
                 <li key={u.id} className={`map-object ${u.mapVisible ? '' : 'hidden'}`} style={{ paddingLeft: depth * 14 }}>
-                  <button type="button" className="map-object-main" onClick={() => (placed ? onFly(u) : canEdit && onPlaceUnit(u))} disabled={!placed && !canEdit}>
+                  <button type="button" className="map-object-main" onClick={() => (placed ? onFly(u) : canEdit && onPlaceUnit?.(u))} disabled={!placed && !(canEdit && onPlaceUnit)}>
                     <span className="map-object-icon unit">
                       <TacticalSignImage sign={u.sign} height={22} />
                     </span>
@@ -509,9 +512,11 @@ export function ObjectList({
                   </button>
                   {canEdit && (
                     <span className="map-object-actions">
-                      <button type="button" className="icon-btn" onClick={() => onPlaceUnit(u)} title={placed ? 'Verschieben' : 'Position setzen'} aria-label={`Position von ${u.name} setzen`}>
-                        <MapPin size={16} />
-                      </button>
+                      {onPlaceUnit && (
+                        <button type="button" className="icon-btn" onClick={() => onPlaceUnit(u)} title={placed ? 'Verschieben' : 'Position setzen'} aria-label={`Position von ${u.name} setzen`}>
+                          <MapPin size={16} />
+                        </button>
+                      )}
                       {placed && (
                         <>
                           <button

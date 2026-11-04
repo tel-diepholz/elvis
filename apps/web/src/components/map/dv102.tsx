@@ -72,18 +72,19 @@ export const generatorName = (s: TacticalSign) => [GENERATOR_LABELS[s.base as Ge
  * Auswahl der Lagezeichen mit Suche, nach Gruppen der DV 102. Einheiten, Stellen und Personen kommen nicht aus dem
  * Zeichensatz, sondern aus dem Zeichengenerator: ihre Kacheln öffnen ihn über onGenerator.
  */
-export function Dv102Picker({ value, onPick, onGenerator }: { value: string | null; onPick: (id: string) => void; onGenerator: (base: GeneratorBase) => void }) {
+export function Dv102Picker({ value, onPick, onGenerator }: { value: string | null; onPick: (id: string) => void; onGenerator?: (base: GeneratorBase) => void }) {
   const mod = useDv102();
   const [q, setQ] = useState('');
   const hits = useMemo(() => mod?.searchDv102(q) ?? [], [mod, q]);
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const bases = SIGN_GENERATOR_BASES.filter((b) => words.every((w) => `${GENERATOR_SEARCH[b]} generator zusammenstellen`.includes(w)));
+  // Ohne onGenerator nur Zeichen aus dem Zeichensatz (z. B. Schadenkonten)
+  const bases = !onGenerator ? [] : SIGN_GENERATOR_BASES.filter((b) => words.every((w) => `${GENERATOR_SEARCH[b]} generator zusammenstellen`.includes(w)));
   const generatorGroup = bases.length > 0 && (
     <section key="generator">
       <h4>Einheiten, Stellen, Personen</h4>
       <div className="dv102-grid">
         {bases.map((b) => (
-          <button key={b} type="button" className="dv102-choice" onClick={() => onGenerator(b)} title={`${GENERATOR_LABELS[b]} mit dem Zeichengenerator zusammenstellen`}>
+          <button key={b} type="button" className="dv102-choice" onClick={() => onGenerator?.(b)} title={`${GENERATOR_LABELS[b]} mit dem Zeichengenerator zusammenstellen`}>
             <span className="dv102-image dv102-generator">
               <TacticalSignImage sign={generatorSign(b)} height={b === 'command' ? 44 : 34} />
             </span>

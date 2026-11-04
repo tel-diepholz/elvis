@@ -21,7 +21,7 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
   und jede Aktion landet im Bedienprotokoll. Beim Entkoppeln eines Bildschirms werden seine Szenen gelöscht.
 - **Kacheln:** Lagekarte (Fahrzeug und Einsatzort, Kartenstil, Mittelpunkt, Mitführen, Zoom), [Kamera](../fahrzeugmodule/kameras-axis.md) (Livebild),
   Wetter (mit amtlichen Warnungen), Wettervorhersage (24 Stunden und/oder 7 Tage), Uhr (DTG), Meldungen, Netzwerk (Router/Failover), Gast-WLAN (QR-Code, Netzname und Passwort des Gastnetzes
-  im laufenden Einsatz, siehe [WLAN](../fahrzeugmodule/wlan-openwrt.md)), Bild (hochgeladenes PNG, JPEG, GIF oder WebP bis 20 MB, ohne Kachelrahmen) und
+  im laufenden Einsatz, siehe [WLAN](../fahrzeugmodule/wlan-openwrt.md)), [Schadenkonten](schadenkonten.md) (offene Konten mit Kräften und Personenschäden, Summe), Bild (hochgeladenes PNG, JPEG, GIF oder WebP bis 20 MB, ohne Kachelrahmen) und
   Szenenwahl (Szenen und Hell/Dunkel per Touch am Bildschirm). Eine mitgeführte Karte folgt Fahrzeug bzw. Einsatzort und
   lässt sich nicht verschieben. Ohne Mitführen lässt sie sich am Bildschirm per Touch und unter „Bildschirme“ direkt in
   der Vorschau verschieben und zoomen – der Bildschirm folgt und behält den Ausschnitt, auch nach „Neu laden“.

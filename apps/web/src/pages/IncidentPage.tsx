@@ -8,6 +8,7 @@ import { fmtDateTime, fmtDuration } from '../lib/format';
 import { useActiveIncident, useNow } from '../lib/hooks';
 import { useToast } from '../lib/toast';
 import { Card, Loading, Modal, PageHeader, Stat } from '../components/ui';
+import { ReportButton } from '../components/ReportButton';
 import { IncidentForm } from './incident/IncidentForm';
 import { deployedUnits } from './incident/UnitsView';
 
@@ -62,7 +63,7 @@ function ActiveIncident({ incident }: { incident: Incident }) {
   });
   const close = useMutation({
     mutationFn: () => api.closeIncident(incident.id),
-    onSuccess: () => toast('success', 'Einsatz beendet und archiviert'),
+    onSuccess: () => toast('success', 'Einsatz beendet – der Einsatzbericht wird unter „Protokolle“ abgelegt'),
     onError: (e) => toast('error', e.message),
   });
 
@@ -70,7 +71,7 @@ function ActiveIncident({ incident }: { incident: Incident }) {
   const deployed = deployedUnits(units);
   const confirmClose = () => {
     const open = active.length ? `\n\n${active.length} Einheit(en) sind noch nicht entlassen.` : '';
-    if (window.confirm(`Einsatz „${incident.title}“ wirklich beenden?${open}\n\nDanach sind keine Änderungen mehr möglich.`)) close.mutate();
+    if (window.confirm(`Einsatz „${incident.title}“ wirklich beenden?${open}\n\nDanach sind keine Änderungen mehr möglich. Der Einsatzbericht (PDF) wird erstellt und unter „Protokolle“ abgelegt.`)) close.mutate();
   };
 
   return (
@@ -87,6 +88,7 @@ function ActiveIncident({ incident }: { incident: Incident }) {
             <button className="btn" onClick={() => setEditing(true)}>
               <Pencil size={16} /> Bearbeiten
             </button>
+            <ReportButton incidentId={incident.id} label="Zwischenbericht (PDF)" />
             <button className="btn btn-danger" onClick={confirmClose} disabled={close.isPending}>
               Einsatz beenden
             </button>

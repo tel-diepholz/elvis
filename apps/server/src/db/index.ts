@@ -993,6 +993,85 @@ const MIGRATIONS: Migration[] = [
   `,
   // Klingeltasten der Türstationen (2N) und Bildschirme, auf denen das Klingeln erscheint
   `ALTER TABLE cameras ADD COLUMN bells TEXT NOT NULL DEFAULT '[]';`,
+  // Schadenkonten (T-Konto je Schadenstelle/Einsatzabschnitt): Einträge werden erledigt statt gelöscht, Personenschäden
+  // als unveränderliche Buchungen (Stand = letzte Buchung je Kategorie). Einheiten verweisen per account_id auf ihren
+  // Abschnitt; units.section bleibt ungenutzt stehen
+  `
+  CREATE TABLE damage_accounts (
+    id INTEGER PRIMARY KEY,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    number INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    leader_unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
+    leader_text TEXT NOT NULL DEFAULT '',
+    radio TEXT NOT NULL DEFAULT '',
+    lat REAL,
+    lon REAL,
+    closed_at TEXT,
+    closed_by TEXT,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (incident_id, number)
+  );
+  CREATE TABLE damage_entries (
+    id INTEGER PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES damage_accounts(id),
+    side TEXT NOT NULL CHECK (side IN ('schaden', 'gefahr', 'massnahme')),
+    text TEXT NOT NULL DEFAULT '',
+    sign TEXT,
+    count INTEGER,
+    uncertain INTEGER NOT NULL DEFAULT 0,
+    done_at TEXT,
+    done_by TEXT,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL
+  );
+  CREATE INDEX damage_entries_account ON damage_entries(account_id);
+  CREATE TABLE damage_counts (
+    id INTEGER PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES damage_accounts(id),
+    category TEXT NOT NULL,
+    value INTEGER NOT NULL,
+    forces INTEGER NOT NULL DEFAULT 0,
+    estimated INTEGER NOT NULL DEFAULT 0,
+    note TEXT NOT NULL DEFAULT '',
+    at TEXT NOT NULL,
+    by TEXT NOT NULL
+  );
+  CREATE INDEX damage_counts_account ON damage_counts(account_id, category, id);
+  CREATE TRIGGER damage_counts_immutable_update BEFORE UPDATE ON damage_counts
+    BEGIN SELECT RAISE(ABORT, 'Buchungen der Personenschäden sind unveränderlich'); END;
+  CREATE TRIGGER damage_counts_immutable_delete BEFORE DELETE ON damage_counts
+    BEGIN SELECT RAISE(ABORT, 'Buchungen der Personenschäden sind unveränderlich'); END;
+  ALTER TABLE units ADD COLUMN account_id INTEGER REFERENCES damage_accounts(id);
+  CREATE INDEX units_account ON units(account_id) WHERE account_id IS NOT NULL;
+  `,
+  // Bisherige Freitext-Abschnitte werden zu Schadenkonten (Nummer in Reihenfolge des ersten Auftretens)
+  (db) => {
+    const sections = db
+      .prepare(
+        `SELECT incident_id, TRIM(section) AS name, MIN(id) AS first_id, MIN(created_at) AS created_at FROM units
+         WHERE TRIM(section) <> '' GROUP BY incident_id, TRIM(section) ORDER BY incident_id, first_id`,
+      )
+      .all() as { incident_id: number; name: string; created_at: string }[];
+    const insert = db.prepare(
+      `INSERT INTO damage_accounts (incident_id, number, name, created_at, created_by, updated_at) VALUES (?, ?, ?, ?, 'System', ?)`,
+    );
+    const assign = db.prepare('UPDATE units SET account_id = ? WHERE incident_id = ? AND TRIM(section) = ?');
+    const numbers = new Map<number, number>();
+    for (const s of sections) {
+      const n = (numbers.get(s.incident_id) ?? 0) + 1;
+      numbers.set(s.incident_id, n);
+      const id = Number(insert.run(s.incident_id, n, s.name, s.created_at, s.created_at).lastInsertRowid);
+      assign.run(id, s.incident_id, s.name);
+    }
+  },
+  // Von ELVIS selbst erzeugte Dokumente (z. B. 'report' = Einsatzbericht); nicht Teil eines späteren Berichts
+  (db) => {
+    const cols = db.prepare("SELECT name FROM pragma_table_info('documents')").all() as { name: string }[];
+    if (!cols.some((c) => c.name === 'generated')) db.exec('ALTER TABLE documents ADD COLUMN generated TEXT');
+  },
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

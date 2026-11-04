@@ -184,7 +184,7 @@ const geoPath = z.union([
 ]);
 const osmRef = z.string().regex(/^[NWR]\d{1,12}$/).nullable();
 /** Kennung eines Lagezeichens nach DV 102 („Kategorie/Name“); ob es das Zeichen gibt, prüft der Server */
-const dv102Id = z.string().regex(/^[\p{L}]+\/[\p{L}\p{N}_]{1,80}$/u, 'Zeichen ungültig');
+export const dv102IdSchema = z.string().regex(/^[\p{L}]+\/[\p{L}\p{N}_]{1,80}$/u, 'Zeichen ungültig');
 /** Grundzeichen, die das Kartenobjekt „Zeichen“ aus dem Generator nimmt – Fahrzeuge stehen als Kräfte auf der Karte */
 export const SIGN_GENERATOR_BASES = ['unit', 'command', 'facility', 'person'] as const;
 const generatorSign = tacticalSignSchema.extend({ base: z.enum(SIGN_GENERATOR_BASES).default('person') });
@@ -208,7 +208,7 @@ const tracked = (id: z.ZodString) =>
 
 export const newMapObjectSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('point'), name, lat, lon, color: ownColor, data: z.object({ detail, osm: osmRef.optional(), icon: mapIconNameSchema.nullable().optional(), badge: z.string().trim().max(40).nullable().optional() }) }),
-  z.object({ kind: z.literal('sign'), name, lat, lon, data: z.union([z.object({ detail, sign: dv102Id }), z.object({ detail, tactical: generatorSign })]) }),
+  z.object({ kind: z.literal('sign'), name, lat, lon, data: z.union([z.object({ detail, sign: dv102IdSchema }), z.object({ detail, tactical: generatorSign })]) }),
   z.object({ kind: z.literal('area'), name, lat, lon, color: ownColor, data: z.object({ detail, osm: osmRef, outline }) }),
   z.object({ kind: z.literal('line'), name, lat, lon, color: ownColor, data: z.object({ detail, osm: osmRef, path: geoPath }) }),
   z.object({ kind: z.literal('gauss'), name, lat, lon, data: gauss.default(DEFAULT_GAUSS) }),
@@ -242,7 +242,7 @@ export const mapObjectPatchSchema = z.object({
   /** Symbol eines Punkts (null = einfacher Punkt) */
   icon: mapIconNameSchema.nullable().optional(),
   /** Lagezeichen eines Zeichens tauschen: fertiges Zeichen oder Zeichen aus dem Generator */
-  sign: dv102Id.optional(),
+  sign: dv102IdSchema.optional(),
   tactical: generatorSign.optional(),
   outline: outline.optional(),
   path: geoPath.optional(),

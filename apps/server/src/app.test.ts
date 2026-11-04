@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Incident, JournalEntry, Unit } from '@elvis/shared';
+import type { DamageAccount, Incident, JournalEntry, Unit } from '@elvis/shared';
 import { buildApp, type App } from './app.js';
 import { parseConfig } from './config.js';
 import { openDb } from './db/index.js';
@@ -52,7 +52,8 @@ describe('Einsatzbezogene Bereiche', () => {
     });
     expect(unit.status).toBe('alarmiert');
     expect(unit.lat).toBeNull();
-    const { body: arrived } = await req<Unit>('PATCH', `/api/units/${unit.id}`, { status: 'eingetroffen', section: 'EA Nord' });
+    const { body: nord } = await req<DamageAccount>('POST', `/api/incidents/${incident.id}/damage-accounts`, { name: 'EA Nord' });
+    const { body: arrived } = await req<Unit>('PATCH', `/api/units/${unit.id}`, { status: 'eingetroffen', accountId: nord.id });
     expect(arrived.arrivedAt).not.toBeNull();
 
     const { body: journal } = await req<JournalEntry[]>('GET', `/api/incidents/${incident.id}/journal`);

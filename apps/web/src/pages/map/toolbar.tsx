@@ -201,15 +201,17 @@ export function MapStylePicker({
   value: string | null;
   auto: MapSource | undefined;
   onChange: (id: string | null) => void;
-  layers: TrafficLayers;
-  onLayers: (l: TrafficLayers) => void;
+  /** Ohne: nur der Kartenstil (z. B. Kartenkachel der Übersicht) */
+  layers?: TrafficLayers;
+  onLayers?: (l: TrafficLayers) => void;
   onMenuHeight?: (px: number) => void;
 }) {
-  const layer = (key: keyof TrafficLayers, icon: ReactNode, label: string) => (
-    <button key={key} type="button" role="menuitemcheckbox" aria-checked={layers[key]} className="map-dropdown-item" onClick={() => onLayers({ ...layers, [key]: !layers[key] })}>
-      <span className="map-dropdown-check">{layers[key] && <Check size={16} />}</span> {icon} {label}
-    </button>
-  );
+  const layer = (key: keyof TrafficLayers, icon: ReactNode, label: string) =>
+    layers && (
+      <button key={key} type="button" role="menuitemcheckbox" aria-checked={layers[key]} className="map-dropdown-item" onClick={() => onLayers?.({ ...layers, [key]: !layers[key] })}>
+        <span className="map-dropdown-check">{layers[key] && <Check size={16} />}</span> {icon} {label}
+      </button>
+    );
   const item = (id: string | null, label: string, close: () => void) => (
     <button key={id ?? 'auto'} type="button" role="menuitemradio" aria-checked={value === id} className="map-dropdown-item" onClick={() => (close(), onChange(id))}>
       <span className="map-dropdown-check">{value === id && <Check size={16} />}</span> {label}
@@ -227,10 +229,14 @@ export function MapStylePicker({
                 {sources.map((s) => item(s.id, s.name, close))}
               </>
             )}
-            <div className="map-dropdown-heading">Ebenen</div>
-            {layer('aircraft', <Plane size={16} />, 'Flugzeuge')}
-            {layer('ships', <Ship size={16} />, 'Schiffe')}
-            {layer('radar', <CloudRain size={16} />, 'Regenradar')}
+            {layers && (
+              <>
+                <div className="map-dropdown-heading">Ebenen</div>
+                {layer('aircraft', <Plane size={16} />, 'Flugzeuge')}
+                {layer('ships', <Ship size={16} />, 'Schiffe')}
+                {layer('radar', <CloudRain size={16} />, 'Regenradar')}
+              </>
+            )}
           </>
         )}
       </Dropdown>

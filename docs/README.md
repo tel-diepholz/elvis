@@ -15,10 +15,12 @@
 - [Flugzeuge und Schiffe](funktionen/luft-und-schiffsverkehr.md) – ADS-B und AIS auf der Karte
 - [Wetter](funktionen/wetter.md) – DWD-Warnungen und Prognose
 - [Kräfte und Personal](funktionen/kraefte-und-personal.md) – Personalbögen, Cloud-Personalabfrage, Ortung per App
+- [Schadenkonten](funktionen/schadenkonten.md) – T-Konto je Schadenstelle/Einsatzabschnitt, Personenschäden
 - [Kontakte](funktionen/kontakte.md) – Adressbuch des ELW
 - [E-Mail](funktionen/email.md) – Postfach des ELW über das Relay, OpenPGP
 - [Nachrichten](funktionen/nachrichten.md) – SMS, Signal, Threema, WhatsApp und Telegram in einer Ansicht
 - [Dokumente, Vorlagen und Collabora](funktionen/dokumente.md)
+- [Einsatzbericht](funktionen/einsatzbericht.md) – PDF mit allen erfassten Daten und Dokumenten, automatisch beim Beenden
 - [Drucken](funktionen/drucken.md) – Druckserver (CUPS), Lagekarten, Gastdrucker
 - [Scannen](funktionen/scannen.md) – Scan an E-Mail in den Posteingang
 - [Bildschirme](funktionen/bildschirme.md) – Kacheln, Szenen, Kiosk und Smart-TV
