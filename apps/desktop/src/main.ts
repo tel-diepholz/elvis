@@ -7,6 +7,7 @@
  * Schließen des Fensters legt die App in den Infobereich – der Server bleibt für die Tablets erreichbar.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, type WriteStream } from 'node:fs';
+import { createServer } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { app, BrowserWindow, clipboard, dialog, Menu, nativeImage, shell, Tray, utilityProcess, type UtilityProcess } from 'electron';
@@ -93,6 +94,48 @@ function startServer(): void {
   });
 }
 
+/** Ist der Port frei? (wie der Server: alle Schnittstellen) */
+function portFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = createServer()
+      .once('error', () => resolve(false))
+      .once('listening', () => probe.close(() => resolve(true)));
+    probe.listen(port, '0.0.0.0');
+  });
+}
+
+/**
+ * Belegten Port vor dem Start erkennen (z. B. ein anderer Webserver oder eine ELVIS-Entwicklerinstanz in WSL, deren
+ * Ports Windows weiterleitet) und einen freien vorschlagen. Liefert false, wenn ELVIS nicht starten soll.
+ */
+async function ensurePort(): Promise<boolean> {
+  if (await portFree(settings.port)) return true;
+  let next: number | null = null;
+  for (let p = settings.port + 1; p <= settings.port + 50 && p <= 65535; p++) {
+    if (await portFree(p)) {
+      next = p;
+      break;
+    }
+  }
+  if (next === null) {
+    dialog.showErrorBox('Port belegt', `Port ${settings.port} und die folgenden sind belegt. Bitte in ${settingsFile} einen freien Port eintragen.`);
+    return false;
+  }
+  const choice = dialog.showMessageBoxSync({
+    type: 'warning',
+    title: 'Port belegt',
+    message: `Port ${settings.port} wird bereits von einem anderen Programm verwendet.`,
+    detail: `ELVIS kann stattdessen Port ${next} verwenden. Tablets erreichen ELVIS dann unter dieser neuen Adresse (siehe „Adresse für Tablets …“ im Infobereich).`,
+    buttons: [`Port ${next} verwenden`, 'Beenden'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (choice !== 0) return false;
+  settings = { ...settings, port: next };
+  writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
+  return true;
+}
+
 /** Wartet, bis der Server antwortet (Datenbank-Migrationen können beim ersten Start etwas dauern) */
 async function waitForServer(timeoutMs = 60_000): Promise<boolean> {
   const until = Date.now() + timeoutMs;
@@ -159,7 +202,7 @@ function showTabletAddresses(): void {
 
 function buildTray(): void {
   tray = new Tray(icon().resize({ width: 16, height: 16 }));
-  tray.setToolTip('ELVIS lite');
+  tray.setToolTip(`ELVIS lite – Port ${settings.port}`);
   const autostart = () => app.getLoginItemSettings().openAtLogin;
   const menu = () =>
     Menu.buildFromTemplate([
@@ -193,8 +236,15 @@ if (!app.requestSingleInstanceLock()) {
     settings = loadSettings();
     if (!existsSync(settingsFile)) writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
     Menu.setApplicationMenu(null);
+    if (!DEV_URL) {
+      if (!(await ensurePort())) {
+        quitting = true;
+        app.quit();
+        return;
+      }
+      startServer();
+    }
     buildTray();
-    if (!DEV_URL) startServer();
     if (!(await waitForServer())) {
       dialog.showErrorBox('ELVIS startet nicht', `Der ELVIS-Server antwortet nicht unter ${localUrl()}.\n\nProtokoll: ${join(logDir, 'server.log')}`);
     }

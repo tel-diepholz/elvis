@@ -44,8 +44,12 @@ zugleich Server: Tablets im selben Netz öffnen `http://<Laptop-IP>:8080` im Bro
 
 - **Installer:** GitHub Actions → Workflow „ELVIS lite (Windows)“ → Artefakt `elvis-lite-installer`, oder selbst bauen
   (unter Windows): `npm ci && npm run dist -w @elvis/desktop` → `apps/desktop/release/*.exe`.
-- **Firewall:** Der Installer gibt TCP 8080 für private und Domänen-Netzwerke frei. Ist das Fahrzeugnetz in Windows als
-  „Öffentlich“ eingestuft, auf „Privat“ umstellen – sonst erreichen Tablets den Laptop nicht.
+- **Firewall:** Der Installer gibt ELVIS lite (das Programm, unabhängig vom Port) für private und Domänen-Netzwerke frei.
+  Ist das Fahrzeugnetz in Windows als „Öffentlich“ eingestuft, auf „Privat“ umstellen – sonst erreichen Tablets den
+  Laptop nicht.
+- **Port:** Standard ist 8080. Ist er belegt (z. B. durch einen anderen Webserver oder eine ELVIS-Entwicklerinstanz in
+  WSL, deren Ports Windows weiterleitet), schlägt ELVIS beim Start einen freien Port vor und merkt ihn sich in
+  `desktop.json`.
 - **Daten:** `%APPDATA%\ELVIS lite\` – `data\` (Datenbank, Dokumente), `elvis.json` (optionale Serverkonfiguration),
   `desktop.json` (Port), `logs\server.log`. Backup und Wiederherstellung wie in der Vollversion unter Einstellungen.
 - **Entwicklung:** `ELVIS_EDITION=lite npm run dev` zeigt die lite-Oberfläche im Browser; die App selbst mit
