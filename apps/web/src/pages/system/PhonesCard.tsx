@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Eye, EyeOff, Pencil, Plus, Power, RefreshCw, Send, Trash2 } from 'lucide-react';
-import { PHONE_MODEL, PHONE_MODELS, phoneConfigSchema, phoneInputSchema, type Phone, type PhoneConfig, type PhoneInput, type PhoneKeySlot, type PhoneModel } from '@elvis/shared';
+import { MAX_PAGING_ZONES, PHONE_MODEL, PHONE_MODELS, phoneConfigSchema, phoneInputSchema, type Phone, type PagingZoneInput, type PhoneConfig, type PhoneInput, type PhoneKeySlot, type PhoneModel } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Card, Field, Loading, Modal } from '../../components/ui';
@@ -109,6 +109,90 @@ function ConfigForm({ config }: { config: PhoneConfig }) {
   );
 }
 
+/** Durchsage-Zonen (Multicast): alle Telefone hören auf alle Zonen, Durchsage-Tasten sprechen in eine Zone */
+function PagingZonesForm({ config }: { config: PhoneConfig }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [zones, setZones] = useState<PagingZoneInput[]>(config.pagingZones);
+  useEffect(() => setZones(config.pagingZones), [config]);
+  const next = { ...config, pagingZones: zones };
+  const result = phoneConfigSchema.safeParse(next);
+  const save = useMutation({
+    mutationFn: () => api.setPhoneConfig(next),
+    onSuccess: (s) => (
+      qc.setQueryData(['phones', 'system'], s),
+      void qc.invalidateQueries({ queryKey: ['phones'] }),
+      toast('success', 'Gespeichert – ELVIS überträgt die Zonen an die Telefone')
+    ),
+    onError: (e) => toast('error', e.message),
+  });
+  const set = (i: number, patch: Partial<PagingZoneInput>) => setZones((zs) => zs.map((z, j) => (j === i ? { ...z, ...patch } : z)));
+  const add = () => {
+    const used = new Set(zones.map((z) => z.address));
+    let n = 1;
+    while (used.has(`239.0.0.${n}:5000`)) n++;
+    setZones((zs) => [...zs, { name: zs.length ? `Zone ${zs.length + 1}` : 'Alle', address: `239.0.0.${n}:5000`, priority: 5, interrupt: false, loud: false }]);
+  };
+  const dirty = JSON.stringify(next) !== JSON.stringify(config);
+  return (
+    <form className="form" onSubmit={(e) => (e.preventDefault(), result.success && save.mutate())}>
+      {zones.length === 0 ? (
+        <p className="muted">Noch keine Zonen. Ohne Zone hören die Telefone keine Durchsagen.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Multicast-Adresse</th>
+                <th>Priorität</th>
+                <th>Gespräch unterbrechen</th>
+                <th>Volle Lautstärke</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {zones.map((z, i) => (
+                <tr key={i}>
+                  <td>
+                    <input value={z.name} onChange={(e) => set(i, { name: e.target.value })} maxLength={30} required aria-label={`Name der Zone ${i + 1}`} />
+                  </td>
+                  <td>
+                    <input value={z.address} onChange={(e) => set(i, { address: e.target.value })} maxLength={21} className="mono" required aria-label={`Multicast-Adresse der Zone ${i + 1}`} />
+                  </td>
+                  <td>
+                    <input type="number" min={0} max={10} value={z.priority ?? 5} onChange={(e) => set(i, { priority: Number(e.target.value) })} aria-label={`Priorität der Zone ${i + 1}`} style={{ width: '5em' }} />
+                  </td>
+                  <td>
+                    <input type="checkbox" checked={z.interrupt ?? false} onChange={(e) => set(i, { interrupt: e.target.checked })} aria-label={`Zone ${i + 1} unterbricht Gespräche`} />
+                  </td>
+                  <td>
+                    <input type="checkbox" checked={z.loud ?? false} onChange={(e) => set(i, { loud: e.target.checked })} aria-label={`Zone ${i + 1} mit voller Lautstärke`} />
+                  </td>
+                  <td>
+                    <button type="button" className="btn btn-icon" aria-label={`Zone ${z.name || i + 1} entfernen`} onClick={() => setZones((zs) => zs.filter((_, j) => j !== i))}>
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {!result.success && <p className="tone-warn">{result.error.issues[0]?.message}</p>}
+      <div className="form-actions spread">
+        <button type="button" className="btn" disabled={zones.length >= MAX_PAGING_ZONES} onClick={add}>
+          <Plus size={16} /> Zone hinzufügen
+        </button>
+        <button type="submit" className="btn btn-primary" disabled={!dirty || !result.success || save.isPending}>
+          Speichern
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function TemplateEditor({ phones }: { phones: Phone[] }) {
   const toast = useToast();
   const qc = useQueryClient();
@@ -169,7 +253,7 @@ export function PhonesCard() {
 
       <Card title="Provisionierung" className="span-3">
         <p className="muted">
-          Die Telefone holen SIP-Konto, Telefonbuch (Kontakte, Taste <em>Verzeichnis</em>) und Funktionstasten von ELVIS. Die URL im DHCP-Server als Option 66 eintragen
+          Die Telefone holen SIP-Konto, Telefonbuch (Kontakte, Taste <em>Verzeichnis</em>), Durchsage-Zonen und Funktionstasten von ELVIS. Die URL im DHCP-Server als Option 66 eintragen
           oder einmalig am Telefon unter <em>Einstellungen → Erweitert → Aktualisieren → Einstellungs-URL</em>. <code>{'{mac}'}</code> setzt das Telefon selbst ein. Danach
           überträgt ELVIS geänderte Tasten sofort; zusätzlich fragt jedes Telefon stündlich nach. Die URL enthält einen geheimen Schlüssel und die SIP-Passwörter – nicht
           weitergeben.
@@ -273,6 +357,15 @@ export function PhonesCard() {
             </table>
           </div>
         )}
+      </Card>
+
+      <Card title="Durchsagen" className="span-3">
+        <p className="muted">
+          Durchsagen laufen per Multicast im Netz des ELW, ohne Telefonanlage. Alle Telefone hören auf jede Zone und spielen eine Durchsage über den Lautsprecher ab. Wer
+          spricht, nutzt eine Taste der Art <em>Durchsage</em>. Kommen zwei Durchsagen gleichzeitig, ist die mit der höheren Priorität zu hören. Ohne{' '}
+          <em>Gespräch unterbrechen</em> hört ein Telefon die Durchsage nur, wenn es gerade frei ist. Sender und Telefone müssen im selben Netz sein.
+        </p>
+        <PagingZonesForm config={system.config} />
       </Card>
 
       <Card title="Tastenvorlage" className="span-3">

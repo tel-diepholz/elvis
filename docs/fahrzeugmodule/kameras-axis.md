@@ -1,11 +1,13 @@
 # Kameras (Axis über VAPIX)
 
 Modul „Kameras“: beliebig viele Kameras, angelegt unter **Einstellungen → Kameras** (nur Admins). Je Kamera gibt es Name,
-Typ (Axis oder Demo ohne Hardware), Adresse, Benutzer, Passwort und die Auflösung des Livebilds. „Verbindung testen“
+Typ (Axis, 2N-Türstation – siehe [kameras-2n.md](kameras-2n.md) – oder Demo ohne Hardware), Adresse, Benutzer, Passwort und die Auflösung des Livebilds. „Verbindung testen“
 zeigt Modell und Funktionen der Kamera.
 
 - **Livebild:** ELVIS holt das MJPEG-Bild von der Kamera (Digest-Anmeldung, MD5 oder SHA-256) und reicht es an den
-  Browser weiter (`/api/cameras/<id>/stream`). Zugangsdaten verlassen den Server nicht. Wie der Fahrzeugbereich ist das
+  Browser weiter (`/api/cameras/<id>/stream`). Zugangsdaten verlassen den Server nicht. Je Kamera und Bildart
+  (Livebild, Vorschau) hält ELVIS nur eine Verbindung zur Kamera und verteilt die Bilder an alle Browser und
+  Bildschirme; wer dazukommt, sieht sofort das letzte Bild. Nach dem letzten Zuschauer bleibt sie noch 5 s offen. Wie der Fahrzeugbereich ist das
   Bild auch für anonyme Arbeitsplätze sichtbar, bedienen können nur angemeldete Benutzer.
 - **Bedienung je nach Kamera:** ELVIS erkennt beim Verbinden, welche Funktionen eine Kamera hat, und zeigt nur die passenden Bedienelemente. „Verbindung testen“ zeigt, welche Schnittstelle was übernimmt.
   - Neuere Kameras mit Motorobjektiv: Optics Control API (`opticscontrol.cgi`, Version wird ausgehandelt) für Zoom,

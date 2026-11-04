@@ -4,7 +4,7 @@ import { MAC_PATTERN } from './workstations';
 
 /**
  * Tischtelefone (Snom D385) an der Telefonanlage des ELW. ELVIS provisioniert sie über eine Abruf-URL (SIP-Konto,
- * Telefonbuch aus den Kontakten, Funktionstasten) und überträgt geänderte Tasten sofort an das Telefon.
+ * Telefonbuch aus den Kontakten, Durchsage-Zonen, Funktionstasten) und überträgt geänderte Tasten sofort an das Telefon.
  *
  * Tastenbelegung in Ebenen: Vorlage (alle Telefone) → Grundbelegung des Telefons → Überschreibung im laufenden
  * Einsatz. Vorlage und Grundbelegung pflegen Admins, überschreiben darf jeder Angemeldete, solange ein Einsatz läuft.
@@ -24,10 +24,25 @@ const text = (max: number) => z.string().trim().max(max);
 /** Nebenstelle: Ziffern, * und # */
 const extension = z.string().trim().regex(/^[0-9*#]{1,20}$/, 'Nebenstelle: nur Ziffern, * und #');
 
+/** Höchstzahl der Durchsage-Zonen (Snom: mc_address 1–10) */
+export const MAX_PAGING_ZONES = 10;
+
+/** Multicast-Adresse mit Port, z. B. „239.0.0.1:5000“ (224.0.0.0–239.255.255.255) */
+export const multicastAddress = z
+  .string()
+  .trim()
+  .refine((v) => {
+    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}):(\d{1,5})$/.exec(v);
+    if (!m) return false;
+    const [a, b, c, d, port] = m.slice(1).map(Number) as [number, number, number, number, number];
+    return a >= 224 && a <= 239 && [b, c, d].every((x) => x <= 255) && port >= 1024 && port <= 65535;
+  }, 'Multicast-Adresse mit Port, z. B. 239.0.0.1:5000');
+
 export const PHONE_KEY_TYPE = {
   contact: 'Kontakt',
   number: 'Nummer',
   blf: 'Nebenstelle (BLF)',
+  paging: 'Durchsage',
   empty: 'leer',
 } as const;
 export type PhoneKeyType = keyof typeof PHONE_KEY_TYPE;
@@ -45,6 +60,8 @@ export const phoneKeySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('number'), number: text(40).min(1, 'Nummer fehlt'), label: text(40).default('') }),
   /** Besetztlampe einer Nebenstelle, Druck ruft an bzw. übernimmt einen Anruf */
   z.object({ type: z.literal('blf'), extension, label: text(40).default('') }),
+  /** Durchsage (Multicast) in eine Zone; leere Adresse = Zone am Telefon auswählen */
+  z.object({ type: z.literal('paging'), address: z.union([z.literal(''), multicastAddress]).default(''), label: text(40).default('') }),
   /** Taste ausdrücklich frei (überdeckt Vorlage bzw. Grundbelegung) */
   z.object({ type: z.literal('empty') }),
 ]);
@@ -120,6 +137,23 @@ export const phoneInputSchema = z.object({
 export type PhoneInput = z.input<typeof phoneInputSchema>;
 export type PhoneData = z.output<typeof phoneInputSchema>;
 
+/**
+ * Durchsage-Zone: Alle Telefone hören auf die Multicast-Adresse. Bei mehreren gleichzeitigen Durchsagen gewinnt die
+ * höchste Priorität.
+ */
+export const pagingZoneSchema = z.object({
+  name: text(30).min(1, 'Name der Zone fehlt'),
+  address: multicastAddress,
+  /** 0 (niedrig) bis 10 (hoch), Snom-Vorgabe 5 */
+  priority: z.number().int().min(0).max(10).default(5),
+  /** Durchsage unterbricht ein laufendes Gespräch (danach geht es weiter); sonst nur, wenn das Telefon frei ist */
+  interrupt: z.boolean().default(false),
+  /** Mit voller Lautstärke wiedergeben */
+  loud: z.boolean().default(false),
+});
+export type PagingZoneInput = z.input<typeof pagingZoneSchema>;
+export type PagingZone = z.output<typeof pagingZoneSchema>;
+
 /** Gemeinsame Einstellungen aller Telefone */
 export const phoneConfigSchema = z.object({
   /** SIP-Server (Telefonanlage), z. B. „192.168.1.10“ oder „pbx.elw:5060“ */
@@ -130,6 +164,12 @@ export const phoneConfigSchema = z.object({
   ntpServer: text(120).default(''),
   /** Snom-Zeitzone, z. B. GER+1 */
   timezone: text(20).default('GER+1'),
+  /** Durchsage-Zonen (Multicast), auf die alle Telefone hören */
+  pagingZones: z
+    .array(pagingZoneSchema)
+    .max(MAX_PAGING_ZONES, `Höchstens ${MAX_PAGING_ZONES} Zonen`)
+    .refine((zs) => new Set(zs.map((z) => z.address)).size === zs.length, 'Jede Multicast-Adresse nur einmal')
+    .default([]),
 });
 export type PhoneConfigInput = z.input<typeof phoneConfigSchema>;
 export type PhoneConfig = z.output<typeof phoneConfigSchema>;
@@ -148,5 +188,6 @@ export function phoneKeyTitle(k: PhoneKey | null): string {
   if (!k || k.type === 'empty') return '';
   if (k.type === 'number') return k.label || k.number;
   if (k.type === 'blf') return k.label || k.extension;
+  if (k.type === 'paging') return k.label || k.address || 'Durchsage';
   return k.label;
 }

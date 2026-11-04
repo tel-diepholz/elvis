@@ -991,6 +991,8 @@ const MIGRATIONS: Migration[] = [
     updated_at TEXT NOT NULL
   );
   `,
+  // Klingeltasten der Türstationen (2N) und Bildschirme, auf denen das Klingeln erscheint
+  `ALTER TABLE cameras ADD COLUMN bells TEXT NOT NULL DEFAULT '[]';`,
   // Schadenkonten (T-Konto je Schadenstelle/Einsatzabschnitt): Einträge werden erledigt statt gelöscht, Personenschäden
   // als unveränderliche Buchungen (Stand = letzte Buchung je Kategorie). Einheiten verweisen per account_id auf ihren
   // Abschnitt; units.section bleibt ungenutzt stehen

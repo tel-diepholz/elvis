@@ -25,7 +25,6 @@ setzen. Mobilteile zeigen das Telefonbuch dann unter *Directory → Remote Phone
 
 ## Telefonbuch für die Tischtelefone
 
-Die Snom-Tischtelefone zeigen die Kontakte auf der Taste *Verzeichnis*. ELVIS trägt das bei der Provisionierung selbst
-ein (`…/api/phonebook/<schlüssel>/snom.xml`, Format `SnomIPPhoneDirectory`), mit denselben Einträgen wie für die
-DECT-Basis. Schnellwahltasten können ebenfalls auf Kontakte zeigen und ändern sich mit dem Kontakt. Siehe
+ELVIS schreibt die Kontakte bei der Provisionierung ins Telefonbuch der Snom-Tischtelefone (Taste *Verzeichnis*), mit
+denselben Einträgen wie für die DECT-Basis. Damit zeigen die Telefone bei Anrufen auch den Namen des Anrufers. Schnellwahltasten können ebenfalls auf Kontakte zeigen und ändern sich mit dem Kontakt. Siehe
 [Tischtelefone (Snom)](../fahrzeugmodule/telefone-snom.md).

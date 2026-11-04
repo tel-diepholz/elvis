@@ -33,6 +33,7 @@
 - [Wetterstation Airmar 150WX](fahrzeugmodule/wetterstation-airmar.md)
 - [Bluetooth: Victron-Akkus und weitere Geräte](fahrzeugmodule/bluetooth-victron.md)
 - [Kameras (Axis über VAPIX)](fahrzeugmodule/kameras-axis.md)
+- [Türstation 2N (Kamerabild)](fahrzeugmodule/kameras-2n.md)
 - [WLAN (OpenWrt-Accesspoints)](fahrzeugmodule/wlan-openwrt.md)
 - [Monitoring (SNMP, Node Exporter)](fahrzeugmodule/monitoring.md)
 

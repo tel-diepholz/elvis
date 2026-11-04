@@ -33,7 +33,7 @@ export function phoneRoutes(app: FastifyInstance, d: Deps): void {
     d.notify(['audit']);
   };
   const keyText = (k: z.output<typeof phoneKeySchema> | null) =>
-    !k ? 'entfernt' : k.type === 'number' ? `Nummer ${k.number}${k.label ? ` („${k.label}“)` : ''}` : k.type === 'blf' ? `Nebenstelle ${k.extension}` : k.type === 'contact' ? `Kontakt ${k.contactId}` : PHONE_KEY_TYPE.empty;
+    !k ? 'entfernt' : k.type === 'number' ? `Nummer ${k.number}${k.label ? ` („${k.label}“)` : ''}` : k.type === 'blf' ? `Nebenstelle ${k.extension}` : k.type === 'paging' ? `Durchsage ${k.address || '(Zone wählen)'}` : k.type === 'contact' ? `Kontakt ${k.contactId}` : PHONE_KEY_TYPE.empty;
 
   // --- Telefon (Snom: setting_server …/snom/{mac}.xml) ---
 
@@ -48,6 +48,8 @@ export function phoneRoutes(app: FastifyInstance, d: Deps): void {
   // --- Angemeldete: Telefone und Tasten, Überschreibungen im laufenden Einsatz ---
 
   app.get('/api/phones', async () => d.phones.list());
+  // Für die Auswahl beim Belegen von Durchsage-Tasten (auch im Einsatz, ohne Admin)
+  app.get('/api/phones/paging-zones', async () => d.phones.config().pagingZones);
   app.get<{ Params: { id: string } }>('/api/phones/:id/keys', async (req) => d.phones.slots(req.params.id));
 
   app.put('/api/phones/:id/keys/:idx', async (req) => {

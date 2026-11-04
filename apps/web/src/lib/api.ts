@@ -1,5 +1,5 @@
 import type { DamageAccount, DamageAccountInput, DamageAccountPatch, DamageCountBooking, DamageCountInput, DamageEntry, DamageEntryInput, DamageEntryPatch } from '@elvis/shared';
-import type { Phone, PhoneConfigInput, PhoneInput, PhoneKeyInput, PhoneKeySlot, PhoneSystemStatus } from '@elvis/shared';
+import type { Phone, PhoneConfigInput, PhoneInput, PhoneKeyInput, PhoneKeySlot, PhoneSystemStatus, PagingZone } from '@elvis/shared';
 import {
   type CallRecord,
   type ChatAttachment,
@@ -327,6 +327,7 @@ export const api = {
   phonebook: () => request<PhonebookStatus>('GET', '/api/system/phonebook'),
   regeneratePhonebookToken: () => request<PhonebookStatus>('POST', '/api/system/phonebook/token'),
   phones: () => request<Phone[]>('GET', '/api/phones'),
+  pagingZones: () => request<PagingZone[]>('GET', '/api/phones/paging-zones'),
   phoneKeys: (id: string) => request<PhoneKeySlot[]>('GET', `/api/phones/${id}/keys`),
   setPhoneKey: (id: string, idx: number, key: PhoneKeyInput, scope: 'phone' | 'incident') => request<PhoneKeySlot[]>('PUT', `/api/phones/${id}/keys/${idx}`, { key, scope }),
   clearPhoneKey: (id: string, idx: number, scope: 'phone' | 'incident') => request<PhoneKeySlot[]>('DELETE', `/api/phones/${id}/keys/${idx}?scope=${scope}`),

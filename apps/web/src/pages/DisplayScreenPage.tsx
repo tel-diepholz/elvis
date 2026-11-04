@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { DISPLAY_COMMAND_EVENT, useLive } from '../lib/live';
 import { applyTheme } from '../lib/theme';
 import { DisplayCanvas } from '../components/display/DisplayCanvas';
+import { DoorbellAlert } from '../components/display/DoorbellAlert';
 import { DisplayControlContext, MapSyncContext, type DisplayControl, type MapSync } from '../components/display/tiles';
 
 /**
@@ -113,6 +114,7 @@ export function DisplayScreenPage() {
           <p>Gekoppelt. In ELVIS unter „Bildschirme“ Inhalte zuweisen.</p>
         </div>
       )}
+      <DoorbellAlert displayId={display!.id} />
       {identify && <div className="display-identify">{display!.name}</div>}
       {connection === 'offline' && <div className="display-offline">Verbindung zu ELVIS unterbrochen …</div>}
     </div>

@@ -1,10 +1,13 @@
-import type { IncomingMessage } from 'node:http';
+import { randomBytes } from 'node:crypto';
+import type { PassThrough } from 'node:stream';
 import { z } from 'zod';
-import type { CameraCaps, CameraStatus, CamerasState } from '@elvis/shared';
+import { DOORBELL_RING_SECONDS, type CameraCaps, type CameraStatus, type CamerasState, type DoorbellRing } from '@elvis/shared';
 import type { CameraSecretConfig } from '../../services/cameras.js';
 import { HttpError } from '../../errors.js';
 import { BaseAdapter, CommandError, command, type AdapterContext } from '../adapter.js';
 import { AxisCamera, DemoCamera, NO_CAPS, type CameraClient } from './axis/camera.js';
+import { TwoNIntercom } from './2n/intercom.js';
+import { HUB_CONTENT_TYPE, MjpegHub } from './mjpeg-hub.js';
 
 /** Quelle der Kameraliste (Einstellungen) */
 export interface CameraSource {
@@ -14,8 +17,11 @@ export interface CameraSource {
 
 export type CameraFactory = (c: CameraSecretConfig) => CameraClient;
 
-export const defaultFactory: CameraFactory = (c) =>
-  c.type === 'demo' ? new DemoCamera() : new AxisCamera({ host: c.host, protocol: c.protocol, username: c.username, password: c.password, verifyTls: c.verifyTls });
+export const defaultFactory: CameraFactory = (c) => {
+  if (c.type === 'demo') return new DemoCamera();
+  const connection = { host: c.host, protocol: c.protocol, username: c.username, password: c.password, verifyTls: c.verifyTls };
+  return c.type === '2n' ? new TwoNIntercom(connection) : new AxisCamera(connection);
+};
 
 interface Entry {
   config: CameraSecretConfig;
@@ -25,12 +31,16 @@ interface Entry {
   nextProbe: number;
   moveTimer: NodeJS.Timeout | null;
   busy: boolean;
+  /** Beobachtung der Klingeltasten beenden (nur Türstationen) */
+  unwatch: (() => void) | null;
 }
 
 const POLL_MS = 3_000;
 const RETRY_PROBE_MS = 15_000;
 /** Ohne erneuten Bewegungsbefehl hält die Kamera nach dieser Zeit an (Bedienung per Gedrückthalten). */
 const MOVE_WATCHDOG_MS = 1_200;
+/** Mehrfaches Drücken derselben Taste zählt in dieser Zeit als ein Klingeln */
+const RING_DEBOUNCE_MS = 10_000;
 
 const speed = z.number().min(-100).max(100);
 const cameraId = z.string().min(1);
@@ -42,15 +52,18 @@ const connectionKey = (c: CameraSecretConfig) => JSON.stringify([c.type, c.host,
 
 /**
  * Alle Kameras aus den Einstellungen: Status, Fähigkeiten und Bedienung. Der Typ (Axis, Demo) ist je Kamera
- * eingestellt; weitere Hersteller kommen als weiterer CameraClient dazu.
+ * eingestellt (2N-Türstationen nur mit Bild); weitere Hersteller kommen als weiterer CameraClient dazu.
  */
 export class CamerasAdapter extends BaseAdapter<'cameras'> {
   private readonly entries = new Map<string, Entry>();
   private timer: NodeJS.Timeout | null = null;
   private unsubscribe: (() => void) | null = null;
   private stopped = false;
-  /** Offene Livebilder, damit sie beim Stoppen geschlossen werden */
-  private readonly streams = new Set<IncomingMessage>();
+  /** Livebilder je Kamera und Bildart („cam-1:live“): eine Verbindung zur Kamera für alle Zuschauer */
+  private readonly hubs = new Map<string, MjpegHub>();
+  /** So lange bleibt ein Livebild nach dem letzten Zuschauer verbunden */
+  streamLingerMs = 5_000;
+  private readonly ringTimers = new Set<NodeJS.Timeout>();
 
   protected readonly commands = {
     move: command(z.object({ cameraId, pan: speed.default(0), tilt: speed.default(0), zoom: speed.default(0) }), async (p) => {
@@ -106,7 +119,7 @@ export class CamerasAdapter extends BaseAdapter<'cameras'> {
     private readonly source: CameraSource,
     private readonly factory: CameraFactory = defaultFactory,
   ) {
-    super('cameras', 'cameras', { cameras: [] } satisfies CamerasState);
+    super('cameras', 'cameras', { cameras: [], rings: [] } satisfies CamerasState);
   }
 
   /** Ablehnungen und Störungen der Kamera als Bedienfehler melden, nicht als internen Fehler */
@@ -137,20 +150,37 @@ export class CamerasAdapter extends BaseAdapter<'cameras'> {
     this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.unsubscribe?.();
-    for (const e of this.entries.values()) if (e.moveTimer) clearTimeout(e.moveTimer);
-    for (const s of this.streams) s.destroy();
+    for (const e of this.entries.values()) this.close(e);
+    for (const t of this.ringTimers) clearTimeout(t);
+    this.ringTimers.clear();
+    for (const h of this.hubs.values()) h.close();
+    this.hubs.clear();
   }
 
-  /** MJPEG-Livebild einer Kamera (null = Kamera liefert kein Bild) */
-  async openStream(cameraId: string, kind: 'live' | 'thumb'): Promise<IncomingMessage | null> {
+  /**
+   * MJPEG-Livebild einer Kamera für einen Zuschauer (null = Kamera liefert kein Bild). Alle Zuschauer teilen sich
+   * eine Verbindung zur Kamera; der Strom endet, wenn die Kamera trennt – der Browser verbindet dann neu.
+   */
+  async openStream(cameraId: string, kind: 'live' | 'thumb'): Promise<{ contentType: string; stream: PassThrough } | null> {
     const e = this.entries.get(cameraId);
     if (!e) throw new CommandError(`Kamera ${cameraId} unbekannt oder deaktiviert`, 404);
-    const stream = await e.client.openStream(kind, e.config.resolution);
-    if (stream) {
-      this.streams.add(stream);
-      stream.on('close', () => this.streams.delete(stream));
+    const key = `${cameraId}:${kind}`;
+    let hub = this.hubs.get(key);
+    if (!hub) {
+      hub = new MjpegHub(() => e.client.openStream(kind, e.config.resolution), this.streamLingerMs);
+      this.hubs.set(key, hub);
     }
-    return stream;
+    const stream = await hub.subscribe();
+    return stream && { contentType: HUB_CONTENT_TYPE, stream };
+  }
+
+  /** Livebilder einer Kamera schließen (entfernt, neu verbunden oder Auflösung geändert) */
+  private closeStreams(cameraId: string): void {
+    for (const [key, hub] of this.hubs) {
+      if (!key.startsWith(`${cameraId}:`)) continue;
+      hub.close();
+      this.hubs.delete(key);
+    }
   }
 
   private require(id: string, cap?: keyof CameraCaps): Entry {
@@ -180,9 +210,11 @@ export class CamerasAdapter extends BaseAdapter<'cameras'> {
     for (const [id, e] of this.entries) {
       const c = configs.find((x) => x.id === id);
       if (!c || connectionKey(c) !== connectionKey(e.config)) {
-        if (e.moveTimer) clearTimeout(e.moveTimer);
+        this.close(e);
+        this.closeStreams(id);
         this.entries.delete(id);
       } else {
+        if (c.resolution !== e.config.resolution) this.closeStreams(id);
         e.config = c;
         e.status = { ...e.status, name: c.name };
       }
@@ -197,10 +229,64 @@ export class CamerasAdapter extends BaseAdapter<'cameras'> {
         nextProbe: 0,
         moveTimer: null,
         busy: false,
+        unwatch: null,
       });
-      void this.poll(this.entries.get(c.id)!);
+      const e = this.entries.get(c.id)!;
+      this.watch(e);
+      void this.poll(e);
     }
     this.publish();
+  }
+
+  private close(e: Entry): void {
+    if (e.moveTimer) clearTimeout(e.moveTimer);
+    e.unwatch?.();
+    e.unwatch = null;
+  }
+
+  /** Klingeltasten einer Türstation beobachten */
+  private watch(e: Entry): void {
+    if (!e.client.watchRings || this.stopped) return;
+    let lastError: string | null = null;
+    e.unwatch = e.client.watchRings(
+      (key) => {
+        lastError = null;
+        if (this.entries.get(e.config.id) === e) this.ring(e, key);
+      },
+      (msg) => {
+        if (msg !== lastError) this.ctx.log.warn(`Türstation ${e.config.name}: Klingel nicht erreichbar (${msg})`);
+        lastError = msg;
+      },
+    );
+  }
+
+  /** Taste gedrückt: passende Klingel suchen und für die zugeordneten Bildschirme melden */
+  private ring(e: Entry, key: string): void {
+    const bell = e.config.bells.find((b) => b.key === key) ?? e.config.bells.find((b) => b.key === '*');
+    if (!bell) {
+      this.ctx.log.info(`Türstation ${e.config.name}: Taste ${key} gedrückt, keine Klingel eingestellt`);
+      return;
+    }
+    const now = Date.now();
+    const recent = this.state.rings.find((r) => r.cameraId === e.config.id && r.key === key && now - Date.parse(r.at) < RING_DEBOUNCE_MS);
+    if (recent) return;
+    const ring: DoorbellRing = {
+      id: randomBytes(6).toString('hex'),
+      cameraId: e.config.id,
+      cameraName: e.config.name,
+      key,
+      label: bell.label,
+      displays: bell.displays,
+      at: new Date(now).toISOString(),
+    };
+    this.ctx.log.info(`Türstation ${e.config.name}: es klingelt (${bell.label})`);
+    // erneutes Klingeln an derselben Taste ersetzt das ältere
+    this.update((s) => void (s.rings = [...s.rings.filter((r) => !(r.cameraId === ring.cameraId && r.key === key)), ring]));
+    const t = setTimeout(() => {
+      this.ringTimers.delete(t);
+      if (this.state.rings.some((r) => r.id === ring.id)) this.update((s) => void (s.rings = s.rings.filter((r) => r.id !== ring.id)));
+    }, DOORBELL_RING_SECONDS * 1000);
+    this.ringTimers.add(t);
   }
 
   private async pollAll(): Promise<void> {

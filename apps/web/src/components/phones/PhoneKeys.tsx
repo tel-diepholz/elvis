@@ -85,6 +85,7 @@ interface Draft {
   label: string;
   number: string;
   extension: string;
+  address: string;
   contactId: number | null;
   phone: number;
 }
@@ -94,6 +95,7 @@ const draftOf = (k: PhoneKey | null): Draft => ({
   label: k && k.type !== 'empty' ? k.label : '',
   number: k?.type === 'number' ? k.number : '',
   extension: k?.type === 'blf' ? k.extension : '',
+  address: k?.type === 'paging' ? k.address : '',
   contactId: k?.type === 'contact' ? k.contactId : null,
   phone: k?.type === 'contact' ? k.phone : 0,
 });
@@ -106,6 +108,8 @@ const keyOf = (d: Draft): PhoneKeyInput | null => {
       return { type: 'number', number: d.number, label: d.label };
     case 'blf':
       return { type: 'blf', extension: d.extension, label: d.label };
+    case 'paging':
+      return { type: 'paging', address: d.address, label: d.label };
     case 'empty':
       return { type: 'empty' };
   }
@@ -154,7 +158,7 @@ function ContactPicker({ contactId, phone, onPick }: { contactId: number | null;
 }
 
 /**
- * Taste belegen: Kontakt, Nummer, Nebenstelle (BLF) oder ausdrücklich frei. `onClear` nimmt die Belegung dieser Ebene
+ * Taste belegen: Kontakt, Nummer, Nebenstelle (BLF), Durchsage oder ausdrücklich frei. `onClear` nimmt die Belegung dieser Ebene
  * zurück (dann gilt die darunterliegende).
  */
 export function KeyEditor({
@@ -189,6 +193,8 @@ export function KeyEditor({
     if (key && valid) onSave(key);
   };
   const extensions = phones.map((p) => ({ ext: p.extension, name: p.name }));
+  const { data: zones = [] } = useQuery({ queryKey: ['phones', 'paging-zones'], queryFn: api.pagingZones, enabled: d.type === 'paging' });
+  const unknownZone = d.address !== '' && !zones.some((z) => z.address === d.address);
 
   return (
     <Modal open title={title} onClose={onClose}>
@@ -217,8 +223,28 @@ export function KeyEditor({
             </datalist>
           </Field>
         )}
+        {d.type === 'paging' && (
+          <Field
+            label="Zone"
+            hint={
+              zones.length === 0
+                ? 'Noch keine Zonen – Admins legen sie unter Einstellungen → Dienste → Telefone (Snom) an.'
+                : 'Drücken startet die Durchsage über die Lautsprecher der Telefone, die die Zone hören. Erneutes Drücken oder Auflegen beendet sie.'
+            }
+          >
+            <select value={d.address} onChange={(e) => set({ address: e.target.value })} autoFocus>
+              <option value="">Am Telefon auswählen</option>
+              {zones.map((z) => (
+                <option key={z.address} value={z.address}>
+                  {z.name} ({z.address})
+                </option>
+              ))}
+              {unknownZone && <option value={d.address}>{d.address} (keine Zone mehr)</option>}
+            </select>
+          </Field>
+        )}
         {d.type !== 'empty' ? (
-          <Field label="Beschriftung" hint={d.type === 'contact' ? 'Leer = Name des Kontakts' : 'Leer = Nummer'}>
+          <Field label="Beschriftung" hint={d.type === 'contact' ? 'Leer = Name des Kontakts' : d.type === 'paging' ? 'Leer = Name der Zone' : 'Leer = Nummer'}>
             <input value={d.label} onChange={(e) => set({ label: e.target.value })} maxLength={40} />
           </Field>
         ) : (
