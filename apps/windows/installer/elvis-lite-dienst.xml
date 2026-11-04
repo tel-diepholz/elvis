@@ -1,0 +1,31 @@
+<!--
+  Windows-Dienst für ELVIS lite (WinSW 2.x, https://github.com/winsw/winsw). %BASE% ist der Programmordner.
+  Daten, Konfiguration und Protokolle liegen in %ProgramData%\ELVIS lite, damit sie Updates und Neuinstallationen
+  überstehen. Port und weitere Einstellungen: %ProgramData%\ELVIS lite\elvis.json (legt der Installer an).
+-->
+<service>
+  <id>elvis-lite</id>
+  <name>ELVIS lite</name>
+  <description>ELVIS – Einsatzleitwagen-Verwaltungs- und Informationssystem (lite). Bedienung im Browser.</description>
+  <executable>%BASE%\node.exe</executable>
+  <arguments>"%BASE%\server\index.mjs"</arguments>
+  <workingdirectory>%ProgramData%\ELVIS lite</workingdirectory>
+  <env name="NODE_ENV" value="production" />
+  <env name="ELVIS_EDITION" value="lite" />
+  <env name="ELVIS_CONFIG" value="%ProgramData%\ELVIS lite\elvis.json" />
+  <env name="ELVIS_DATA_DIR" value="%ProgramData%\ELVIS lite\data" />
+  <env name="ELVIS_WEB_DIST" value="%BASE%\web" />
+  <startmode>Automatic</startmode>
+  <delayedAutoStart />
+  <stoptimeout>15 sec</stoptimeout>
+  <!-- Absturz: neu starten, aber nicht in schneller Schleife (z. B. bei belegtem Port) -->
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="2 min" />
+  <resetfailure>1 hour</resetfailure>
+  <logpath>%ProgramData%\ELVIS lite\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+</service>

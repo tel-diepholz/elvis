@@ -1,7 +1,7 @@
 import type { DeviceId } from './devices';
 
 /**
- * Ausbaustufe von ELVIS: „full“ für den Fahrzeugserver im ELW 2, „lite“ als Desktop-App (Windows) für kleinere
+ * Ausbaustufe von ELVIS: „full“ für den Fahrzeugserver im ELW 2, „lite“ als Windows-Dienst für kleinere
  * Fahrzeuge ohne eigene Fahrzeugtechnik – Einsatzführung und Kommunikation, keine Gerätemodule und keine Addons.
  */
 export type Edition = 'full' | 'lite';

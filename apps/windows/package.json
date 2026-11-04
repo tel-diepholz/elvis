@@ -1,0 +1,20 @@
+{
+  "name": "@elvis/windows",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "description": "ELVIS lite – ELVIS als Windows-Dienst für kleinere Fahrzeuge (ELW 1), Bedienung im Browser",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build -w @elvis/web && tsup",
+    "stage": "node scripts/stage.mjs",
+    "dist": "npm run build && node scripts/stage.mjs && node scripts/installer.mjs",
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "@elvis/server": "*",
+    "@elvis/shared": "*",
+    "fflate": "^0.8.3",
+    "tsup": "^8.3.5"
+  }
+}

@@ -29,7 +29,7 @@ const mapSourceSchema = z.object({
 export type MapSourceConfig = z.infer<typeof mapSourceSchema>;
 
 const configSchema = z.object({
-  /** Ausbaustufe: „full“ (Fahrzeugserver) oder „lite“ (Desktop-App ohne Fahrzeugtechnik, siehe applyEdition). */
+  /** Ausbaustufe: „full“ (Fahrzeugserver) oder „lite“ (Windows-Dienst ohne Fahrzeugtechnik, siehe applyEdition). */
   edition: z.enum(EDITIONS as [Edition, ...Edition[]]).default('full'),
   host: z.string().default('0.0.0.0'),
   port: z.coerce.number().int().default(8080),
