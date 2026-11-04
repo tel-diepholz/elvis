@@ -14,6 +14,7 @@
 - [Ausbreitungsberechnung](funktionen/ausbreitung.md) – Gauß-Fahne und 60°-Sektor
 - [Flugzeuge und Schiffe](funktionen/luft-und-schiffsverkehr.md) – ADS-B und AIS auf der Karte
 - [Wetter](funktionen/wetter.md) – DWD-Warnungen und Prognose
+- [Energiefluss](funktionen/energiefluss.md) – Quellen, Verbraucher und Batterie als Grafik, frei belegbar
 - [Kräfte und Personal](funktionen/kraefte-und-personal.md) – Personalbögen, Cloud-Personalabfrage, Ortung per App
 - [Kontakte](funktionen/kontakte.md) – Adressbuch des ELW
 - [E-Mail](funktionen/email.md) – Postfach des ELW über das Relay, OpenPGP

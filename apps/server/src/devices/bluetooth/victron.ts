@@ -224,9 +224,9 @@ class BitWriter {
   }
 }
 
-/** Messwerte einer Lithium-Batterie bzw. eines Batteriemonitors so verpacken, wie das Gerät sie sendet */
+/** Messwerte so verpacken, wie das Gerät sie sendet (Simulation und Tests) */
 export function victronEncode(
-  readout: Extract<VictronReadout, { type: 'lithium' | 'battery-monitor' }>,
+  readout: Extract<VictronReadout, { type: 'lithium' | 'battery-monitor' | 'solar' | 'dcdc' }>,
   keyHex: string,
   opts: { productId?: number; iv?: number } = {},
 ): Buffer {
@@ -244,6 +244,23 @@ export function victronEncode(
     w.put(12, cents(readout.voltageV, 0xfff))
       .put(4, balancer ? Number(balancer) : 0xf)
       .put(7, readout.temperatureC === null ? 0x7f : readout.temperatureC + 40);
+  } else if (readout.type === 'solar') {
+    type = 0x01;
+    const s16 = (v: number | null, f: number) => (v === null ? 0x7fff : Math.round(v * f) & 0xffff);
+    w.put(8, readout.state ?? 0xff)
+      .put(8, readout.error ?? 0xff)
+      .put(16, s16(readout.voltageV, 100))
+      .put(16, s16(readout.currentA, 10))
+      .put(16, readout.yieldTodayWh === null ? 0xffff : Math.round(readout.yieldTodayWh / 10))
+      .put(16, readout.pvPowerW ?? 0xffff)
+      .put(9, readout.loadCurrentA === null ? 0x1ff : Math.round(readout.loadCurrentA * 10));
+  } else if (readout.type === 'dcdc') {
+    type = 0x04;
+    w.put(8, readout.state ?? 0xff)
+      .put(8, readout.error ?? 0xff)
+      .put(16, readout.inputVoltageV === null ? 0xffff : Math.round(readout.inputVoltageV * 100))
+      .put(16, readout.outputVoltageV === null ? 0x7fff : Math.round(readout.outputVoltageV * 100) & 0xffff)
+      .put(32, readout.offReason);
   } else {
     type = 0x02;
     w.put(16, readout.remainingMin ?? 0xffff)
@@ -259,7 +276,7 @@ export function victronEncode(
   const iv = opts.iv ?? 0;
   const head = Buffer.alloc(8);
   head[0] = 0x10;
-  head.writeUInt16LE(opts.productId ?? (type === 0x05 ? 0xa3e5 : 0xa389), 2);
+  head.writeUInt16LE(opts.productId ?? ({ 0x01: 0xa053, 0x04: 0xa3c0, 0x05: 0xa3e5 } as Record<number, number>)[type] ?? 0xa389, 2);
   head[4] = type;
   head.writeUInt16LE(iv, 5);
   head[7] = key[0]!;

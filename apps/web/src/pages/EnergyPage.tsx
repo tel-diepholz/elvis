@@ -1,4 +1,4 @@
-import { BatteryCharging, Bluetooth } from 'lucide-react';
+import { BatteryCharging, Bluetooth, Settings2, Workflow } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { VICTRON_BALANCER_LABELS, VICTRON_READOUT_LABELS, VICTRON_STATE_LABELS, type BluetoothDeviceLive, type DeviceSnapshot, type VictronCellVoltage, type VictronReadout } from '@elvis/shared';
@@ -8,6 +8,9 @@ import { useDevice } from '../lib/live';
 import { ModuleDisabled } from '../components/ModuleDisabled';
 import { Badge, Card, EmptyState, Meter, PageHeader, Stat, type Tone } from '../components/ui';
 import { InverterCard } from './energy/InverterCard';
+import { EnergyFlow } from '../components/energy/EnergyFlow';
+import { useEnergyFlow } from '../components/energy/useEnergyFlow';
+import { useInfo } from '../lib/hooks';
 
 const state = (s: number | null) => (s === null ? '–' : (VICTRON_STATE_LABELS[s] ?? `Zustand ${s}`));
 
@@ -204,6 +207,30 @@ function BluetoothSection({ bt }: { bt: DeviceSnapshot<'bluetooth'> }) {
   );
 }
 
+/** Energiefluss nach der Einstellung (sonst automatisch); Admins können ihn anpassen */
+function EnergyFlowCard() {
+  const { data, config, isLoading } = useEnergyFlow();
+  const admin = !!useAuth().user?.isAdmin;
+  const { data: info } = useInfo();
+  if (isLoading || config.nodes.length === 0) return null;
+  return (
+    <Card
+      title="Energiefluss"
+      icon={<Workflow size={18} />}
+      className="energy-flow-card"
+      actions={
+        admin ? (
+          <Link className="btn btn-sm btn-ghost" to="/einstellungen#energiefluss">
+            <Settings2 size={14} /> Anpassen
+          </Link>
+        ) : undefined
+      }
+    >
+      <EnergyFlow config={config} data={data} hubLabel={config.hubLabel || info?.vehicle.name || 'Fahrzeug'} />
+    </Card>
+  );
+}
+
 /** Energie im Fahrzeug: Wechselrichter am VE.Bus und Victron-Geräte über Bluetooth (je nach aktivierten Modulen) */
 export function EnergyPage() {
   const inverter = useDevice('inverter');
@@ -215,6 +242,7 @@ export function EnergyPage() {
   return (
     <>
       <PageHeader title="Energie" subtitle={subtitle} />
+      <EnergyFlowCard />
       {inverter && <InverterCard snap={inverter} />}
       {bt && <BluetoothSection bt={bt} />}
     </>

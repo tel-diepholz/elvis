@@ -30,6 +30,7 @@ import {
   PhoneCall,
   Wifi,
   MessagesSquare,
+  Workflow,
 } from 'lucide-react';
 import type { DeviceId } from '@elvis/shared';
 import { api } from '../lib/api';
@@ -61,6 +62,7 @@ import { ScanSettingsCard } from './system/ScanSettingsCard';
 import { SettingsCard } from './system/SettingsCard';
 import { TaskTemplatesCard } from './system/TaskTemplatesCard';
 import { TrafficCard } from './system/TrafficCard';
+import { EnergyFlowCard } from './system/EnergyFlowCard';
 import { WifiApsCard, WifiCard } from './system/WifiCard';
 import { WorkstationsCard } from './system/WorkstationsCard';
 
@@ -137,6 +139,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="verkehr" title="Luft- und Schiffsverkehr" icon={<Plane {...ICON} />} summary="Flugzeuge (ADS-B/MLAT) und Schiffe (AIS) auf der Karte">
             <TrafficCard />
+          </SettingsSection>
+          <SettingsSection id="energiefluss" title="Energiefluss" icon={<Workflow {...ICON} />} summary="Darstellung auf der Seite „Energie“: Quellen, Verbraucher, Batterie">
+            <EnergyFlowCard />
           </SettingsSection>
           <SettingsSection id="drucken" title="Druckserver" icon={<Printer {...ICON} />} summary="Ablage im Einsatz, vorausgewählter Drucker">
             <PrintSettingsCard />

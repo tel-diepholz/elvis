@@ -209,6 +209,9 @@ export class BluetoothAdapter extends BaseAdapter<'bluetooth'> {
 
 // --- Simulation ---
 
+const simType = (name: string) =>
+  /shunt|bmv/i.test(name) ? ('battery-monitor' as const) : /solar|mppt/i.test(name) ? ('solar' as const) : /orion|dc-?dc/i.test(name) ? ('dcdc' as const) : ('lithium' as const);
+
 /** Zwei Lithium-Batterien und ein SmartShunt, die nicht eingetragen sind, plus Werte für alle eingetragenen Geräte */
 export class SimScanner implements BleScanner {
   readonly label = 'Simulation';
@@ -234,16 +237,21 @@ export class SimScanner implements BleScanner {
         // Übernommene Geräte senden ab dann mit dem eingetragenen Schlüssel
         ...this.strangers.filter((s) => !configured.some((c) => c.address === s.address)),
         ...configured
-          // Simuliert als Lithium-Batterie, mit „Shunt“ oder „BMV“ im Namen als Batteriemonitor
-          .map((c) => ({ address: c.address, name: c.name, key: c.key, type: /shunt|bmv/i.test(c.name) ? ('battery-monitor' as const) : ('lithium' as const) })),
+          // Simuliert als Lithium-Batterie; nach dem Namen: „Shunt“/„BMV“ Batteriemonitor, „Solar“/„MPPT“ Solarladeregler, „Orion“/„DC-DC“ DC/DC-Lader
+          .map((c) => ({ address: c.address, name: c.name, key: c.key, type: simType(c.name) })),
       ];
       sims.forEach((s, i) => {
         // Leicht schwankende, plausible Werte
         const cell = 3.3 + 0.02 * Math.sin(t + i);
+        const pv = Math.max(0, Math.round(180 + 120 * Math.sin(t / 3 + i)));
         const data =
           s.type === 'lithium'
             ? victronEncode({ type: 'lithium', bmsFlags: 0, errorFlags: 0, cells: [cell, cell + 0.01, cell, cell - 0.01], voltageV: Math.round(cell * 400) / 100, balancer: 'balanced', temperatureC: 18 + (i % 3) }, s.key, { iv: this.iv })
-            : victronEncode({ type: 'battery-monitor', remainingMin: 900, voltageV: 13.18, currentA: -6.4 + Math.sin(t), consumedAh: -38.5, socPct: 81.3, temperatureC: null, starterVoltageV: null, midpointVoltageV: null, alarms: [] }, s.key, { iv: this.iv });
+            : s.type === 'solar'
+              ? victronEncode({ type: 'solar', state: 3, error: 0, voltageV: 13.6, currentA: Math.round((pv / 13.6) * 10) / 10, yieldTodayWh: 840, pvPowerW: pv, loadCurrentA: null }, s.key, { iv: this.iv })
+              : s.type === 'dcdc'
+                ? victronEncode({ type: 'dcdc', state: 3, error: 0, inputVoltageV: 14.1, outputVoltageV: 13.9, offReason: 0 }, s.key, { iv: this.iv })
+                : victronEncode({ type: 'battery-monitor', remainingMin: 900, voltageV: 13.18, currentA: -6.4 + Math.sin(t), consumedAh: -38.5, socPct: 81.3, temperatureC: null, starterVoltageV: null, midpointVoltageV: null, alarms: [] }, s.key, { iv: this.iv });
         onAdvertisement({ address: s.address, name: s.name, rssi: -55 - 6 * i, manufacturerData: new Map([[VICTRON_COMPANY_ID, data]]) });
       });
     };
