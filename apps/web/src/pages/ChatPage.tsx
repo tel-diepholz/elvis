@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, FileText, FolderInput, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, Search, Trash2, Truck, UserPlus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, FileText, FolderInput, MapPin, MessageSquarePlus, MessagesSquare, PenSquare, RadioTower, Search, Trash2, Truck, UserPlus } from 'lucide-react';
 import {
   CHAT_CHANNEL_LABEL,
   CHAT_CHANNELS,
   CHAT_STATUS_LABEL,
   MESSAGE_BODY_MAX,
   MESSAGE_PARTY_MAX,
+  MESSAGING_STATE_LABEL,
+  crewLabel,
+  vehicleLabel,
   formatPhone,
   isChatImage,
   phoneKey,
@@ -16,13 +19,14 @@ import {
   type ChatThread,
   type Incident,
   type MessageInput,
+  type MessagingConversation,
   type Unit,
 } from '@elvis/shared';
 import { api } from '../lib/api';
 import { fmtBytes, fmtDateTime, fmtTime } from '../lib/format';
 import { useActiveIncident } from '../lib/hooks';
 import { useToast } from '../lib/toast';
-import { EmptyState, Field, Loading, Modal, PageHeader } from '../components/ui';
+import { Badge, EmptyState, Field, Loading, Modal, PageHeader } from '../components/ui';
 import { ContactForm, emptyContact } from '../components/contacts/ContactForm';
 import { ChannelIcon } from '../components/chat/ChannelIcon';
 import { FolderSelect } from '../components/documents/FolderTree';
@@ -30,6 +34,7 @@ import { ChatComposer, type ChatDraftForm } from '../components/chat/ChatCompose
 import { ThreadReply, type ReplyTarget } from '../components/chat/ThreadReply';
 import { MessageForm } from '../components/messages/MessageForm';
 import { useMessageContext } from '../components/messages/messageHooks';
+import { PeerContacts, VehicleSearch } from '../components/messaging/VehicleSearch';
 
 const STATUS: Record<Exclude<ChatMessage['status'], 'received'>, { tone: 'ok' | 'warn' | 'alarm'; icon: typeof Check }> = {
   sending: { tone: 'warn', icon: Clock },
@@ -54,6 +59,14 @@ function listTime(iso: string): string {
   return d.toDateString() === new Date().toDateString() ? fmtTime(iso) : fmtDateTime(iso).split(' ')[0]!;
 }
 
+/** Fahrzeug-Chat (Cloud Messaging): Gesprächsschlüssel elvis:<ELW-ID> */
+const elvisPeer = (key: string | null) => (key?.startsWith('elvis:') ? key.slice(6) : null);
+
+/** Noch keine Nachricht im Fahrzeug-Chat (gerade angefragt oder angenommen): leeres Gespräch mit der Installation */
+function draftCloudThread(c: MessagingConversation): ChatThread {
+  return { key: c.threadKey, contactId: null, name: vehicleLabel(c.peer.vehicle), numbers: [], peer: c.peer.elwId, channels: ['elvis'], last: null as unknown as ChatMessage, unread: 0, count: 0 };
+}
+
 /** Noch kein Gespräch (z. B. aus den Kontakten geöffnet): leeres Gespräch mit dieser Rufnummer */
 function draftThread(number: string): ChatThread {
   const n = phoneKey(number);
@@ -73,10 +86,30 @@ export function ChatPage() {
   const [asContact, setAsContact] = useState<string | null>(null);
   const [asDocument, setAsDocument] = useState<ChatMessage | null>(null);
   const [asUnit, setAsUnit] = useState<ChatThread | null>(null);
+  const [findVehicle, setFindVehicle] = useState(false);
   const { data: incident } = useActiveIncident();
   const { data: avail } = useQuery({ queryKey: ['chat', 'available'], queryFn: api.chatAvailable });
   const available = !!avail?.available;
-  const { data: threads } = useQuery({ queryKey: ['chat', 'threads'], queryFn: api.chatThreads, enabled: available });
+  const { data: rawThreads } = useQuery({ queryKey: ['chat', 'threads'], queryFn: api.chatThreads, enabled: available });
+  const cloud = avail?.channels.find((c) => c.channel === 'elvis')?.available ?? false;
+  const { data: conversations = [] } = useQuery({ queryKey: ['messaging', 'conversations'], queryFn: api.messagingConversations, enabled: cloud });
+  /** Neuester Fahrzeug-Chat je Installation */
+  const cloudChat = useMemo(() => {
+    const m = new Map<string, MessagingConversation>();
+    for (const c of conversations) if (!m.has(c.peer.elwId)) m.set(c.peer.elwId, c);
+    return m;
+  }, [conversations]);
+  // Fahrzeug-Chats heißen wie das Fahrzeug (nicht wie die Person, die zuletzt schrieb); offene ohne Nachricht stehen oben
+  const threads = useMemo(() => {
+    if (!rawThreads) return rawThreads;
+    const named = rawThreads.map((t) => {
+      const c = cloudChat.get(elvisPeer(t.key) ?? '');
+      return c ? { ...t, name: vehicleLabel(c.peer.vehicle) } : t;
+    });
+    const keys = new Set(named.map((t) => t.key));
+    const fresh = [...cloudChat.values()].filter((c) => (c.state === 'requested' || c.state === 'accepted') && !keys.has(c.threadKey)).map(draftCloudThread);
+    return [...fresh, ...named];
+  }, [rawThreads, cloudChat]);
   const { data: contacts = [] } = useQuery({ queryKey: ['contacts'], queryFn: api.contacts, enabled: available });
   // Kräfte in der laufenden Lage mit Rufnummer: ihr Name steht am Gespräch (Zuordnung gilt nur für diese Lage)
   const { data: units = [] } = useQuery({ queryKey: ['units', incident?.id], queryFn: () => api.units(incident!.id), enabled: available && !!incident });
@@ -144,9 +177,16 @@ export function ChatPage() {
           </span>
         }
         actions={
-          <button className="btn btn-primary" onClick={() => setDraft({})}>
-            <PenSquare size={16} /> Neue Nachricht
-          </button>
+          <span className="btn-row">
+            {cloud && (
+              <button className="btn" onClick={() => setFindVehicle(true)} title="Andere ELVIS-Installation suchen und einen Chat anfragen">
+                <RadioTower size={16} /> Fahrzeug anschreiben
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => setDraft({})}>
+              <PenSquare size={16} /> Neue Nachricht
+            </button>
+          </span>
         }
       />
       <div className={`chat-layout ${selected ? 'has-thread' : ''}`}>
@@ -168,12 +208,19 @@ export function ChatPage() {
                       {threadName(t)}
                       <UnitTags units={unitsOf(t)} />
                     </span>
-                    <span className="chat-thread-time muted">{listTime(t.last.date)}</span>
-                    <span className="chat-thread-snippet muted">
-                      <ChannelIcon channel={t.last.channel} size={12} />
-                      {t.last.folder === 'sent' && <span>Du: </span>}
-                      <span className="chat-thread-text">{summary(t.last)}</span>
-                    </span>
+                    <span className="chat-thread-time muted">{t.last ? listTime(t.last.date) : ''}</span>
+                    {t.last ? (
+                      <span className="chat-thread-snippet muted">
+                        <ChannelIcon channel={t.last.channel} size={12} />
+                        {t.last.folder === 'sent' && <span>Du: </span>}
+                        <span className="chat-thread-text">{summary(t.last)}</span>
+                      </span>
+                    ) : (
+                      <span className="chat-thread-snippet muted">
+                        <ChannelIcon channel="elvis" size={12} />
+                        <span className="chat-thread-text">Fahrzeug-Chat {MESSAGING_STATE_LABEL[cloudChat.get(t.peer ?? '')?.state ?? 'requested']}</span>
+                      </span>
+                    )}
                     <span className="chat-thread-badges">
                       {t.channels.length > 1 &&
                         t.channels.map((c) => (
@@ -198,6 +245,7 @@ export function ChatPage() {
               presetNumber={presetNumber}
               onBack={() => select(null)}
               onSent={(m) => m[0] && m[0].thread !== selected.key && select(m[0].thread)}
+              cloudChat={elvisPeer(selected.key) ? (cloudChat.get(elvisPeer(selected.key)!) ?? null) : null}
               onMessage={incident ? setAsMessage : undefined}
               onDocument={incident ? setAsDocument : undefined}
               onContact={setAsContact}
@@ -212,6 +260,17 @@ export function ChatPage() {
         </section>
       </div>
 
+      <Modal open={findVehicle} title="Fahrzeug anschreiben" onClose={() => setFindVehicle(false)} wide>
+        {findVehicle && (
+          <VehicleSearch
+            conversations={conversations}
+            onOpen={(c) => {
+              setFindVehicle(false);
+              select(c.threadKey);
+            }}
+          />
+        )}
+      </Modal>
       <Modal open={draft !== null} title="Neue Nachricht" onClose={() => setDraft(null)} wide>
         {draft && <ChatComposer initial={draft} onDone={() => setDraft(null)} onSent={() => void qc.invalidateQueries({ queryKey: ['chat'] })} />}
       </Modal>
@@ -244,6 +303,7 @@ function ThreadView({
   onContact,
   units,
   onAssign,
+  cloudChat,
 }: {
   thread: ChatThread;
   labels: Record<string, string>;
@@ -260,6 +320,8 @@ function ThreadView({
   units: Unit[];
   /** Rufnummer einer Kraft der Lage zuordnen; nur mit laufendem Einsatz und Rufnummer */
   onAssign?: () => void;
+  /** Fahrzeug-Chat (Cloud Messaging) dieses Gesprächs */
+  cloudChat?: MessagingConversation | null;
 }) {
   const toast = useToast();
   const { data: ctx } = useMessageContext();
@@ -286,7 +348,7 @@ function ThreadView({
   const lastChannel = exists ? (thread.last?.channel ?? null) : null;
   // Angeklickte Rufnummer zuerst, dann die zuletzt genutzten
   const numbers = presetNumber && thread.numbers.includes(presetNumber) ? [presetNumber, ...thread.numbers.filter((n) => n !== presetNumber)] : thread.numbers;
-  const target: ReplyTarget = { numbers, peer: thread.peer && !thread.numbers.length ? { channel: thread.last.channel, id: thread.peer } : null, labels };
+  const target: ReplyTarget = { numbers, peer: thread.peer && !thread.numbers.length ? { channel: thread.last?.channel ?? thread.channels[0] ?? 'elvis', id: thread.peer } : null, labels };
 
   // Tagesweise trennen
   let lastDay = '';
@@ -310,7 +372,7 @@ function ThreadView({
                 {labels[n] ? ` (${labels[n]})` : ''}
               </span>
             ))}
-            {!thread.numbers.length && thread.peer && <span className="mono">{thread.peer}</span>}
+            {!thread.numbers.length && thread.peer && (cloudChat ? <span>{cloudChat.peer.vehicle.organization} · {cloudChat.peer.regionLabel}</span> : <span className="mono">{thread.peer}</span>)}
           </span>
         </div>
         {thread.contactId === null && thread.numbers[0] && (
@@ -336,8 +398,14 @@ function ThreadView({
         )}
       </header>
 
+      {cloudChat && <CloudChatBar chat={cloudChat} />}
+
       <div className="thread-messages">
-        {!exists && <p className="muted thread-empty">Noch keine Nachrichten mit {name}. Unten schreiben und den Messenger wählen.</p>}
+        {!exists && (
+          <p className="muted thread-empty">
+            {cloudChat ? (cloudChat.state === 'accepted' ? `Verbunden mit ${name}. Unten schreiben – Text, Dokumente und Standorte gehen Ende-zu-Ende verschlüsselt.` : '') : `Noch keine Nachrichten mit ${name}. Unten schreiben und den Messenger wählen.`}
+          </p>
+        )}
         {messages.map((m) => {
           const day = new Date(m.date).toDateString();
           const divider = day !== lastDay ? fmtDateTime(m.date).split(' ')[0] : null;
@@ -367,6 +435,7 @@ function ThreadView({
                   <ChannelIcon channel={m.channel} size={12} title={CHAT_CHANNEL_LABEL[m.channel]} />
                   {fmtTime(m.date)}
                   {m.folder === 'sent' && m.createdBy && <span> · {m.createdBy}</span>}
+                  {m.folder === 'inbox' && m.channel === 'elvis' && m.name && <span> · {m.name}</span>}
                   {st && (
                     <span className={`tone-${st.tone}`} title={m.error ?? CHAT_STATUS_LABEL[m.status]}>
                       <st.icon size={12} aria-label={CHAT_STATUS_LABEL[m.status]} />
@@ -393,7 +462,51 @@ function ThreadView({
         <div ref={endRef} />
       </div>
 
-      <ThreadReply target={target} lastChannel={lastChannel} preset={preset} onSent={onSent} />
+      {cloudChat && cloudChat.state !== 'accepted' && !thread.numbers.length ? (
+        <p className="thread-reply muted">{cloudChat.state === 'requested' ? (cloudChat.direction === 'out' ? 'Wartet darauf, dass die Gegenseite die Anfrage annimmt …' : 'Anfrage unten links annehmen, um zu schreiben.') : `Chat ${MESSAGING_STATE_LABEL[cloudChat.state]}.`}</p>
+      ) : (
+        <ThreadReply target={target} lastChannel={lastChannel} preset={preset} onSent={onSent} />
+      )}
+    </div>
+  );
+}
+
+/** Fahrzeug-Chat: Zustand, Besatzung der Gegenseite (Name und Rolle), Kontaktdaten; beenden bzw. neu anfragen */
+function CloudChatBar({ chat }: { chat: MessagingConversation }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const done = () => {
+    void qc.invalidateQueries({ queryKey: ['messaging'] });
+    void qc.invalidateQueries({ queryKey: ['chat'] });
+  };
+  const close = useMutation({ mutationFn: () => api.messagingDecide(chat.id, 'close'), onSuccess: done, onError: (e) => toast('error', e.message) });
+  const again = useMutation({ mutationFn: () => api.messagingRequest(chat.peer.elwId), onSuccess: () => (done(), toast('success', 'Anfrage gesendet')), onError: (e) => toast('error', e.message) });
+  const tone = chat.state === 'accepted' ? 'ok' : chat.state === 'requested' ? 'info' : 'muted';
+  return (
+    <div className="cloud-chat-bar">
+      <div className="cloud-chat-state">
+        <Badge tone={tone}>{MESSAGING_STATE_LABEL[chat.state]}</Badge>
+        {chat.state === 'requested' && chat.direction === 'out' && chat.requestedBy && <span className="muted small">angefragt von {crewLabel(chat.requestedBy)}</span>}
+        {(chat.state === 'declined' || chat.state === 'closed') && chat.decidedBy && <span className="muted small">von {chat.decidedBy}</span>}
+        <span className="spacer" />
+        {(chat.state === 'accepted' || (chat.state === 'requested' && chat.direction === 'out')) && (
+          <button className="btn btn-sm" disabled={close.isPending} onClick={() => window.confirm(`Chat mit ${vehicleLabel(chat.peer.vehicle)} beenden?`) && close.mutate()}>
+            {chat.state === 'accepted' ? 'Chat beenden' : 'Anfrage zurückziehen'}
+          </button>
+        )}
+        {(chat.state === 'declined' || chat.state === 'closed') && (
+          <button className="btn btn-sm" disabled={again.isPending} onClick={() => again.mutate()}>
+            <RadioTower size={14} /> Erneut anfragen
+          </button>
+        )}
+      </div>
+      {chat.state === 'accepted' && (
+        <div className="cloud-chat-crew small">
+          <span className="muted">Im Fahrzeug angemeldet: </span>
+          {chat.peerCrew.length ? chat.peerCrew.map((m, i) => <span key={i} className="cloud-chat-member">{crewLabel(m)}</span>) : <span className="muted">niemand</span>}
+        </div>
+      )}
+      <PeerContacts peer={chat.peer} />
     </div>
   );
 }

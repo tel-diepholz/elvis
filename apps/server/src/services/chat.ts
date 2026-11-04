@@ -38,7 +38,7 @@ import {
 import type { Db } from '../db/index.js';
 import type { Store } from '../db/store.js';
 import type { DeviceManager } from '../devices/manager.js';
-import { isMessengerAdapter, type ChatReceipt, type IncomingChat, type MessengerAdapter, type MessengerBus } from '../devices/messaging/bus.js';
+import { isMessengerAdapter, type ChatReceipt, type IncomingChat, type MessengerAdapter, type MessengerBus, type OutgoingChat, type SendResult } from '../devices/messaging/bus.js';
 import type { IncomingSms, TelephonyBus } from '../devices/telephony/bus.js';
 import { HttpError } from '../errors.js';
 
@@ -76,6 +76,12 @@ interface Row {
   a_size: number | null;
 }
 
+/** Fahrzeug-Chat mit anderen ELVIS-Installationen (Cloud Messaging, services/messaging) */
+export interface CloudChannel {
+  channelInfo(): ChatChannelInfo;
+  sendMessage(msg: OutgoingChat): Promise<SendResult>;
+}
+
 const SELECT = 'SELECT m.*, f.name AS a_name, f.mime_type AS a_mime_type, f.size AS a_size FROM chat_messages m LEFT JOIN chat_files f ON f.id = m.attachment_id';
 
 /** Rangfolge der Zustände gesendeter Nachrichten – eine späte „zugestellt“-Meldung überschreibt kein „gelesen“ */
@@ -87,6 +93,7 @@ const STATUS_RANK: Record<ChatStatus, number> = { received: 0, sending: 1, faile
  */
 export class ChatService {
   private readonly fileDir: string;
+  private cloud: CloudChannel | null = null;
 
   constructor(
     private readonly db: Db,
@@ -101,6 +108,11 @@ export class ChatService {
     deps.messenger.onReceipt((r) => this.receipt(r));
     // Beim Start noch „wird gesendet“: das Ergebnis ist verloren
     db.prepare("UPDATE chat_messages SET status = 'failed', error = 'Abgebrochen (ELVIS neu gestartet)' WHERE status = 'sending'").run();
+  }
+
+  /** Fahrzeug-Chat anbinden (MessagingService) */
+  attachCloud(cloud: CloudChannel): void {
+    this.cloud = cloud;
   }
 
   // --- Einstellungen ---
@@ -165,7 +177,9 @@ export class ChatService {
   available(): ChatAvailability {
     const sms = this.smsInfo();
     const order = this.settings().order;
-    const channels = [sms.info, ...MESSENGER_IDS.map((c) => this.channelInfo(c))].sort((a, b) => order.indexOf(a.channel) - order.indexOf(b.channel));
+    const channels = [sms.info, ...MESSENGER_IDS.map((c) => this.channelInfo(c))].sort((a, b) => (order as readonly string[]).indexOf(a.channel) - (order as readonly string[]).indexOf(b.channel));
+    // Der Fahrzeug-Chat steht außerhalb der Reihenfolge (er geht an Installationen, nicht an Rufnummern)
+    if (this.cloud) channels.push(this.cloud.channelInfo());
     return { available: channels.some((c) => c.available), channels, order, ports: sms.ports, defaultPort: sms.defaultPort };
   }
 
@@ -432,7 +446,8 @@ export class ChatService {
     const seen = new Set<string>();
     const rows: { channel: ChatChannel; peer: string; number: string | null }[] = [];
     for (const r of draft.to) {
-      const info = avail.channels.find((c) => c.channel === r.channel)!;
+      const info = avail.channels.find((c) => c.channel === r.channel);
+      if (!info) throw new HttpError(409, `${CHAT_CHANNEL_LABEL[r.channel]} ist nicht verfügbar`);
       const label = info.label;
       if (!info.available) throw new HttpError(409, r.channel === 'sms' ? 'Kein GSM-Gateway mit SMS aktiv' : `${label} ist nicht eingerichtet`);
       const { peer, number } = chatPeer(r.channel, r.to);
@@ -488,6 +503,18 @@ export class ChatService {
           text: location && !state.capabilities.location ? smsText(r.text, location) : r.text,
           attachment: r.attachment_id ? { name: r.a_name ?? 'bild', mimeType: r.a_mime_type ?? 'application/octet-stream', path: join(this.fileDir, r.attachment_id) } : null,
           location: state.capabilities.location ? location : null,
+        });
+        externalId = out.externalId;
+        result = out.info;
+      } else if (r.channel === 'elvis') {
+        if (!this.cloud) throw new HttpError(409, 'Fahrzeug-Chat ist nicht verfügbar');
+        const out = await this.cloud.sendMessage({
+          peer: r.peer,
+          number: null,
+          text: r.text,
+          attachment: r.attachment_id ? { name: r.a_name ?? 'datei', mimeType: r.a_mime_type ?? 'application/octet-stream', path: join(this.fileDir, r.attachment_id) } : null,
+          location,
+          operator,
         });
         externalId = out.externalId;
         result = out.info;

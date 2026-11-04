@@ -13,6 +13,7 @@ zeigt den Kanal. Der Eintrag erscheint, sobald mindestens ein Kanal aktiv ist. E
 | Threema | Threema | [Gateway (E2E)](../fahrzeugmodule/threema-gateway.md) |
 | WhatsApp | WhatsApp | [Cloud API](../fahrzeugmodule/whatsapp-cloud-api.md) |
 | Telegram | Telegram | [Telegram-Konto](../fahrzeugmodule/telegram.md) |
+| Fahrzeug-Chat | – (Cloud Messaging) | an andere ELVIS-Installationen, siehe [Cloud Messaging](cloud-messaging.md) |
 
 Die Messenger sind eigene Fahrzeugmodule unter **Einstellungen → Fahrzeugmodule**, jeweils mit echtem Treiber und
 dem Treiber **Simulation**. Die Simulation sendet nach einer Sekunde und meldet danach „zugestellt“ und „gelesen“.

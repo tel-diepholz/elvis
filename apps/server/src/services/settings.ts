@@ -17,13 +17,13 @@ export class SettingsService {
 
   constructor(
     private readonly db: Db,
-    private readonly defaults: { vehicle: VehicleInfo },
+    private readonly defaults: { vehicle: Omit<VehicleInfo, 'contacts'> },
   ) {}
 
   get(): Settings {
-    // device:<id> gehört zur Modulkonfiguration (DeviceConfigStore), wifi:* zum WLAN (WifiService), documents:* zu den Dokumenten, print:* zum Druckserver, app:* zur App-Anbindung, map:* zu den Kartenquellen (TileService), traffic:* zum Luft- und Schiffsverkehr, messages:* zu den Meldungen, requests:* zu den Anforderungen, mail:* zum Postfach, backup:* zum Backup, phonebook:* zum Telefonbuch, chat:* zu den Nachrichten, driver:* zur Ablage der Treiber, incident:* zur Lage, position:* zum Fahrzeugstandort
+    // device:<id> gehört zur Modulkonfiguration (DeviceConfigStore), wifi:* zum WLAN (WifiService), documents:* zu den Dokumenten, print:* zum Druckserver, app:* zur App-Anbindung, map:* zu den Kartenquellen (TileService), traffic:* zum Luft- und Schiffsverkehr, messages:* zu den Meldungen, requests:* zu den Anforderungen, mail:* zum Postfach, backup:* zum Backup, phonebook:* zum Telefonbuch, chat:* zu den Nachrichten, driver:* zur Ablage der Treiber, incident:* zur Lage, position:* zum Fahrzeugstandort, messaging:* zum Cloud Messaging
     const rows = this.db
-      .prepare("SELECT * FROM settings WHERE key NOT LIKE 'device:%' AND key NOT LIKE 'wifi:%' AND key NOT LIKE 'documents:%' AND key NOT LIKE 'print:%' AND key NOT LIKE 'app:%' AND key NOT LIKE 'map:%' AND key NOT LIKE 'traffic:%' AND key NOT LIKE 'messages:%' AND key NOT LIKE 'requests:%' AND key NOT LIKE 'mail:%' AND key NOT LIKE 'backup:%' AND key NOT LIKE 'phonebook:%' AND key NOT LIKE 'chat:%' AND key NOT LIKE 'driver:%' AND key NOT LIKE 'incident:%' AND key NOT LIKE 'position:%'")
+      .prepare("SELECT * FROM settings WHERE key NOT LIKE 'device:%' AND key NOT LIKE 'wifi:%' AND key NOT LIKE 'documents:%' AND key NOT LIKE 'print:%' AND key NOT LIKE 'app:%' AND key NOT LIKE 'map:%' AND key NOT LIKE 'traffic:%' AND key NOT LIKE 'messages:%' AND key NOT LIKE 'requests:%' AND key NOT LIKE 'mail:%' AND key NOT LIKE 'backup:%' AND key NOT LIKE 'phonebook:%' AND key NOT LIKE 'chat:%' AND key NOT LIKE 'driver:%' AND key NOT LIKE 'incident:%' AND key NOT LIKE 'position:%' AND key NOT LIKE 'messaging:%'")
       .all() as Row[];
     const value = <T>(key: string): T | undefined => {
       const r = rows.find((x) => x.key === key);
@@ -33,7 +33,7 @@ export class SettingsService {
     // Gespeicherte Zeichen durch das Schema führen, damit neue Felder Defaults bekommen.
     const sign = tacticalSignSchema.safeParse(value('mapSign') ?? DEFAULT_VEHICLE_SIGN);
     return {
-      vehicle: { ...this.defaults.vehicle, ...value<VehicleInfo>('vehicle') },
+      vehicle: { contacts: [], ...this.defaults.vehicle, ...value<Partial<VehicleInfo>>('vehicle') },
       mapSign: sign.success ? sign.data : DEFAULT_VEHICLE_SIGN,
       updatedAt: latest?.updated_at ?? null,
       updatedBy: latest?.updated_by ?? null,

@@ -12,14 +12,23 @@ export interface Alert {
   since: string;
 }
 
+/** Eigene Erreichbarkeit des Fahrzeugs (mehrere E-Mail-Adressen und Rufnummern, z. B. Satellitentelefon, Primär-SIM) */
+export interface VehicleContact {
+  kind: 'email' | 'phone';
+  value: string;
+  /** Freie Beschriftung, z. B. „Satellitentelefon“ oder „Sekundär-SIM“ */
+  label: string;
+}
+
 export interface VehicleInfo {
   name: string;
   callsign: string;
   organization: string;
+  contacts: VehicleContact[];
 }
 
 /** Topics a client should refetch via REST when invalidated. */
-export type Topic = 'incident' | 'journal' | 'units' | 'forces' | 'documents' | 'audit' | 'dockerHosts' | 'addons' | 'mapSources' | 'users' | 'settings' | 'devices' | 'cameras' | 'cameraPresets' | 'displays' | 'videoSources' | 'mapObjects' | 'wifi' | 'wifiClients' | 'monitoring' | 'bluetooth' | 'templates' | 'office' | 'roles' | 'tasks' | 'taskTemplates' | 'printing' | 'scans' | 'workstations' | 'appLinks' | 'personnel' | 'personnelSheets' | 'messages' | 'radioIds' | 'overpassQueries' | 'requests' | 'mail' | 'contacts' | 'backup' | 'georef' | 'chat' | 'calls' | 'phones' | 'damage' | 'energyFlow';
+export type Topic = 'incident' | 'journal' | 'units' | 'forces' | 'documents' | 'audit' | 'dockerHosts' | 'addons' | 'mapSources' | 'users' | 'settings' | 'devices' | 'cameras' | 'cameraPresets' | 'displays' | 'videoSources' | 'mapObjects' | 'wifi' | 'wifiClients' | 'monitoring' | 'bluetooth' | 'templates' | 'office' | 'roles' | 'tasks' | 'taskTemplates' | 'printing' | 'scans' | 'workstations' | 'appLinks' | 'personnel' | 'personnelSheets' | 'messages' | 'radioIds' | 'overpassQueries' | 'requests' | 'mail' | 'contacts' | 'backup' | 'georef' | 'chat' | 'calls' | 'phones' | 'damage' | 'energyFlow' | 'messaging';
 
 export type ServerMessage =
   | {

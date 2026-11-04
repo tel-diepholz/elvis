@@ -13,6 +13,7 @@ import { CaCertLink } from './CaCertLink';
 import { AccountMenu } from './auth/AccountMenu';
 import { DueTasksButton, DueTasksPanel } from './tasks/DueTasks';
 import { MessagesButton, MessagesPanel } from './messages/MessageAlerts';
+import { ChatRequestPanel } from './messaging/ChatRequestPanel';
 import { useMessageAttention } from './messages/messageHooks';
 import { inEdition, MOBILE_PRIMARY, NAV, navFor, type NavGroup, type NavItem } from './nav';
 import { MESSENGER_IDS, type MessengerState, type TelephonyState } from '@elvis/shared';
@@ -317,6 +318,7 @@ export function Layout() {
 
       {alertsOpen && <AlertPanel onClose={() => setAlertsOpen(false)} />}
       <div className="panel-stack">
+        <ChatRequestPanel />
         <MessagesPanel />
         <DueTasksPanel />
       </div>

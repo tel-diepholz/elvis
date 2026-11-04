@@ -190,6 +190,7 @@ export const DOCUMENT_PLACEHOLDERS: { key: string; label: string; inPath: boolea
   { key: 'fahrzeug.name', label: 'Fahrzeug', inPath: true },
   { key: 'fahrzeug.rufname', label: 'Funkrufname', inPath: true },
   { key: 'fahrzeug.organisation', label: 'Organisation', inPath: true },
+  { key: 'fahrzeug.kontakte', label: 'Kontaktdaten (Beschriftung: Rufnummer/E-Mail, je Zeile)', inPath: false },
   { key: 'ordner.laufnummer', label: 'Laufende Nummer im Zielordner (001, 002 …) – nur Dateiname', inPath: false },
 ];
 
@@ -225,7 +226,12 @@ export function documentPlaceholders(
       tag: p2(d.getDate()),
     },
     benutzer: { name: ctx.userName },
-    fahrzeug: { name: ctx.vehicle.name, rufname: ctx.vehicle.callsign, organisation: ctx.vehicle.organization },
+    fahrzeug: {
+      name: ctx.vehicle.name,
+      rufname: ctx.vehicle.callsign,
+      organisation: ctx.vehicle.organization,
+      kontakte: (ctx.vehicle.contacts ?? []).map((c) => (c.label ? `${c.label}: ${c.value}` : c.value)).join('\n'),
+    },
     ...(sequence !== undefined && { ordner: { laufnummer: String(sequence).padStart(3, '0') } }),
   };
 }

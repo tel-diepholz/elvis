@@ -35,7 +35,23 @@ describe('Einstellungen', () => {
     expect(res.status).toBe(200);
     expect(res.body.vehicle.callsign).toBe('Florian Musterstadt 12/11-1');
     expect(res.body.mapSign).toEqual(DEFAULT_VEHICLE_SIGN);
+    expect(res.body.vehicle.contacts).toEqual([]);
     expect(res.body.updatedBy).toBeNull();
+  });
+
+  it('speichern mehrere Kontaktdaten mit Beschriftung', async () => {
+    const admin = await adminCookie(app);
+    const contacts = [
+      { kind: 'phone', value: '+49 170 1234567', label: 'Primär-SIM' },
+      { kind: 'phone', value: '+881 6 31234567', label: 'Satellitentelefon' },
+      { kind: 'email', value: 'elw@ff-nordstadt.de', label: '' },
+    ];
+    const saved = await call<Settings>('PUT', '/api/settings', admin, { ...input, vehicle: { ...input.vehicle, contacts } });
+    expect(saved.status).toBe(200);
+    expect(saved.body.vehicle.contacts).toEqual(contacts);
+    expect((await call<Settings>('GET', '/api/settings')).body.vehicle.contacts).toEqual(contacts);
+    // Ohne Kontakte gespeichert (ältere Clients): leere Liste
+    expect((await call<Settings>('PUT', '/api/settings', admin, input)).body.vehicle.contacts).toEqual([]);
   });
 
   it('dürfen nur Admins ändern', async () => {
@@ -63,6 +79,10 @@ describe('Einstellungen', () => {
     const admin = await adminCookie(app);
     expect((await call('PUT', '/api/settings', admin, { ...input, vehicle: { ...input.vehicle, name: '' } })).status).toBe(400);
     expect((await call('PUT', '/api/settings', admin, { ...input, mapSign: { ...input.mapSign, org: 'marine' } })).status).toBe(400);
+    const withContact = (c: object) => call('PUT', '/api/settings', admin, { ...input, vehicle: { ...input.vehicle, contacts: [c] } });
+    expect((await withContact({ kind: 'email', value: 'kein-at', label: '' })).status).toBe(400);
+    expect((await withContact({ kind: 'phone', value: 'abc', label: '' })).status).toBe(400);
+    expect((await withContact({ kind: 'fax', value: '0421 1', label: '' })).status).toBe(400);
   });
 });
 

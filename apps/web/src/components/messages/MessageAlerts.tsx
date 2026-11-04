@@ -19,8 +19,8 @@ export function MessagesButton() {
   );
 }
 
-/** Kurzer Ton, wenn neue Meldungen dazukommen */
-function beep() {
+/** Kurzer Ton, wenn neue Meldungen (oder Chat-Anfragen) dazukommen */
+export function beep() {
   try {
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();

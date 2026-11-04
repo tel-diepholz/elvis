@@ -92,6 +92,8 @@ describe('Nachrichten: SMS', () => {
       ['whatsapp', true],
       ['telegram', true],
       ['sms', true],
+      // Fahrzeug-Chat (Cloud Messaging) außerhalb der Reihenfolge; ohne Postfach und Registrierung nicht verfügbar
+      ['elvis', false],
     ]);
     expect(avail.ports).toEqual([
       { port: 1, name: 'Telekom 1', status: 'up' },

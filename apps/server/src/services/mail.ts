@@ -186,6 +186,11 @@ export class MailService {
     return this.crypto;
   }
 
+  /** Schlüssel des aktiven Postfachs (Cloud Messaging verschlüsselt und signiert damit); null ohne aktives Postfach */
+  activeCrypto(): MailCrypto | null {
+    return this.enabled && this.state()?.status === 'active' ? this.cryptoOf() : null;
+  }
+
   /** Postfach nutzbar (für Navigation und Bediener) */
   available(): { available: boolean; address: string | null } {
     const s = this.state();

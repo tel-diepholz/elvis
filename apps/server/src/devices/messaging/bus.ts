@@ -1,9 +1,9 @@
-import type { ChatLocation, ChatStatus, HookKind, MessengerId, MessengerSetupInput, RelayHook, RelayHookEvent } from '@elvis/shared';
+import type { ChatChannel, ChatLocation, ChatStatus, HookKind, MessengerId, MessengerSetupInput, RelayHook, RelayHookEvent } from '@elvis/shared';
 import type { DeviceAdapter } from '../adapter.js';
 
-/** Eingegangene Nachricht eines Messengers */
+/** Eingegangene Nachricht eines Messengers bzw. des Fahrzeug-Chats (Cloud Messaging) */
 export interface IncomingChat {
-  channel: MessengerId;
+  channel: Exclude<ChatChannel, 'sms'>;
   /** Kennung der Gegenstelle im Dienst (Rufnummer im phoneKey-Format, Threema-ID, Telegram-ID …) */
   peer: string;
   /** Rufnummer der Gegenstelle, falls der Dienst sie liefert */
@@ -35,6 +35,8 @@ export interface OutgoingChat {
   text: string;
   attachment: { name: string; mimeType: string; path: string } | null;
   location: ChatLocation | null;
+  /** Wer sendet (der Fahrzeug-Chat nennt der Gegenseite Name und Rolle) */
+  operator?: string;
 }
 
 export interface SendResult {

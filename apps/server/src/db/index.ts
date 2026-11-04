@@ -1079,6 +1079,31 @@ const MIGRATIONS: Migration[] = [
     db.exec("ALTER TABLE incidents ADD COLUMN kind TEXT NOT NULL DEFAULT 'rescue' CHECK (kind IN ('area', 'rescue', 'staff'))");
     db.exec("UPDATE incidents SET kind = 'staff' WHERE procurement_mode = 'staff'");
   },
+  // Cloud Messaging: Gegenstellen (andere ELVIS-Installationen) und Chats mit ihnen; die Nachrichten selbst liegen in
+  // chat_messages (Kanal 'elvis', peer = ELW-ID der Gegenstelle)
+  `
+  CREATE TABLE IF NOT EXISTS messaging_peers (
+    elw_id TEXT PRIMARY KEY,
+    vehicle TEXT NOT NULL,
+    region_label TEXT NOT NULL,
+    address TEXT NOT NULL,
+    public_key TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS messaging_conversations (
+    id TEXT PRIMARY KEY,
+    peer_elw TEXT NOT NULL REFERENCES messaging_peers(elw_id),
+    direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),
+    state TEXT NOT NULL CHECK (state IN ('requested', 'accepted', 'declined', 'closed')),
+    requested_by TEXT,
+    peer_crew TEXT NOT NULL DEFAULT '[]',
+    decided_by TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS messaging_conversations_peer ON messaging_conversations(peer_elw, updated_at);
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

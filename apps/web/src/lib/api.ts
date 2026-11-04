@@ -1,6 +1,7 @@
 import type { DamageAccount, DamageAccountInput, DamageAccountPatch, DamageCountBooking, DamageCountInput, DamageEntry, DamageEntryInput, DamageEntryPatch } from '@elvis/shared';
 import type { ManualPosition, ManualPositionInput, VehiclePosition } from '@elvis/shared';
 import type { EnergyFlowInput, EnergyFlowSettings, UpdateStatus } from '@elvis/shared';
+import type { MessagingConversation, MessagingPeer, MessagingRegisterInput, MessagingStatus, Region, RegionWithPath } from '@elvis/shared';
 import type { Phone, PhoneConfigInput, PhoneInput, PhoneKeyInput, PhoneKeySlot, PhoneSystemStatus, PagingZone } from '@elvis/shared';
 import {
   type CallRecord,
@@ -301,6 +302,16 @@ export const api = {
   removeMailKey: (address: string) => request<void>('DELETE', `/api/mail/keys/${encodeURIComponent(address)}`),
   mailSuggest: (q: string) => request<MailAddressSuggestion[]>('GET', `/api/mail/suggest?q=${encodeURIComponent(q)}`),
 
+  messagingStatus: () => request<MessagingStatus>('GET', '/api/messaging/status'),
+  messagingRegister: (input: MessagingRegisterInput) => request<MessagingStatus>('PUT', '/api/system/messaging', input),
+  messagingUnregister: () => request<MessagingStatus>('DELETE', '/api/system/messaging'),
+  messagingRegions: (parent: string) => request<Region[]>('GET', `/api/messaging/regions?parent=${encodeURIComponent(parent)}`),
+  messagingRegionSearch: (q: string) => request<RegionWithPath[]>('GET', `/api/messaging/regions?q=${encodeURIComponent(q)}`),
+  messagingRegion: (ars: string) => request<RegionWithPath>('GET', `/api/messaging/regions?ars=${encodeURIComponent(ars)}`),
+  messagingDirectory: (q: string, region: string) => request<MessagingPeer[]>('GET', `/api/messaging/directory?${new URLSearchParams({ q, region })}`),
+  messagingConversations: () => request<MessagingConversation[]>('GET', '/api/messaging/conversations'),
+  messagingRequest: (elwId: string) => request<MessagingConversation>('POST', '/api/messaging/conversations', { elwId }),
+  messagingDecide: (id: string, action: 'accept' | 'decline' | 'close') => request<MessagingConversation>('POST', `/api/messaging/conversations/${id}/${action}`),
   chatAvailable: () => request<ChatAvailability>('GET', '/api/chat/available'),
   chatUnread: () => request<{ count: number }>('GET', '/api/chat/unread'),
   chatMessages: (folder: ChatFolder) => request<ChatList>('GET', `/api/chat/messages?folder=${folder}`),
