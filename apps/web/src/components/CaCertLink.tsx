@@ -12,7 +12,7 @@ export function CaCertLink() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className="nav-item nav-item-button" onClick={() => setOpen(true)}>
+      <button type="button" className="nav-item nav-item-button" onClick={() => setOpen(true)} title="Zertifikat installieren">
         <ShieldCheck size={20} />
         <span>Zertifikat installieren</span>
       </button>

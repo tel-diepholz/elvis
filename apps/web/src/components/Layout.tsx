@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Bell, Lock, Menu, Moon, Sun, Wifi, WifiOff, X } from 'lucide-react';
+import { Bell, Lock, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun, Wifi, WifiOff, X } from 'lucide-react';
 import { useActiveIncident, useInfo, useNow, useSettings } from '../lib/hooks';
 import { useAlerts, useLive } from '../lib/live';
 import { fmtDate, fmtDtg, fmtTimeSec, fmtWeekday } from '../lib/format';
@@ -42,19 +42,43 @@ function useChat(): { available: boolean; unread: number } {
   return { available, unread: available ? (data?.count ?? 0) : 0 };
 }
 
+const COLLAPSE_KEY = 'elvis.navCollapsed';
+
+/** Seitenleiste auf dem Desktop auf die Icons einklappen – Zustand bleibt im Browser gespeichert. */
+function useNavCollapsed(): [boolean, () => void] {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () =>
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1');
+      } catch {
+        /* storage unavailable */
+      }
+      return !c;
+    });
+  return [collapsed, toggle];
+}
+
 type Badges = Record<NonNullable<NavItem['badge']>, number>;
 const BADGE_TITLE: Record<keyof Badges, string> = { personnelSheets: 'neue Personalbögen', messages: 'Meldungen zu bearbeiten', mail: 'ungelesene Mails', chat: 'ungelesene Nachrichten' };
 
 function NavEntry({ item, locked, lockReason, onNavigate, badges }: { item: NavItem; locked: boolean; lockReason?: string; onNavigate?: () => void; badges: Badges }) {
   const Icon = item.icon;
   const count = item.badge && !locked ? badges[item.badge] : 0;
+  const title = [item.label, locked ? lockReason : count > 0 ? `${count} ${BADGE_TITLE[item.badge!]}` : undefined].filter(Boolean).join(' – ');
   return (
     <NavLink
       to={item.to}
       end={item.to === '/' || item.to === '/einsatz'}
       className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${locked ? 'locked' : ''}`}
       onClick={onNavigate}
-      title={locked ? lockReason : undefined}
+      title={title}
     >
       <Icon size={20} />
       <span>{item.label}</span>
@@ -81,6 +105,7 @@ export function Layout() {
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [navCollapsed, toggleNav] = useNavCollapsed();
   const unreadSheets = useUnreadSheets();
   const messageCount = useMessageAttention(now).attention.length;
   const mail = useMail();
@@ -131,17 +156,29 @@ export function Layout() {
   const version = info && <VersionTag edition={info.edition} version={info.version} linkToUpdate={info.edition === 'lite' && !!user?.isAdmin} />;
 
   return (
-    <div className={`shell ${incident ? 'has-incident' : ''}`}>
+    <div className={`shell ${incident ? 'has-incident' : ''} ${navCollapsed ? 'nav-collapsed' : ''}`}>
       <aside className="sidebar">
-        <div className="brand">
+        <div className="brand" title={navCollapsed ? `${vehicle?.name ?? 'ELVIS'} · ${vehicle?.callsign ?? ''}` : undefined}>
           <div className="brand-mark">E</div>
-          <div>
+          <div className="brand-text">
             <div className="brand-name">{vehicle?.name ?? 'ELVIS'}</div>
             <div className="brand-sub">{vehicle?.callsign ?? '…'}</div>
           </div>
         </div>
         {nav}
-        {version}
+        <div className="sidebar-footer">
+          {version}
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon nav-collapse"
+            onClick={toggleNav}
+            aria-expanded={!navCollapsed}
+            aria-label={navCollapsed ? 'Seitenleiste ausklappen' : 'Seitenleiste einklappen'}
+            title={navCollapsed ? 'Seitenleiste ausklappen' : 'Seitenleiste einklappen'}
+          >
+            {navCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+          </button>
+        </div>
       </aside>
 
       <header className="topbar">
