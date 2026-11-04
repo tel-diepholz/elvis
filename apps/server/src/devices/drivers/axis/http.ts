@@ -96,9 +96,20 @@ export class AxisHttp {
   }
 
   /** Anfrage mit automatischer Anmeldung; liefert die Antwort als Datenstrom. */
+  /** Verbindung öffnen; scheitert schon der TLS-Aufbau (manche Geräte, z. B. 2N, gelegentlich), einmal neu versuchen */
+  private async openRetry(method: string, path: string, body: Buffer | undefined, contentType: string | undefined, timeoutMs: number): Promise<IncomingMessage> {
+    try {
+      return await this.open(method, path, body, contentType, timeoutMs);
+    } catch (err) {
+      // nur, wenn die Anfrage noch nicht gesendet war
+      if (!/before secure TLS connection/.test((err as Error).message)) throw err;
+      return this.open(method, path, body, contentType, timeoutMs);
+    }
+  }
+
   async stream(method: 'GET' | 'POST', path: string, body?: Buffer, contentType?: string, timeoutMs = 8_000): Promise<IncomingMessage> {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await this.open(method, path, body, contentType, timeoutMs);
+      const res = await this.openRetry(method, path, body, contentType, timeoutMs);
       if (res.statusCode !== 401) return res;
       res.resume();
       const offers = parseChallenges(res.rawHeaders.filter((_, i, a) => i % 2 === 1 && a[i - 1]!.toLowerCase() === 'www-authenticate'));

@@ -7,6 +7,7 @@ import type { CameraConfig, CameraPreset, CameraTestResult, DeviceSnapshot, Inci
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
 import { FakeAxis } from '../devices/drivers/axis/fake-axis.js';
+import type { CamerasAdapter } from '../devices/drivers/cameras.js';
 import { adminCookie } from '../test-helpers.js';
 
 let app: App;
@@ -82,14 +83,24 @@ describe('Kameraverwaltung', () => {
     const { body: c } = await req<CameraConfig>('POST', '/api/system/cameras', input());
     await app.server.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server.server.address() as AddressInfo).port;
-    const res = await fetch(`http://127.0.0.1:${port}/api/cameras/${c.id}/stream`);
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toBe('multipart/x-mixed-replace; boundary=myboundary');
-    const reader = res.body!.getReader();
-    const { value } = await reader.read();
-    expect(Buffer.from(value!).toString('latin1')).toContain('Content-Type: image/jpeg');
-    await reader.cancel();
-    // Browser trennt → ELVIS schließt den Strom zur Kamera
+    (app.devices.adapter('cameras') as CamerasAdapter).streamLingerMs = 0;
+    const open = async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/cameras/${c.id}/stream`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('multipart/x-mixed-replace; boundary=elvisframe');
+      const reader = res.body!.getReader();
+      const { value } = await reader.read();
+      expect(Buffer.from(value!).toString('latin1')).toContain('Content-Type: image/jpeg');
+      return reader;
+    };
+    // Zwei Browser teilen sich eine Verbindung zur Kamera
+    const [a, b] = await Promise.all([open(), open()]);
+    expect(cam.streams).toBe(1);
+    await a.cancel();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cam.streams).toBe(1);
+    // letzter Browser trennt → ELVIS schließt den Strom zur Kamera
+    await b.cancel();
     await until(() => cam.streams === 0);
     app.server.server.closeAllConnections(); // Keep-alive des Test-Clients
   });

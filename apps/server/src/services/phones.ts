@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import {
+  MAX_PAGING_ZONES,
   MAX_PHONE_KEYS,
   PHONE_MODEL,
   dialableNumber,
@@ -8,6 +9,7 @@ import {
   type Contact,
   type Incident,
   type Phone,
+  type PagingZone,
   type PhoneConfig,
   type PhoneConfigInput,
   type PhoneData,
@@ -21,7 +23,7 @@ import {
 import type { Db } from '../db/index.js';
 import type { Logger } from '../devices/adapter.js';
 import { HttpError } from '../errors.js';
-import { xmlEscape } from './phonebook.js';
+import { xmlEscape, type PhonebookEntry } from './phonebook.js';
 
 const CONFIG_KEY = 'phones:config';
 const TOKEN_KEY = 'phones:token';
@@ -34,14 +36,16 @@ const REFRESH_S = 3600;
 const PUSH_CHUNK = 12;
 const PUSH_TIMEOUT_MS = 5000;
 const PUSH_DELAY_MS = 300;
+/** Einträge im Telefonbuch des Telefons (Snom D3xx: bis 2000) */
+const MAX_TBOOK = 2000;
 
 export type PhoneFetch = (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<{ ok: boolean; status: number }>;
 
 export interface PhoneDeps {
   contacts: () => Contact[];
   activeIncident: () => Incident | null;
-  /** Token des Kontakte-Telefonbuchs (services/phonebook.ts) */
-  phonebookToken: () => string;
+  /** Kontakte als Telefonbuch-Einträge (services/phonebook.ts) – kommen ins Telefonbuch des Telefons */
+  phonebook: () => PhonebookEntry[];
   log: Logger;
   fetch?: PhoneFetch;
   now?: () => number;
@@ -83,6 +87,19 @@ const parseKeys = (json: string): PhoneKeys => {
     if (parsed.success) out[Number(idx)] = parsed.data;
   }
   return out;
+};
+
+/** Mobilfunknummern (015x, 016x, 017x) bekommen im Telefonbuch das Handy-Symbol */
+export const numberType = (n: string) => (/^(\+49|0049|0)1[5-7]/.test(n) ? 'mobile' : 'business');
+
+/** Snom-Wert einer Durchsage-Zone (mc_address): immer über den Lautsprecher */
+export const mcAddress = (z: PagingZone) =>
+  `ip=${z.address},speaker=1,interrupt=${z.interrupt ? 1 : 0},volmax=${z.loud ? 1 : 0},priority=${z.priority},name=${z.name.replace(/\s*,\s*/g, ' ')}`;
+
+/** mc_address-Platz i (ab 0), leer = Platz frei */
+const zoneSetting = (config: PhoneConfig, i: number) => {
+  const z = config.pagingZones[i];
+  return z ? mcAddress(z) : '';
 };
 
 /** Kurzer Name für die Tastenbeschriftung: „Meyer, Hans“ bzw. die Einrichtung */
@@ -353,6 +370,11 @@ export class PhoneService {
     if (!key || key.type === 'empty') return { label: '', target: '', error: null };
     if (key.type === 'number') return { label: key.label || key.number, target: dialableNumber(key.number), error: null };
     if (key.type === 'blf') return { label: key.label || key.extension, target: key.extension, error: null };
+    if (key.type === 'paging') {
+      if (!key.address) return { label: key.label || 'Durchsage', target: 'Zone wählen', error: null };
+      const zone = this.config().pagingZones.find((z) => z.address === key.address);
+      return { label: key.label || zone?.name || key.address, target: key.address, error: null };
+    }
     const c = contacts.get(key.contactId);
     if (!c) return { label: key.label || 'Kontakt gelöscht', target: '', error: 'Kontakt gelöscht' };
     const phone = c.phones[key.phone];
@@ -390,6 +412,8 @@ export class PhoneService {
       const uri = `<sip:${slot.target}@${config.registrar}>`;
       return config.pickupPrefix ? `blf ${uri}|${config.pickupPrefix}` : `blf ${uri}`;
     }
+    // Ohne Adresse: Liste der Zonen am Telefon
+    if (key.type === 'paging') return key.address ? `multicast ${key.address}` : 'keyevent F_ZONES';
     return `speed ${slot.target}`;
   }
 
@@ -441,12 +465,22 @@ export class PhoneService {
       setting('user_pass', r.sip_password, 1),
       setting('user_host', config.registrar, 1),
       setting('user_outbound', config.outboundProxy, 1),
-      setting('dkey_directory', `url ${base}/api/phonebook/${this.deps.phonebookToken()}/snom.xml`),
+      // Verzeichnistaste öffnet das Telefonbuch des Telefons (früher: XML-Seite mit den Kontakten)
+      setting('dkey_directory', 'keyevent F_DIRECTORY_SEARCH'),
+      setting('multicast_listen', config.pagingZones.length ? 'on' : 'off'),
+      // Alle Plätze schreiben, damit entfernte Zonen auch am Telefon verschwinden
+      ...Array.from({ length: MAX_PAGING_ZONES }, (_, i) => setting('mc_address', zoneSetting(config, i), i + 1)),
     ].join('');
     const keys = this.slots(r.id)
       .map((s) => `    <fkey idx="${s.idx}" context="active" label="${e(s.label)}" perm="R">${e(this.fkey(s, config))}</fkey>\n`)
       .join('');
-    return `<?xml version="1.0" encoding="utf-8"?>\n<settings>\n  <phone-settings e="2">\n${settings}  </phone-settings>\n  <functionKeys e="2">\n${keys}  </functionKeys>\n</settings>\n`;
+    // complete="true": ersetzt das Telefonbuch des Telefons, gelöschte Kontakte verschwinden mit
+    const tbook = this.deps
+      .phonebook()
+      .slice(0, MAX_TBOOK)
+      .map((p) => `    <item context="line1" type="none">\n      <name>${e(p.name)}</name>\n      <number>${e(p.number)}</number>\n      <number_type>${numberType(p.number)}</number_type>\n    </item>\n`)
+      .join('');
+    return `<?xml version="1.0" encoding="utf-8"?>\n<settings>\n  <phone-settings e="2">\n${settings}  </phone-settings>\n  <functionKeys e="2">\n${keys}  </functionKeys>\n  <tbook e="2" complete="true">\n${tbook}  </tbook>\n</settings>\n`;
   }
 
   // --- Übertragung an das Telefon ---
@@ -490,6 +524,11 @@ export class PhoneService {
     try {
       for (let i = 0; i < slots.length; i += PUSH_CHUNK) {
         const params = new URLSearchParams({ settings: 'save', store_settings: 'save' });
+        // Durchsage-Zonen gleich mit, damit neue Durchsage-Tasten sofort ein Ziel haben
+        if (i === 0) {
+          params.set('multicast_listen', config.pagingZones.length ? 'on' : 'off');
+          for (let z = 0; z < MAX_PAGING_ZONES; z++) params.set(`mc_address${z + 1}`, zoneSetting(config, z));
+        }
         for (const s of slots.slice(i, i + PUSH_CHUNK)) {
           params.set(`fkey${s.idx}`, this.fkey(s, config));
           params.set(`fkey_label${s.idx}`, s.label);

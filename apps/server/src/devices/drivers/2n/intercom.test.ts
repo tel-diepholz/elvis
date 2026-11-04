@@ -20,6 +20,8 @@ class Fake2N {
   private waiting: ((events: unknown[]) => void)[] = [];
   private queue: unknown[] = [];
   subscription = 1000;
+  /** Nächsten Abruf ohne Antwort abbrechen (wie ein Netzwerkfehler) */
+  dropNextPull = false;
 
   /** Taste an der Türstation drücken (KeyPressed wie am echten Gerät) */
   press(key: string): void {
@@ -49,6 +51,7 @@ class Fake2N {
       if (url.pathname === '/api/log/subscribe') return json({ success: true, result: { id: ++this.subscription } });
       if (url.pathname === '/api/log/unsubscribe') return json({ success: true });
       if (url.pathname === '/api/log/pull') {
+        if (this.dropNextPull) return ((this.dropNextPull = false), req.socket.destroy());
         if (Number(url.searchParams.get('id')) !== this.subscription) return json({ success: false, error: { code: 12, param: 'id', description: 'invalid subscription id' } });
         const reply = (events: unknown[]) => json({ success: true, result: { events } });
         if (this.queue.length) return reply(this.queue.splice(0));
@@ -136,10 +139,10 @@ describe('2N-Türstation', () => {
     await expect(a.execute('zoom', { cameraId: 'cam-tuer', direction: 1 })).rejects.toThrow(/unterstützt das nicht/);
 
     const live = (await a.openStream('cam-tuer', 'live'))!;
-    expect(live.headers['content-type']).toContain('multipart/x-mixed-replace');
-    expect((await new Promise<Buffer>((r) => live.once('data', r))).toString('latin1')).toContain('--frame');
-    live.destroy();
-    (await a.openStream('cam-tuer', 'thumb'))!.destroy();
+    expect(live.contentType).toBe('multipart/x-mixed-replace; boundary=elvisframe');
+    expect((await new Promise<Buffer>((r) => live.stream.once('data', r))).toString('latin1')).toContain('Content-Type: image/jpeg');
+    live.stream.destroy();
+    (await a.openStream('cam-tuer', 'thumb'))!.stream.destroy();
     expect(f.calls.filter((c) => c.startsWith('/api/camera/snapshot'))).toEqual(['/api/camera/snapshot?width=1280&height=960&fps=10', '/api/camera/snapshot?width=320&height=240&fps=2']);
     await a.stop();
   });
@@ -178,6 +181,23 @@ describe('Klingeln', () => {
     await until(() => keys.length === 2);
     expect(keys).toEqual(['1', '2']);
     expect(f.calls.find((c) => c.startsWith('/api/log/subscribe'))).toBe('/api/log/subscribe?include=new&filter=KeyPressed&duration=4');
+    stop();
+  });
+
+  it('behält das Abo bei Netzwerkfehlern, damit kein Klingeln in der Lücke verloren geht', async () => {
+    const f = await fake();
+    const cam = new TwoNIntercom({ host: `127.0.0.1:${f.port}`, protocol: 'http', username: 'elvis', password: 'geheim', verifyTls: false });
+    Object.assign(cam, { pullSeconds: 1, pullRetryMs: 50 });
+    const keys: string[] = [];
+    const errors: string[] = [];
+    const stop = cam.watchRings((k) => keys.push(k), (m) => errors.push(m));
+    await until(() => f.calls.some((c) => c.startsWith('/api/log/pull')));
+    f.dropNextPull = true;
+    await until(() => errors.length === 1);
+    // in der Lücke gedrückt: die Türstation hält das Ereignis vor
+    f.press('%1');
+    await until(() => keys.length === 1);
+    expect(f.calls.filter((c) => c.startsWith('/api/log/subscribe'))).toHaveLength(1);
     stop();
   });
 

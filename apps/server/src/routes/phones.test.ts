@@ -91,7 +91,6 @@ describe('Tischtelefone (Snom)', () => {
     await req('PUT', '/api/system/phones/config', { registrar: 'pbx.elw', pickupPrefix: '*8', ntpServer: '10.0.0.1' });
     const phone = (await req<Phone>('POST', '/api/system/phones', PHONE)).body;
     const s = await status();
-    const pb = (await req<PhonebookStatus>('GET', '/api/system/phonebook')).body;
 
     await req('PUT', `/api/phones/${phone.id}/keys/0`, { scope: 'phone', key: { type: 'number', number: '+49 (0)5441 / 123', label: 'Leitstelle' } });
     await req('PUT', `/api/phones/${phone.id}/keys/1`, { scope: 'phone', key: { type: 'blf', extension: '102', label: 'Funk' } });
@@ -107,7 +106,9 @@ describe('Tischtelefone (Snom)', () => {
     expect(xml).toContain('<user_realname idx="1" perm="R">ELW Lage</user_realname>');
     expect(xml).toContain('<ntp_server perm="R">10.0.0.1</ntp_server>');
     expect(xml).toContain(`<http_pass perm="R">${s.adminPassword}</http_pass>`);
-    expect(xml).toContain(`<dkey_directory perm="R">url http://localhost:80/api/phonebook/${pb.token}/snom.xml</dkey_directory>`);
+    expect(xml).toContain('<dkey_directory perm="R">keyevent F_DIRECTORY_SEARCH</dkey_directory>');
+    expect(xml).toContain('<multicast_listen perm="R">off</multicast_listen>');
+    expect(xml).toContain('<mc_address idx="10" perm="R"></mc_address>');
     expect(fkey(xml, 0)).toEqual(['Leitstelle', 'speed +495441123']);
     expect(fkey(xml, 1)).toEqual(['Funk', 'blf &lt;sip:102@pbx.elw&gt;|*8']);
     expect(fkey(xml, 47)).toEqual(['', 'none']);
@@ -191,6 +192,53 @@ describe('Tischtelefone (Snom)', () => {
     const failed = (await req<Phone>('POST', `/api/system/phones/${phone.id}/push`)).body;
     expect(failed.push).toMatchObject({ state: 'failed' });
     expect(failed.push?.error).toContain('Zugang abgelehnt');
+  });
+
+  it('schreibt die Kontakte ins Telefonbuch des Telefons', async () => {
+    await req('POST', '/api/system/phones', PHONE);
+    await req('POST', '/api/contacts', { kind: 'person', lastName: 'Meyer', firstName: 'Hans', phones: [{ label: 'Mobil', number: '0171 2' }, { label: 'Büro', number: '05441 1' }] });
+    await req('POST', '/api/contacts', { kind: 'organization', organization: 'Bauhof & Co', phones: [{ label: '', number: '+49 (0)5441 99' }] });
+    const xml = (await provision((await status()).token)).body;
+    const tbook = /<tbook e="2" complete="true">\n([\s\S]*)  <\/tbook>/.exec(xml)?.[1];
+    expect(tbook).toBe(
+      '    <item context="line1" type="none">\n      <name>Bauhof &amp; Co</name>\n      <number>+49544199</number>\n      <number_type>business</number_type>\n    </item>\n' +
+        '    <item context="line1" type="none">\n      <name>Meyer, Hans - Büro</name>\n      <number>054411</number>\n      <number_type>business</number_type>\n    </item>\n' +
+        '    <item context="line1" type="none">\n      <name>Meyer, Hans - Mobil</name>\n      <number>01712</number>\n      <number_type>mobile</number_type>\n    </item>\n',
+    );
+  });
+
+  it('Durchsagen: Zonen an alle Telefone, Tasten in eine Zone oder zur Auswahl', async () => {
+    const zones = [
+      { name: 'Alle', address: '239.0.0.1:5000' },
+      { name: 'Führung, Lage', address: '239.0.0.2:5000', priority: 8, interrupt: true, loud: true },
+    ];
+    expect((await req('PUT', '/api/system/phones/config', { registrar: 'pbx.elw', pagingZones: [{ name: 'X', address: '10.0.0.1:5000' }] })).status).toBe(400);
+    expect((await req('PUT', '/api/system/phones/config', { registrar: 'pbx.elw', pagingZones: [zones[0], zones[0]] })).status).toBe(400);
+    expect((await req('PUT', '/api/system/phones/config', { registrar: 'pbx.elw', pagingZones: zones })).status).toBe(200);
+
+    const phone = (await req<Phone>('POST', '/api/system/phones', PHONE)).body;
+    const slots = (await req<PhoneKeySlot[]>('PUT', `/api/phones/${phone.id}/keys/3`, { scope: 'phone', key: { type: 'paging', address: '239.0.0.2:5000' } })).body;
+    expect(slots[3]).toMatchObject({ label: 'Führung, Lage', target: '239.0.0.2:5000' });
+    await req('PUT', `/api/phones/${phone.id}/keys/4`, { scope: 'phone', key: { type: 'paging', label: 'Durchsage' } });
+    expect((await req('PUT', `/api/phones/${phone.id}/keys/5`, { scope: 'phone', key: { type: 'paging', address: '239.0.0.1' } })).status).toBe(400);
+
+    const s = await status();
+    const xml = (await provision(s.token)).body;
+    expect(xml).toContain('<multicast_listen perm="R">on</multicast_listen>');
+    expect(xml).toContain('<mc_address idx="1" perm="R">ip=239.0.0.1:5000,speaker=1,interrupt=0,volmax=0,priority=5,name=Alle</mc_address>');
+    expect(xml).toContain('<mc_address idx="2" perm="R">ip=239.0.0.2:5000,speaker=1,interrupt=1,volmax=1,priority=8,name=Führung Lage</mc_address>');
+    expect(xml).toContain('<mc_address idx="3" perm="R"></mc_address>');
+    expect(fkey(xml, 3)).toEqual(['Führung, Lage', 'multicast 239.0.0.2:5000']);
+    expect(fkey(xml, 4)).toEqual(['Durchsage', 'keyevent F_ZONES']);
+
+    // Sofortige Übertragung nimmt die Zonen mit
+    const done = (await req<Phone>('POST', `/api/system/phones/${phone.id}/push`)).body;
+    expect(done.push?.state).toBe('ok');
+    const first = new URL(pushed.at(-4)!.url);
+    expect(first.searchParams.get('multicast_listen')).toBe('on');
+    expect(first.searchParams.get('mc_address2')).toContain('ip=239.0.0.2:5000');
+    expect(first.searchParams.get('mc_address3')).toBe('');
+    expect(new URL(pushed.at(-3)!.url).searchParams.has('mc_address1')).toBe(false);
   });
 
   it('liefert die Kontakte als Snom-Telefonbuch', async () => {
