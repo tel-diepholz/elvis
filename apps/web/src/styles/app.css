@@ -232,7 +232,107 @@ input[type='checkbox'] {
   overflow-y: auto;
   background: var(--bg-elev);
   border-right: 1px solid var(--border);
-  padding: 14px 12px;
+  padding: 14px 12px 0;
+}
+.sidebar > .nav {
+  flex: 1;
+}
+/* Fußzeile der Seitenleiste (Version, Einklapp-Schalter) – bleibt auch bei langem Menü sichtbar */
+.sidebar-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: auto -12px 0;
+  padding: 6px 12px 6px 0;
+  background: var(--bg-elev);
+  border-top: 1px solid var(--border);
+}
+.sidebar-footer .nav-version {
+  position: static;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 0 22px;
+  border: 0;
+  background: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-footer .nav-collapse {
+  margin-left: auto;
+  color: var(--text-muted);
+}
+.sidebar-footer .nav-collapse:hover {
+  color: var(--text);
+}
+
+/* ---------- Eingeklappte Seitenleiste (nur Icons) ---------- */
+.shell.nav-collapsed {
+  --sidebar-w: 68px;
+}
+.nav-collapsed .sidebar {
+  padding-left: 10px;
+  padding-right: 10px;
+  overflow-x: hidden;
+}
+.nav-collapsed .sidebar .brand {
+  justify-content: center;
+  padding: 4px 0 18px;
+}
+.nav-collapsed .sidebar .brand-text,
+.nav-collapsed .sidebar .nav-item > span,
+.nav-collapsed .sidebar .nav-lock {
+  display: none;
+}
+.nav-collapsed .sidebar .nav-group {
+  margin-bottom: 8px;
+}
+.nav-collapsed .sidebar .nav-group + .nav-group {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.nav-collapsed .sidebar .nav-group-label {
+  display: none;
+}
+.nav-collapsed .sidebar .nav-item {
+  justify-content: center;
+  padding: 10px 0;
+  position: relative;
+}
+.nav-collapsed .sidebar .nav-item.locked {
+  opacity: 0.55;
+}
+/* Zähler wird zum kleinen Badge an der Ecke des Icons */
+.nav-collapsed .sidebar .nav-item > .nav-badge {
+  display: block;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 16px;
+}
+.nav-collapsed .sidebar-footer {
+  margin: auto -10px 0;
+  padding: 6px 0;
+  justify-content: center;
+}
+.nav-collapsed .sidebar-footer .nav-version {
+  display: none;
+}
+.nav-collapsed .sidebar-footer .nav-collapse {
+  margin: 0;
+}
+/* Einsatz aktiv: Markierung am Gruppenanfang statt Beschriftung */
+.nav-collapsed.has-incident .sidebar .nav-group:has(.nav-live) {
+  box-shadow: inset 3px 0 0 var(--accent);
+  border-radius: 2px;
 }
 
 .brand {
