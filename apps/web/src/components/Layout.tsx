@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Bell, Lock, Menu, Moon, Sun, Wifi, WifiOff, X } from 'lucide-react';
 import { useActiveIncident, useInfo, useNow, useSettings } from '../lib/hooks';
 import { useAlerts, useLive } from '../lib/live';
@@ -128,6 +128,7 @@ export function Layout() {
       )}
     </nav>
   );
+  const version = info && <VersionTag edition={info.edition} version={info.version} linkToUpdate={info.edition === 'lite' && !!user?.isAdmin} />;
 
   return (
     <div className={`shell ${incident ? 'has-incident' : ''}`}>
@@ -140,6 +141,7 @@ export function Layout() {
           </div>
         </div>
         {nav}
+        {version}
       </aside>
 
       <header className="topbar">
@@ -214,6 +216,7 @@ export function Layout() {
               </button>
             </div>
             {nav}
+            {version}
           </div>
         </div>
       )}
@@ -224,5 +227,17 @@ export function Layout() {
         <DueTasksPanel />
       </div>
     </div>
+  );
+}
+
+/** Versionsanzeige unten links im Menü; Admins in ELVIS lite kommen damit direkt zu Einstellungen → Update */
+function VersionTag({ edition, version, linkToUpdate }: { edition: 'full' | 'lite'; version: string; linkToUpdate: boolean }) {
+  const label = `${edition === 'lite' ? 'ELVIS lite' : 'ELVIS'} ${version === 'dev' ? '(Entwicklung)' : version}`;
+  return linkToUpdate ? (
+    <Link to="/einstellungen#update" className="nav-version" title="Einstellungen → Update">
+      {label}
+    </Link>
+  ) : (
+    <div className="nav-version">{label}</div>
   );
 }
