@@ -31,6 +31,14 @@ export function WebRtcPlayer({ url, audio }: { url: string; audio: boolean }) {
     pc.addTransceiver('video', { direction: 'recvonly' });
     pc.addTransceiver('audio', { direction: 'recvonly' });
     pc.ontrack = (e) => {
+      // so wenig puffern wie möglich (Lagebild, Bildschirmfreigabe) – Chrome kennt zusätzlich playoutDelayHint
+      const r = e.receiver as unknown as Record<string, unknown>;
+      try {
+        if ('jitterBufferTarget' in r) r.jitterBufferTarget = 0;
+        else if ('playoutDelayHint' in r) r.playoutDelayHint = 0;
+      } catch {
+        // ältere Browser: Standardpuffer
+      }
       stream.addTrack(e.track);
       const v = video.current;
       if (v && v.srcObject !== stream) v.srcObject = stream;

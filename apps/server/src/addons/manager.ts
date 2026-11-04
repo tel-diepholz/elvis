@@ -67,6 +67,16 @@ interface AddonRow {
   updated_at: string;
 }
 
+/** Ausgestelltes Addon-Zertifikat (settings: addons:tls:<id>) */
+interface StoredCert {
+  /** Aufbau des Zertifikats – ältere Stände werden neu ausgestellt (CERT_FORMAT) */
+  format?: number;
+  certPem: string;
+  keyPem: string;
+  names: string[];
+  expiresAt: string;
+}
+
 /** Laufender Job mit Fortschritt je Schritt (nur im Speicher; der Verlauf steht in addon_job_runs). */
 interface LiveRun {
   runId: number;
@@ -76,6 +86,11 @@ interface LiveRun {
 export type AuditFn = (e: { operator: string; target: string; action: string; params: string; success: boolean; message: string }) => void;
 
 const RECONCILE_MS = 30_000;
+const CERT_CHECK_MS = 6 * 3_600_000;
+/** Addon-Zertifikate so lange vor Ablauf erneuern */
+const CERT_RENEW_MS = 30 * 86_400_000;
+/** 3: CN = Adresse, nur gültige Hostnamen im SAN (Format 1 mit Umlaut im CN lehnte iOS ab) */
+const CERT_FORMAT = 3;
 const SCHEDULE_MS = 5 * 60_000;
 const NOTIFY_THROTTLE_MS = 1_000;
 const LOG_TAIL_MAX = 2000;
@@ -112,8 +127,13 @@ export class AddonManager {
   start(): void {
     this.runs.markInterrupted();
     void this.reconcileAll();
-    this.timers = [setInterval(() => void this.reconcileAll(), RECONCILE_MS), setInterval(() => void this.runScheduledJobs(), SCHEDULE_MS)];
+    this.timers = [
+      setInterval(() => void this.reconcileAll(), RECONCILE_MS),
+      setInterval(() => void this.runScheduledJobs(), SCHEDULE_MS),
+      setInterval(() => void this.renewCertificates(), CERT_CHECK_MS),
+    ];
     setTimeout(() => void this.runScheduledJobs(), 10_000);
+    setTimeout(() => void this.renewCertificates(), 20_000);
   }
 
   stop(): void {
@@ -418,6 +438,7 @@ export class AddonManager {
         for (const name of addonVolumes(m)) await docker.createVolume({ Name: name, Labels: { [LABEL_MANAGED]: 'true', [LABEL_ADDON]: id } });
       });
       if (m.files) await this.step(op, `Dateien kopieren (${m.files.paths.length})`, () => this.copyFiles(docker, m));
+      if (m.tls) await this.step(op, 'TLS-Zertifikat aus der ELVIS-CA', () => this.installCertificate(docker, m, hostId, false));
       await this.step(op, 'Alte Container entfernen', () => this.removeContainers(docker, id, false));
       for (const c of m.containers) {
         const waiting = !!c.waitForJob && !this.runs.lastSuccess(id, c.waitForJob);
@@ -440,15 +461,69 @@ export class AddonManager {
   private async copyFiles(docker: Docker, m: AddonManifest): Promise<void> {
     const spec = m.files!;
     const files = await this.repos.addonFiles(m.id);
-    const pack = tar.pack();
-    const base = spec.target.replace(/^\/+|\/+$/g, '');
-    const dirs = new Set<string>();
-    for (const f of files) {
-      const parts = `${base}/${f.path}`.split('/').filter(Boolean);
-      for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/'));
+    await this.writeToVolume(
+      docker,
+      m.id,
+      spec.volume,
+      files.map((f) => ({ path: `${spec.target}/${f.path}`, data: f.data, mode: f.path.endsWith('.sh') ? 0o755 : 0o644 })),
+    );
+  }
+
+  /**
+   * TLS-Zertifikat für das Addon aus der ELVIS-CA (manifest.tls) ins Volume legen. Ein gespeichertes Zertifikat wird
+   * weiterverwendet, solange es zu Adresse und Name des Hosts passt und nicht bald abläuft.
+   * @returns true, wenn ein neues Zertifikat ausgestellt wurde
+   */
+  private async installCertificate(docker: Docker, m: AddonManifest, hostId: number, onlyIfRenewed: boolean): Promise<boolean> {
+    const spec = m.tls!;
+    const h = this.hosts.get(hostId);
+    const names = [...new Set([h.address, h.name].filter(Boolean))];
+    const key = `addons:tls:${m.id}`;
+    const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+    let cert = row ? (JSON.parse(row.value) as StoredCert) : null;
+    const fresh = !!cert && cert.format === CERT_FORMAT && cert.names.join(',') === names.join(',') && new Date(cert.expiresAt).getTime() - this.now().getTime() > CERT_RENEW_MS;
+    if (!fresh) {
+      // CN = Adresse (nur ASCII); Browser prüfen ohnehin nur das SAN
+      const b = this.hosts.issueWebCert(h.address, names);
+      cert = { format: CERT_FORMAT, certPem: b.certPem, keyPem: b.keyPem, names, expiresAt: b.expiresAt.toISOString() };
+      this.db
+        .prepare('INSERT INTO settings (key, value, updated_at, updated_by) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
+        .run(key, JSON.stringify(cert), this.now().toISOString(), 'system');
     }
+    if (onlyIfRenewed && fresh) return false;
+    await this.writeToVolume(docker, m.id, spec.volume, [
+      { path: `${spec.target}/cert.pem`, data: Buffer.from(cert!.certPem), mode: 0o644 },
+      { path: `${spec.target}/ca.pem`, data: Buffer.from(this.hosts.caPem), mode: 0o644 },
+      // zuletzt: Addons laden neu, sobald sich key.pem ändert – dann passen alle drei Dateien zusammen
+      { path: `${spec.target}/key.pem`, data: Buffer.from(cert!.keyPem), mode: 0o600 },
+    ]);
+    return !fresh;
+  }
+
+  /** Zertifikate laufender Addons vor Ablauf (oder nach Änderung von Adresse/Name des Hosts) erneuern */
+  async renewCertificates(): Promise<void> {
+    for (const r of this.rows()) {
+      const m = JSON.parse(r.manifest) as AddonManifest;
+      if (!m.tls || this.busy.has(r.id) || this.ops.get(r.id)?.finishedAt === null) continue;
+      try {
+        const { docker } = this.hosts.readyClient(r.host_id);
+        if (await this.installCertificate(docker, m, r.host_id, true)) {
+          this.audit({ operator: 'system', target: `addon:${r.id}`, action: 'renew-certificate', params: '{}', success: true, message: 'TLS-Zertifikat erneuert' });
+        }
+      } catch {
+        // Host gerade nicht erreichbar – beim nächsten Durchlauf
+      }
+    }
+  }
+
+  /** Dateien per Hilfscontainer in ein Volume des Addons schreiben (Docker-API: Archiv hochladen); Pfade relativ zum Volume. */
+  private async writeToVolume(docker: Docker, addonId: string, volume: string, files: { path: string; data: Buffer; mode: number }[]): Promise<void> {
+    const pack = tar.pack();
+    const names = files.map((f) => f.path.split('/').filter(Boolean));
+    const dirs = new Set<string>();
+    for (const parts of names) for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/'));
     for (const d of [...dirs].sort()) pack.entry({ name: `${d}/`, type: 'directory', mode: 0o755 });
-    for (const f of files) pack.entry({ name: `${base}/${f.path}`.replace(/^\/+/, ''), mode: f.path.endsWith('.sh') ? 0o755 : 0o644 }, f.data);
+    files.forEach((f, i) => pack.entry({ name: names[i]!.join('/'), mode: f.mode }, f.data));
     pack.finalize();
     const chunks: Buffer[] = [];
     for await (const chunk of pack as unknown as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
@@ -456,8 +531,8 @@ export class AddonManager {
     const helper = await docker.createContainer({
       Image: HELPER_IMAGE,
       Cmd: ['true'],
-      Labels: { [LABEL_MANAGED]: 'true', [LABEL_ADDON]: m.id, 'elvis.addon.helper': 'files' },
-      HostConfig: { Binds: [`${volumeName(m.id, spec.volume)}:/volume`] },
+      Labels: { [LABEL_MANAGED]: 'true', [LABEL_ADDON]: addonId, 'elvis.addon.helper': 'files' },
+      HostConfig: { Binds: [`${volumeName(addonId, volume)}:/volume`] },
     });
     try {
       await helper.putArchive(Buffer.concat(chunks), { path: '/volume' });

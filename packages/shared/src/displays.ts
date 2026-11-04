@@ -5,7 +5,7 @@ import { z } from 'zod';
  * Den Inhalt bestimmt ein Raster mit Kacheln, das aus ELVIS ferngesteuert wird.
  */
 
-export type DisplayTileType = 'map' | 'camera' | 'video' | 'weather' | 'forecast' | 'clock' | 'alerts' | 'network' | 'text' | 'guestWifi' | 'tasks' | 'forces' | 'scenes' | 'image';
+export type DisplayTileType = 'map' | 'camera' | 'video' | 'weather' | 'forecast' | 'clock' | 'alerts' | 'network' | 'text' | 'guestWifi' | 'tasks' | 'forces' | 'damage' | 'scenes' | 'image';
 
 export interface DisplayTileTypeInfo {
   label: string;
@@ -17,7 +17,7 @@ export interface DisplayTileTypeInfo {
 export const DISPLAY_TILE_TYPES: Record<DisplayTileType, DisplayTileTypeInfo> = {
   map: { label: 'Lagekarte', description: 'Karte mit Fahrzeug und Einsatzort, per Touch verschieb- und zoombar', size: { w: 6, h: 6 } },
   camera: { label: 'Kamera', description: 'Livebild einer Kamera', size: { w: 4, h: 3 } },
-  video: { label: 'Video (NDI)', description: 'Videostrom eines Gateways, z. B. NDI-Quelle über das Addon „NDI-Gateway“', size: { w: 4, h: 3 } },
+  video: { label: 'Video', description: 'Videostrom eines Gateways: Bildschirmübertragung (AirPlay, Browser) oder NDI-Quelle', size: { w: 4, h: 3 } },
   weather: { label: 'Wetter', description: 'Wind, Böen, Ausbreitungsrichtung, Temperatur', size: { w: 3, h: 3 } },
   forecast: { label: 'Wettervorhersage', description: 'Prognose am Fahrzeugstandort für die nächsten 24 Stunden und 7 Tage', size: { w: 6, h: 4 } },
   clock: { label: 'Uhr', description: 'Datum-Zeit-Gruppe, Uhrzeit und Datum', size: { w: 3, h: 2 } },
@@ -27,6 +27,7 @@ export const DISPLAY_TILE_TYPES: Record<DisplayTileType, DisplayTileTypeInfo> = 
   guestWifi: { label: 'Gast-WLAN', description: 'QR-Code, Netzname und Passwort des Gastnetzes im laufenden Einsatz', size: { w: 4, h: 3 } },
   tasks: { label: 'Aufgaben', description: 'Offene Aufgaben des laufenden Einsatzes mit Fälligkeit, fällige hervorgehoben', size: { w: 4, h: 4 } },
   forces: { label: 'Kräfteübersicht', description: 'Kräfte des laufenden Einsatzes nach Abschnitten mit taktischem Zeichen, Status und Stärke', size: { w: 5, h: 5 } },
+  damage: { label: 'Schadenkonten', description: 'Schadenkonten des laufenden Einsatzes mit Kräften und Personenschäden, darunter die Summe', size: { w: 5, h: 4 } },
   image: { label: 'Bild', description: 'Hochgeladenes Bild, z. B. Lageplan, Logo oder Hinweistafel', size: { w: 4, h: 3 } },
   scenes: { label: 'Szenenwahl', description: 'Szenen des Bildschirms per Touch aufrufen, dazu Umschalter für helles und dunkles Design', size: { w: 3, h: 3 } },
 };

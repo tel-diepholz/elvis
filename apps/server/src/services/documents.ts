@@ -236,8 +236,10 @@ export class DocumentService {
     pathPattern: string,
     file: { filename: string; mimeType: string; content: Buffer; description: string },
     by: { id: number | null; name: string },
+    opts: { allowClosed?: boolean; generated?: string } = {},
   ): Promise<{ documentId: number; path: string }> {
-    const incident = this.requireOpen(incidentId);
+    // Der Einsatzbericht entsteht erst nach dem Beenden
+    const incident = opts.allowClosed ? this.incident(incidentId) : this.requireOpen(incidentId);
     let path: string;
     try {
       path = renderPlaceholders(pathPattern, documentPlaceholders({ incident, vehicle: this.deps.vehicle(), userName: by.name, now: new Date() }));
@@ -261,6 +263,7 @@ export class DocumentService {
           uploadedBy: by.name,
           createdByUserId: by.id,
         });
+        if (opts.generated) this.store.markGenerated(d.id, opts.generated);
         this.journal(incidentId, `Dokument hinzugefügt: ${this.displayPath(d)}${file.description ? ` (${file.description})` : ''}`, by.name);
         return d;
       });

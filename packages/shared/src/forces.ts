@@ -183,6 +183,9 @@ export interface Unit {
   sign: TacticalSign;
   /** Eigene Stärke (ohne Untereinheiten) */
   strength: Strength;
+  /** Einsatzabschnitt = Schadenkonto; null = keinem Abschnitt zugeordnet */
+  accountId: number | null;
+  /** Anzeigename des Abschnitts (Bezeichnung des Schadenkontos), leer = keiner */
   section: string;
   status: UnitStatus;
   /** Position auf der Karte; null = noch nicht gesetzt */
@@ -213,7 +216,7 @@ export const newUnitSchema = z.object({
   mobile: mobileSchema.default(''),
   sign: tacticalSignSchema.default(DEFAULT_UNIT_SIGN),
   strength: strengthSchema.default(ZERO_STRENGTH),
-  section: text(100).default(''),
+  accountId: id.nullable().default(null),
   parentId: id.nullable().default(null),
   role: text(60).default(''),
   status: status.default('alarmiert'),
@@ -230,7 +233,7 @@ export const unitPatchSchema = z
     mobile: mobileSchema.optional(),
     sign: tacticalSignSchema.optional(),
     strength: strengthSchema.optional(),
-    section: text(100).optional(),
+    accountId: id.nullable().optional(),
     parentId: id.nullable().optional(),
     role: text(60).optional(),
     status: status.optional(),
@@ -254,7 +257,7 @@ export const deployUnitSchema = z.object({
   tree: deployNodeSchema,
   parentId: id.nullable().default(null),
   role: text(60).default(''),
-  section: text(100).default(''),
+  accountId: id.nullable().default(null),
   status: status.default('alarmiert'),
 });
 export type DeployUnitInput = z.input<typeof deployUnitSchema>;

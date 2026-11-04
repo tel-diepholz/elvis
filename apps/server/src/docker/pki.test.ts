@@ -56,6 +56,28 @@ describe('Docker-PKI', () => {
     expect(b.expiresAt.getTime()).toBeGreaterThan(Date.now() + 2 * 365 * 86_400_000);
   });
 
+  it('stellt Webzertifikate für Addons höchstens 397 Tage aus (Apple/Browser-Grenze 825 Tage)', () => {
+    const b = pki.issueWebCert('Bildschirmübertragung (server2)', ['10.0.0.2']);
+    const cert = forge.pki.certificateFromPem(b.certPem);
+    expect(forge.pki.certificateFromPem(pki.caPem).verify(cert)).toBe(true);
+    // nur Server-Authentifizierung: mit diesem Zertifikat kommt niemand an die Docker-API (dockerd verlangt clientAuth)
+    const eku = cert.getExtension('extKeyUsage') as { serverAuth?: boolean; clientAuth?: boolean };
+    expect(eku.serverAuth).toBe(true);
+    expect(eku.clientAuth).toBeFalsy();
+    expect(b.expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(397 * 86_400_000);
+    expect(b.expiresAt.getTime() - Date.now()).toBeGreaterThan(390 * 86_400_000);
+  });
+
+  it('kodiert Umlaute als UTF8String und nimmt nur gültige Hostnamen ins SAN (sonst lehnt iOS das Zertifikat ab)', () => {
+    const b = pki.issueWebCert('Bildschirmübertragung (Docker Server 1)', ['172.18.5.13', 'Docker Server 1', 'docker1.local']);
+    const cert = forge.pki.certificateFromPem(b.certPem);
+    const cn = cert.subject.getField('CN') as { value: string; valueTagClass: number };
+    expect(cn.valueTagClass).toBe(forge.asn1.Type.UTF8);
+    expect(forge.util.decodeUtf8(cn.value)).toBe('Bildschirmübertragung (Docker Server 1)');
+    const san = cert.getExtension('subjectAltName') as { altNames: { ip?: string; value?: string }[] };
+    expect(san.altNames.map((n) => n.ip ?? n.value)).toEqual(['172.18.5.13', 'docker1.local']);
+  });
+
   it('erlaubt mTLS mit dem ELVIS-Client-Zertifikat', async () => {
     expect(await handshake(pki.issueServerCert('localhost', ['127.0.0.1']), pki.clientBundle)).toBe(true);
   });

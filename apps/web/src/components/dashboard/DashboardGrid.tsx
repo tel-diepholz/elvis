@@ -2,7 +2,8 @@ import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerE
 import { Link } from 'react-router-dom';
 import { ChevronRight, GripVertical, Settings2, X } from 'lucide-react';
 import { DASHBOARD_COLS, DASHBOARD_MAX_ROWS, DASHBOARD_TILE_TYPES, dashboardRows, placeDashboardTile, type DashboardTile } from '@elvis/shared';
-import { DASHBOARD_ICONS, DASHBOARD_LINKS, DashboardTileContent, HEADLESS } from './tiles';
+import { useAuth } from '../../lib/auth';
+import { DASHBOARD_ACTIONS, DASHBOARD_ICONS, DASHBOARD_LINKS, DashboardTileContent, HEADLESS } from './tiles';
 
 type Box = Pick<DashboardTile, 'x' | 'y' | 'w' | 'h'>;
 interface Drag {
@@ -41,6 +42,7 @@ export function DashboardGrid({
   onSettings: (id: string) => void;
   onRemove: (id: string) => void;
 }) {
+  const { user } = useAuth();
   const grid = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const edit = editing && !stacked;
@@ -114,6 +116,7 @@ export function DashboardGrid({
         const Icon = DASHBOARD_ICONS[t.type];
         const link = DASHBOARD_LINKS[t.type];
         const headless = HEADLESS.has(t.type);
+        const Actions = user && !edit ? DASHBOARD_ACTIONS[t.type] : undefined;
         const title = typeof t.config.heading === 'string' && t.config.heading.trim() ? t.config.heading.trim() : info.label;
         const style: CSSProperties = stacked
           ? { height: `calc(${Math.max(t.h, 2)} * ${ROW_PX}px + ${Math.max(t.h, 2) - 1} * ${GAP_PX}px)` }
@@ -137,6 +140,11 @@ export function DashboardGrid({
                 ) : (
                   <span className="dash-tile-title">
                     <Icon size={16} /> {title}
+                  </span>
+                )}
+                {Actions && (
+                  <span className="dash-tile-actions">
+                    <Actions />
                   </span>
                 )}
               </header>

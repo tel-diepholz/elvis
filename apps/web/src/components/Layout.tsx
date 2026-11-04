@@ -9,6 +9,7 @@ import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
 import { effectiveTheme, toggleTheme, useTheme } from '../lib/theme';
 import { AlertPanel } from './AlertPanel';
+import { CaCertLink } from './CaCertLink';
 import { AccountMenu } from './auth/AccountMenu';
 import { DueTasksButton, DueTasksPanel } from './tasks/DueTasks';
 import { MessagesButton, MessagesPanel } from './messages/MessageAlerts';
@@ -117,6 +118,11 @@ export function Layout() {
             })}
         </div>
       ))}
+      {dockerEnabled && (
+        <div className="nav-group nav-footer">
+          <CaCertLink />
+        </div>
+      )}
     </nav>
   );
 

@@ -333,6 +333,12 @@ export const addonManifestSchema = z
         paths: z.array(z.string().regex(/^(?!\/)(?!.*\.\.)[\w./-]+$/, 'relativer Pfad ohne ..')).min(1),
       })
       .optional(),
+    /**
+     * TLS-Zertifikat für den Docker-Host aus der CA von ELVIS (dieselbe wie für die Docker-Verwaltung). ELVIS legt
+     * cert.pem, key.pem und ca.pem unter <target> ins Volume und erneuert sie vor Ablauf – Clients, die der CA von
+     * ELVIS vertrauen (Download in der Seitenleiste), sehen keine Zertifikatswarnung.
+     */
+    tls: z.object({ volume: slug, target: z.string().startsWith('/') }).optional(),
   })
   .superRefine((m, ctx) => {
     const names = m.containers.map((c) => c.name);

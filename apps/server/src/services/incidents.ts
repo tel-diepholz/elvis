@@ -58,7 +58,7 @@ const INCIDENT_FIELD_LABELS: Record<keyof IncidentPatch, string | null> = {
  */
 export class IncidentService {
   private readonly removedListeners: ((o: MapObject) => void)[] = [];
-  private readonly closedListeners: ((incident: Incident) => void)[] = [];
+  private readonly closedListeners: ((incident: Incident, operator: string) => void)[] = [];
 
   constructor(
     private readonly store: Store,
@@ -129,12 +129,12 @@ export class IncidentService {
       return this.store.closeIncident(id);
     });
     this.notify(['incident', 'journal', 'cameraPresets']);
-    for (const fn of this.closedListeners) fn(closed);
+    for (const fn of this.closedListeners) fn(closed, operator);
     return closed;
   }
 
   /** Aufräumen nach dem Einsatzende (z. B. Tastenbelegung der Telefone zurücksetzen) */
-  onClosed(fn: (incident: Incident) => void): void {
+  onClosed(fn: (incident: Incident, operator: string) => void): void {
     this.closedListeners.push(fn);
   }
 
@@ -351,6 +351,15 @@ export class IncidentService {
     return parent;
   }
 
+  /** Abschnitt (Schadenkonto) prüfen: im selben Einsatz und nicht aufgelöst; liefert den Anzeigenamen */
+  private sectionFor(incidentId: number, accountId: number | null): string {
+    if (accountId === null) return '';
+    const a = this.store.damageAccountRef(accountId);
+    if (!a || a.incidentId !== incidentId) throw new HttpError(400, 'Schadenkonto nicht gefunden');
+    if (a.closedAt) throw new HttpError(409, `Schadenkonto ${a.name} ist aufgelöst`);
+    return a.name;
+  }
+
   private create(incidentId: number, u: Omit<Unit, 'id' | 'incidentId' | 'createdAt' | 'updatedAt' | 'arrivedAt' | 'releasedAt' | 'lat' | 'lon' | 'positionSource' | 'positionAt' | 'positionAccuracyM' | 'mapVisible'>): Unit {
     const ts = new Date().toISOString();
     return this.store.addUnit({
@@ -380,7 +389,8 @@ export class IncidentService {
     this.requireOpen(id);
     const unit = this.store.transaction(() => {
       const parent = this.parentFor(id, input.parentId);
-      const u = this.create(id, { ...input, role: parent ? input.role : '', sourceId: null });
+      const section = this.sectionFor(id, input.accountId);
+      const u = this.create(id, { ...input, section, role: parent ? input.role : '', sourceId: null });
       this.system(id, this.arrivalText(u, [`Stärke ${formatStrength(u.strength)}`], parent), operator);
       return u;
     });
@@ -407,10 +417,11 @@ export class IncidentService {
 
     const root = this.store.transaction(() => {
       const parent = this.parentFor(id, input.parentId);
+      const section = this.sectionFor(id, input.accountId);
       const created: Unit[] = [];
       const make = (node: DeployNode, parentId: number | null, role: string): Unit => {
         const f = catalog.get(node.forceUnitId)!;
-        const u = this.create(id, { ...f, parentId, role, sourceId: f.id, section: input.section, status: input.status });
+        const u = this.create(id, { ...f, parentId, role, sourceId: f.id, accountId: input.accountId, section, status: input.status });
         created.push(u);
         for (const c of node.children) make(c, u.id, f.members.find((m) => m.unitId === c.forceUnitId)!.role);
         return u;
@@ -479,7 +490,7 @@ export class IncidentService {
         ...(patch.mobile !== undefined && { mobile: patch.mobile }),
         ...(patch.sign !== undefined && { sign: patch.sign }),
         ...(patch.strength !== undefined && { strength: patch.strength }),
-        ...(patch.section !== undefined && { section: patch.section }),
+        ...(patch.accountId !== undefined && patch.accountId !== before.accountId && { accountId: patch.accountId, section: this.sectionFor(before.incidentId, patch.accountId) }),
         ...(patch.parentId !== undefined && { parentId: patch.parentId }),
         ...(patch.role !== undefined && { role: patch.role }),
         ...(patch.lat !== undefined && {
@@ -499,7 +510,7 @@ export class IncidentService {
     // Status und Abschnitt gelten für die Untereinheiten mit; schon entlassene bleiben es (außer die Einheit kehrt zurück)
     const subs = unitDescendants(this.store.units(before.incidentId), before.id);
     const statusChanged = next.status !== before.status;
-    const sectionChanged = next.section !== before.section;
+    const sectionChanged = next.accountId !== before.accountId;
     const followers =
       patch.cascade && (statusChanged || sectionChanged) ? subs.filter((d) => d.status !== 'entlassen' || before.status === 'entlassen') : [];
 
@@ -517,12 +528,14 @@ export class IncidentService {
     const saved = this.store.transaction(() => {
       const u = this.store.saveUnit(next);
       for (const d of followers) {
-        this.store.saveUnit(stamp({ ...d, ...(sectionChanged && { section: next.section }) }, statusChanged ? next.status : d.status));
+        this.store.saveUnit(stamp({ ...d, ...(sectionChanged && { accountId: next.accountId, section: next.section }) }, statusChanged ? next.status : d.status));
       }
       if (changes.length > 0) this.system(u.incidentId, `${u.name}: ${changes.join(', ')}`, operator);
       return u;
     });
-    this.notify(changes.length > 0 ? ['units', 'journal'] : ['units']);
+    const topics: Topic[] = changes.length > 0 ? ['units', 'journal'] : ['units'];
+    if (sectionChanged) topics.push('damage');
+    this.notify(topics);
     return saved;
   }
 }

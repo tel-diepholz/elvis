@@ -55,6 +55,9 @@ import { appLinkRoutes } from './routes/applinks.js';
 import { MailService, type MailFetch } from './services/mail.js';
 import type { WkdFetch } from './services/mailcrypto.js';
 import { mailRoutes } from './routes/mail.js';
+import { reportRoutes } from './routes/report.js';
+import { ReportService } from './services/report/index.js';
+import type { OfficeConverter } from './services/report/attachments.js';
 import { chatRoutes } from './routes/chat.js';
 import { telephonyRoutes } from './routes/telephony.js';
 import { ChatService } from './services/chat.js';
@@ -98,8 +101,10 @@ import { TaskService } from './services/tasks.js';
 import { taskRoutes } from './routes/tasks.js';
 import { MessageService } from './services/messages.js';
 import { RequestService } from './services/requests.js';
+import { DamageService } from './services/damage.js';
 import { messageRoutes } from './routes/messages.js';
 import { requestRoutes } from './routes/requests.js';
+import { damageRoutes } from './routes/damage.js';
 import { printingRoutes, type OfficeDownload } from './routes/printing.js';
 import { PrintService, type IppTransport } from './services/printing.js';
 import { scanningRoutes } from './routes/scanning.js';
@@ -119,6 +124,7 @@ export interface App {
   personnel: PersonnelService;
   mail: MailService;
   chat: ChatService;
+  report: ReportService;
   reachability: ReachabilityService;
   calls: CallLogService;
   traffic: TrafficService;
@@ -128,7 +134,7 @@ export interface App {
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; phoneFetch?: PhoneFetch; phonePushDelayMs?: number; restart?: () => void } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; officeConvert?: OfficeConverter | null; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; phoneFetch?: PhoneFetch; phonePushDelayMs?: number; restart?: () => void } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -180,6 +186,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const tasks = new TaskService(db, { store, roles, notify: (t) => hub.invalidate(t) });
   const messages = new MessageService(db, { store, roles, notify: (t) => hub.invalidate(t) });
   const requests = new RequestService(db, { store, roles, tasks, messages, notify: (t) => hub.invalidate(t) });
+  const damage = new DamageService(db, { store, notify: (t) => hub.invalidate(t) });
   const forces = new ForceService(db, store);
   const incidents = new IncidentService(
     store,
@@ -339,6 +346,27 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     docker = { hosts, repos, addons };
   }
   const georef = new GeorefService({ dataDir: config.dataDir, documents, incidents, hosts: docker?.hosts ?? null, notify: (t) => hub.invalidate(t) });
+  const report = new ReportService({
+    db,
+    store,
+    documents,
+    personnel,
+    damage,
+    tasks,
+    requests,
+    messages,
+    calls,
+    chat,
+    mail,
+    tiles,
+    office,
+    settings: () => settings.get(),
+    overlayTile: (id, z, x, y) => georef.tile(id, z, x, y),
+    convert: opts.officeConvert,
+    log: server.log,
+  });
+  // Beim Beenden: Einsatzbericht erzeugen und unter „Protokolle“ ablegen
+  incidents.onClosed((incident, operator) => void report.archive(incident, operator));
 
   await server.register(fastifyCookie);
   await server.register(fastifyWebsocket);
@@ -387,6 +415,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     taskRoutes(api, { tasks, roles, store, notify: (t) => hub.invalidate(t) });
     messageRoutes(api, { messages, store, incidents, forces, mail, chat, notify: (t) => hub.invalidate(t) });
     requestRoutes(api, { requests, store, notify: (t) => hub.invalidate(t) });
+    damageRoutes(api, { damage });
     deviceRoutes(api, devices, store, (t) => hub.invalidate(t));
     incidentRoutes(api, { incidents, forces, store, notify: (t) => hub.invalidate(t) });
     documentRoutes(api, { documents, templates, office, store, notify: (t) => hub.invalidate(t) });
@@ -416,6 +445,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     mailRoutes(api, mail);
     chatRoutes(api, { chat, reachability, contacts, documents });
     telephonyRoutes(api, { calls });
+    reportRoutes(api, { report, store, notify: (t) => hub.invalidate(t) });
     contactRoutes(api, { contacts, personnel });
     phonebookRoutes(api, { phonebook, store, notify: (t) => hub.invalidate(t) });
     phoneRoutes(api, { phones, store, notify: (t) => hub.invalidate(t) });
@@ -461,6 +491,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     appLinks,
     personnel,
     mail,
+    report,
     chat,
     reachability,
     calls,
@@ -511,6 +542,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       docker?.addons.stop();
       await devices.stop();
       await scanning.stop();
+      await report.idle();
       await server.close();
       db.close();
     },

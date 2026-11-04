@@ -3,8 +3,9 @@ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Bell, Cctv, CalendarDays, Clock, CloudSun, Image as ImageIcon, Layers, ListChecks, Map as MapIcon, Moon, Network, Repeat, Sun, Type, Users, Video, Wifi } from 'lucide-react';
+import { Bell, Cctv, CalendarDays, ClipboardPlus, Clock, CloudSun, Image as ImageIcon, Layers, ListChecks, Map as MapIcon, Moon, Network, Repeat, Sun, Type, Users, Video, Wifi } from 'lucide-react';
 import {
+  DAMAGE_INJURED,
   DEFAULT_VEHICLE_SIGN,
   DISPLAY_TILE_TYPES,
   UNIT_STATUS,
@@ -18,9 +19,13 @@ import {
   taskIsDue,
   unitChildren,
   unitDescendants,
+  type DamageAccount,
+  type DamageCount,
+  type DamageCountCategory,
   type DisplayDevice,
   type DisplayMapView,
   type DisplayTile,
+  type VideoStream,
   type DisplayTheme,
   type DisplayTileType,
   type Unit,
@@ -37,12 +42,21 @@ import { TacticalSignImage, tacticalIcon } from '../tactical/TacticalSign';
 import { WindCompass } from '../WindCompass';
 import { WeatherIcon, WindArrow, gustTone } from '../WeatherIcon';
 import { WebRtcPlayer } from './WebRtcPlayer';
-import { MapObjectsLayer, useMapObjects } from '../map/objects';
+import { MapObjectsLayer, objectBounds, useMapObjects } from '../map/objects';
 import { UnitsLayer, useMapUnits } from '../map/units';
-import { WifiQr } from '../WifiQr';
+import { QrCode, WifiQr } from '../WifiQr';
 import { fmtRelative } from '../tasks/taskActions';
+import { useAuth } from '../../lib/auth';
+import { ObjectList } from '../../pages/map/objectlist';
+import { MapStylePicker } from '../../pages/map/toolbar';
 
-export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, forecast: CalendarDays, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users, scenes: Layers, image: ImageIcon };
+/**
+ * Einstellungen einer Kachel aus der Kachel heraus ändern (z. B. Kartenstil in der Kartenkachel). Die Übersicht
+ * speichert sie in der Anordnung des Benutzers; ohne Kontext (Bildschirme) gilt die Wahl nur bis zum Neuladen.
+ */
+export const TileConfigContext = createContext<{ setConfig: (tileId: string, patch: DisplayTile['config']) => void } | null>(null);
+
+export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, forecast: CalendarDays, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users, damage: ClipboardPlus, scenes: Layers, image: ImageIcon };
 
 const date = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 const time = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -219,21 +233,49 @@ function CameraTile({ tile }: { tile: DisplayTile }) {
 }
 
 // wie auf der Lagekarte
-/** Videostrom eines Gateways (z. B. NDI) über den WebRTC-Player von MediaMTX */
+/** Videostrom eines Gateways (NDI, Bildschirmübertragung) über den WebRTC-Player von MediaMTX */
 function VideoTile({ tile }: { tile: DisplayTile }) {
   const { data } = useQuery({ queryKey: ['videoSources'], queryFn: api.videoSources });
   if (!data) return <TileEmpty text="Lade Videoquellen …" />;
-  const stream = tile.config.streamId ? data.streams.find((s) => s.id === tile.config.streamId) : data.streams[0];
+  // „Erste verfügbare Quelle“: bevorzugt eine, die gerade sendet
+  const stream = tile.config.streamId ? data.streams.find((s) => s.id === tile.config.streamId) : (data.streams.find((s) => s.state === 'running') ?? data.streams[0]);
   if (!stream) {
     const problem = data.providers.find((p) => p.problem)?.problem;
-    if (!data.providers.length) return <TileEmpty text="Kein Video-Gateway installiert (Addon „NDI-Gateway“)" />;
-    return <TileEmpty text={problem ?? (tile.config.streamId ? 'Quelle derzeit nicht verfügbar' : 'Keine NDI-Quelle gefunden')} />;
+    if (!data.providers.length) return <TileEmpty text="Keine Videoquelle installiert (Addon „Bildschirmübertragung“ oder „NDI-Gateway“)" />;
+    return <TileEmpty text={problem ?? (tile.config.streamId ? 'Quelle derzeit nicht verfügbar' : 'Keine Videoquelle gefunden')} />;
   }
   if (stream.state === 'error') return <TileEmpty text={`${stream.name}: ${stream.error ?? 'Störung'}`} />;
+  if (stream.state === 'idle') return stream.connect ? <VideoConnectView stream={stream} /> : <TileEmpty text={`${stream.name}: kein Signal`} />;
   return (
     <div className="tile-camera">
-      <WebRtcPlayer key={stream.url} url={stream.url} audio={tile.config.audio === true} />
-      <span className="tile-camera-label">{stream.name}</span>
+      {/* neuer Sender → neu verbinden, statt auf das Ende der alten Sitzung zu warten */}
+      <WebRtcPlayer key={`${stream.url}|${stream.via ?? ''}|${stream.sender ?? ''}`} url={stream.url} audio={tile.config.audio === true} />
+      <span className="tile-camera-label">{stream.sender ? `${stream.name} · ${stream.sender}` : stream.name}</span>
+    </div>
+  );
+}
+
+/** Empfänger ohne Sender: zeigt, wie man per AirPlay oder Browser auf ihn teilt */
+function VideoConnectView({ stream }: { stream: VideoStream }) {
+  const c = stream.connect ?? {};
+  return (
+    <div className="tile-wifi tile-cast">
+      {c.shareUrl && <QrCode data={c.shareUrl} label={`QR-Code für ${c.shareUrl}`} className="tile-wifi-qr" />}
+      <dl>
+        <div className="tile-wifi-title">{stream.name}: Bildschirm teilen</div>
+        {c.airplay && (
+          <>
+            <dt>iPhone, iPad, Mac – AirPlay</dt>
+            <dd>{c.airplay}</dd>
+          </>
+        )}
+        {c.shareUrl && (
+          <>
+            <dt>Windows, Mac, Linux – im Browser öffnen</dt>
+            <dd>{c.shareUrl.replace(/^https?:\/\//, '')}</dd>
+          </>
+        )}
+      </dl>
     </div>
   );
 }
@@ -246,6 +288,21 @@ function Follow({ pos, enabled }: { pos: [number, number] | null; enabled: boole
   useEffect(() => {
     if (enabled && pos) map.panTo(pos, { animate: true });
   }, [map, enabled, pos?.[0], pos?.[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/**
+ * Waren beim Aufbau weder Fahrzeug- noch Einsatzposition bekannt (und kein Ausschnitt gemerkt), steht die Karte auf
+ * ganz Deutschland: einmal auf die Mitte der Kachel springen, sobald eine Position da ist.
+ */
+function InitialCenter({ pos, zoom, enabled }: { pos: [number, number] | null; zoom: number; enabled: boolean }) {
+  const map = useMap();
+  const done = useRef(!enabled);
+  useEffect(() => {
+    if (done.current || !pos) return;
+    done.current = true;
+    map.setView(pos, zoom);
+  }, [map, pos?.[0], pos?.[1]]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 
@@ -321,6 +378,21 @@ function RemoteControl({ tileId, view, onMove }: { tileId: string; view: Display
 
 const mapViewKey = (tileId: string) => `elvis.display.mapView.${tileId}`;
 
+const readLocal = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const writeLocal = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* nur Komfort */
+  }
+};
+
 /**
  * Bedienung der Karte: ohne Mitführen frei verschieben und zoomen, mit Mitführen gesperrt – dann folgt der Ausschnitt
  * nur Fahrzeug bzw. Einsatzort. Die Klasse map-locked lässt in der Vorschau die Eingaben durch die Karte hindurch.
@@ -348,6 +420,15 @@ function AutoResize() {
 
 function MapTile({ tile }: { tile: DisplayTile }) {
   const settings = useSettings().data;
+  const { user } = useAuth();
+  const tileConfig = useContext(TileConfigContext);
+  const map = useRef<L.Map | null>(null);
+  // Bildschirme (ohne Übersicht als Kontext) merken sich den gewählten Kartenstil selbst, solange die Einstellung gleich bleibt
+  const sourceKey = `elvis.display.mapSource.${tile.id}.${String(tile.config.sourceId ?? '')}`;
+  const [localSource, setLocalSource] = useState<string | null>(() => (tileConfig ? null : readLocal(sourceKey)));
+  const [styleMenuPx, setStyleMenuPx] = useState(0);
+  const showList = tile.config.objectList === true;
+  const showStyle = tile.config.styleControl === true;
   const weather = useDevice('weather');
   const { data: sources = [] } = useQuery({ queryKey: ['mapSources'], queryFn: api.mapSources, staleTime: Infinity });
   // Einsatzort: Bildschirme und angemeldete Benutzer dürfen ihn lesen, sonst bleibt er weg
@@ -359,7 +440,16 @@ function MapTile({ tile }: { tile: DisplayTile }) {
   const now = useNow();
   const ws = weather?.state;
   const wind = ws && ws.windSpeedMs !== null && ws.windDirectionDeg !== null ? { windSpeedMs: ws.windSpeedMs, windDirectionDeg: ws.windDirectionDeg } : undefined;
-  const source = sources.find((s) => s.id === tile.config.sourceId) ?? autoSource(sources, true);
+  useEffect(() => {
+    if (!tileConfig) setLocalSource(readLocal(sourceKey));
+  }, [sourceKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sourceId = String(localSource ?? tile.config.sourceId ?? '');
+  const source = sources.find((s) => s.id === sourceId) ?? autoSource(sources, true);
+  const chooseSource = (id: string | null) => {
+    if (tileConfig) return tileConfig.setConfig(tile.id, { sourceId: id ?? '' });
+    setLocalSource(id ?? '');
+    writeLocal(sourceKey, id ?? '');
+  };
   const gps = weather?.state.position;
   const vPos: [number, number] | null = gps ? [gps.lat, gps.lon] : null;
   const iPos: [number, number] | null = incident?.lat != null && incident.lon != null ? [incident.lat, incident.lon] : null;
@@ -373,27 +463,60 @@ function MapTile({ tile }: { tile: DisplayTile }) {
     [tile.id], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const zoom = Number(tile.config.zoom) || 15;
-  const center = (tile.config.center === 'incident' ? iPos ?? vPos : vPos ?? iPos) ?? [51.1657, 10.4515];
+  const target = tile.config.center === 'incident' ? (iPos ?? vPos) : (vPos ?? iPos);
+  const center = target ?? [51.1657, 10.4515];
+  // Nur beim ersten Rendern entschieden: ohne gemerkten Ausschnitt und ohne Position später einmal zentrieren
+  const [startedBlind] = useState(() => !saved && !target);
+  /** Objekt aus der Objektliste anfliegen */
+  const fly = (target: Parameters<Parameters<typeof ObjectList>[0]['onFly']>[0]) => {
+    const m = map.current;
+    if (!m) return;
+    if (target === 'incident') return iPos && m.flyTo(iPos, 16);
+    if (target === 'vehicle') return vPos && m.flyTo(vPos, 16);
+    if ('status' in target) return target.lat !== null && target.lon !== null && m.flyTo([target.lat, target.lon], 17);
+    if (target.kind === 'area' || target.kind === 'line' || target.kind === 'overlay') return m.flyToBounds(objectBounds(target), { maxZoom: target.kind === 'overlay' ? 18 : 16 });
+    m.flyTo([target.lat, target.lon], target.kind === 'point' ? 17 : 14);
+  };
   return (
-    <MapContainer
-      center={saved ? [saved.lat, saved.lon] : center}
-      zoom={saved ? saved.zoom : vPos || iPos ? zoom : 6}
-      className="tile-map"
-      zoomControl={false}
-      attributionControl={false}
-    >
-      {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} maxZoom={source.maxZoom} />}
-      <MapObjectsLayer objects={objects} wind={wind} now={now} />
-      <UnitsLayer units={units} />
-      {vPos && (incident?.vehicleVisible ?? true) && <Marker position={vPos} icon={icon} />}
-      {iPos && <Marker position={iPos} icon={incidentIcon} />}
-      <Follow pos={tile.config.center === 'incident' ? iPos : vPos} enabled={follow} />
-      <Interaction enabled={!follow} />
-      {sync && preview && !follow && <RemoteControl tileId={tile.id} view={sync.views![tile.id]} onMove={sync.onMove} />}
-      {sync && !preview && !follow && <RemoteTarget tileId={tile.id} />}
-      {sync && !preview && !follow && <ReportView tileId={tile.id} sync={sync} />}
-      <AutoResize />
-    </MapContainer>
+    <div className={`tile-map-wrap ${showStyle ? 'with-style' : ''}`}>
+      <MapContainer
+        ref={map}
+        center={saved ? [saved.lat, saved.lon] : center}
+        zoom={saved ? saved.zoom : vPos || iPos ? zoom : 6}
+        className="tile-map"
+        zoomControl={false}
+        attributionControl={false}
+      >
+        {source && <TileLayer key={source.id} url={api.tileUrl(source.id)} maxZoom={source.maxZoom} />}
+        <MapObjectsLayer objects={objects} wind={wind} now={now} />
+        <UnitsLayer units={units} />
+        {vPos && (incident?.vehicleVisible ?? true) && <Marker position={vPos} icon={icon} />}
+        {iPos && <Marker position={iPos} icon={incidentIcon} />}
+        <InitialCenter pos={target} zoom={zoom} enabled={startedBlind} />
+        <Follow pos={tile.config.center === 'incident' ? iPos : vPos} enabled={follow} />
+        <Interaction enabled={!follow} />
+        {sync && preview && !follow && <RemoteControl tileId={tile.id} view={sync.views![tile.id]} onMove={sync.onMove} />}
+        {sync && !preview && !follow && <RemoteTarget tileId={tile.id} />}
+        {sync && !preview && !follow && <ReportView tileId={tile.id} sync={sync} />}
+        <AutoResize />
+      </MapContainer>
+      {showStyle && sources.length > 1 && (
+        <MapStylePicker sources={sources} value={sources.some((s) => s.id === sourceId) ? sourceId : null} auto={autoSource(sources, true)} onChange={chooseSource} onMenuHeight={setStyleMenuPx} />
+      )}
+      {showList && incident && (
+        <ObjectList
+          incident={incident}
+          vehicle={{ name: settings?.vehicle.name ?? 'ELW', pos: vPos }}
+          objects={objects}
+          units={units}
+          wind={wind}
+          now={now}
+          canEdit={!!user && !incident.closedAt}
+          shiftPx={styleMenuPx}
+          onFly={fly}
+        />
+      )}
+    </div>
   );
 }
 
@@ -578,6 +701,77 @@ function ForcesTile({ tile }: { tile: DisplayTile }) {
   );
 }
 
+const DAMAGE_COLUMNS: { label: string; categories: DamageCountCategory[] }[] = [
+  { label: 'Verletzte', categories: DAMAGE_INJURED },
+  { label: 'Tote', categories: ['tot'] },
+  { label: 'Vermisste', categories: ['vermisst'] },
+];
+
+/** Summe einer Spalte; „~“ wenn ein Schätzwert dabei ist, „–“ ohne Meldung */
+function damageCell(counts: DamageCount[], categories: DamageCountCategory[]): string {
+  const hit = counts.filter((c) => categories.includes(c.category));
+  if (!hit.length) return '–';
+  return `${hit.some((c) => c.estimated) ? '~' : ''}${hit.reduce((n, c) => n + c.value, 0)}`;
+}
+
+/** Offene Schadenkonten mit Kräften und Personenschäden, darunter die Summe über alle (auch aufgelöste) Konten */
+function DamageTile() {
+  const { data: incident } = useQuery({ queryKey: ['incident', 'active', 'display'], queryFn: () => api.activeIncident().catch(() => null) });
+  const { data: accounts } = useQuery({ queryKey: ['damage', incident?.id ?? 0], queryFn: () => api.damageAccounts(incident!.id), enabled: !!incident });
+  const { data: units = [] } = useMapUnits(incident?.id);
+  if (!incident) return <TileEmpty text="Kein Einsatz aufgelegt" />;
+  if (!accounts) return <TileEmpty text="Lade Schadenkonten …" />;
+  const open = accounts.filter((a) => !a.closedAt);
+  if (!open.length) return <TileEmpty text="Keine Schadenkonten" />;
+  const all = accounts.flatMap((a) => a.counts);
+  const active = (a: DamageAccount) => units.filter((u) => u.accountId === a.id && u.status !== 'entlassen');
+  return (
+    <div className="tile-damage">
+      <table>
+        <thead>
+          <tr>
+            <th colSpan={2}>Schadenkonto</th>
+            <th>Kräfte</th>
+            {DAMAGE_COLUMNS.map((c) => (
+              <th key={c.label}>{c.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {open.map((a) => (
+            <tr key={a.id}>
+              <td>
+                <span className="damage-number tile-damage-number">{a.number}</span>
+              </td>
+              <td className="tile-damage-name">
+                {a.name}
+                {a.entries.some((e) => e.side === 'gefahr' && !e.doneAt) && <span className="tile-damage-danger"> · Gefahr</span>}
+              </td>
+              <td className="mono">{formatStrength(sumStrength(active(a)))}</td>
+              {DAMAGE_COLUMNS.map((c) => (
+                <td key={c.label} className="mono">
+                  {damageCell(a.counts, c.categories)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={2}>Gesamt</td>
+            <td className="mono">{formatStrength(sumStrength(units.filter((u) => u.accountId !== null && u.status !== 'entlassen')))}</td>
+            {DAMAGE_COLUMNS.map((c) => (
+              <td key={c.label} className="mono">
+                {damageCell(all, c.categories)}
+              </td>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 /** Hochgeladenes Bild, eingepasst oder kachelfüllend */
 function ImageTile({ tile }: { tile: DisplayTile }) {
   const id = typeof tile.config.imageId === 'number' ? tile.config.imageId : null;
@@ -675,6 +869,8 @@ export function TileView({ tile }: { tile: DisplayTile }) {
       return <TasksTile tile={tile} />;
     case 'forces':
       return <ForcesTile tile={tile} />;
+    case 'damage':
+      return <DamageTile />;
     case 'scenes':
       return <ScenesTile tile={tile} />;
     case 'image':

@@ -16,10 +16,12 @@
 - [Wetter](funktionen/wetter.md) – DWD-Warnungen und Prognose
 - [Energiefluss](funktionen/energiefluss.md) – Quellen, Verbraucher und Batterie als Grafik, frei belegbar
 - [Kräfte und Personal](funktionen/kraefte-und-personal.md) – Personalbögen, Cloud-Personalabfrage, Ortung per App
+- [Schadenkonten](funktionen/schadenkonten.md) – T-Konto je Schadenstelle/Einsatzabschnitt, Personenschäden
 - [Kontakte](funktionen/kontakte.md) – Adressbuch des ELW
 - [E-Mail](funktionen/email.md) – Postfach des ELW über das Relay, OpenPGP
 - [Nachrichten](funktionen/nachrichten.md) – SMS, Signal, Threema, WhatsApp und Telegram in einer Ansicht
 - [Dokumente, Vorlagen und Collabora](funktionen/dokumente.md)
+- [Einsatzbericht](funktionen/einsatzbericht.md) – PDF mit allen erfassten Daten und Dokumenten, automatisch beim Beenden
 - [Drucken](funktionen/drucken.md) – Druckserver (CUPS), Lagekarten, Gastdrucker
 - [Scannen](funktionen/scannen.md) – Scan an E-Mail in den Posteingang
 - [Bildschirme](funktionen/bildschirme.md) – Kacheln, Szenen, Kiosk und Smart-TV
@@ -41,6 +43,7 @@
 - [Addons und Docker-Hosts](addons/README.md) – Docker-Hosts anbinden, Addon-Repositories
 - [Manifest-Referenz](addons/manifest.md) – Aufbau der `addon.yaml`
 - [NDI-Gateway](addons/ndi-gateway.md)
+- [Bildschirmübertragung (AirPlay, Browser)](addons/screencast.md)
 - [Arbeitsplätze (PXE)](addons/arbeitsplaetze-pxe.md)
 
 ## Entwicklung

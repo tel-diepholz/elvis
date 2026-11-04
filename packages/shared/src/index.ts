@@ -43,3 +43,4 @@ export * from './routing';
 export * from './georef';
 export * from './phones';
 export * from './dashboard';
+export * from './damage';

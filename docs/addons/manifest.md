@@ -62,6 +62,14 @@ gehört, was Admins nach der Installation tun müssen: Module einschalten, Konte
 - `builds`: Images aus einem Dockerfile im Addon bauen, Verweis per `image: "build:<name>"`.
 - `devices` und `gpus` mit Bedingung `when: { option, equals }`, z. B. nur bei passender Encoder-Wahl.
 - `provides.videoSources`: Gateways mit Status-Adresse und WebRTC-Basisadresse.
+- `tls: { volume, target }`: ELVIS stellt aus seiner CA (derselben wie für die Docker-Hosts) ein Server-Zertifikat
+  für Adresse und Namen des Hosts aus und legt `cert.pem`, `key.pem` und `ca.pem` unter `target` ins Volume.
+  - Das Zertifikat ist 397 Tage gültig. ELVIS erneuert es 30 Tage vor Ablauf und sofort, wenn sich Adresse oder Name
+    des Hosts ändern.
+  - `key.pem` wird zuletzt geschrieben. Das Addon lädt neu, sobald sich diese Datei ändert.
+  - Die CA steht öffentlich unter `/api/tls/ca.crt`, in der Seitenleiste als „Zertifikat installieren“. Geräte mit
+    installierter CA öffnen die HTTPS-Seiten der Addons ohne Warnung.
+  - Beispiel: [Bildschirmübertragung](screencast.md).
 
 Bei den jeweiligen Addons beschrieben:
 

@@ -11,6 +11,9 @@ export interface CertBundle {
 }
 
 const YEAR_MS = 365 * 86_400_000;
+const DNS_NAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
+/** Laufzeit der Addon-Webzertifikate (wie bei öffentlichen CAs höchstens 397 Tage) */
+export const WEB_CERT_MS = 397 * 86_400_000;
 
 function newKeyPair(): { publicKey: forge.pki.PublicKey; privateKey: forge.pki.rsa.PrivateKey; keyPem: string } {
   // Schlüssel nativ erzeugen (schnell), Zertifikate mit node-forge bauen.
@@ -27,7 +30,11 @@ function baseCert(publicKey: forge.pki.PublicKey, cn: string, validMs: number): 
   const now = new Date();
   cert.validity.notBefore = new Date(now.getTime() - 5 * 60_000); // Uhrabweichung tolerieren
   cert.validity.notAfter = new Date(now.getTime() + validMs);
-  cert.setSubject([{ name: 'commonName', value: cn }, { name: 'organizationName', value: 'ELVIS' }]);
+  // UTF8String: PrintableString erlaubt keine Umlaute – iOS/macOS lehnen solche Zertifikate ab (OpenSSL nicht)
+  cert.setSubject([
+    { name: 'commonName', value: cn, valueTagClass: forge.asn1.Type.UTF8 },
+    { name: 'organizationName', value: 'ELVIS' },
+  ] as forge.pki.CertificateField[]);
   return cert;
 }
 
@@ -86,11 +93,20 @@ export class DockerPki {
     return this.issue(name, 3 * YEAR_MS, 'server', addresses);
   }
 
+  /**
+   * Server-Zertifikat für Webseiten von Addons (z. B. Freigabeseite der Bildschirmübertragung). Kurz gültig, denn
+   * Apple-Geräte und Browser lehnen Server-Zertifikate mit mehr als 825 Tagen Laufzeit ab; ELVIS erneuert es vorher.
+   */
+  issueWebCert(name: string, addresses: string[]): CertBundle {
+    return this.issue(name, WEB_CERT_MS, 'server', addresses);
+  }
+
   private issue(cn: string, validMs: number, usage: 'server' | 'client', addresses: string[]): CertBundle {
     const kp = newKeyPair();
     const cert = baseCert(kp.publicKey, cn, validMs);
     cert.setIssuer(this.ca.cert.subject.attributes);
-    const altNames = [...new Set(addresses)].map((a) => (isIP(a) ? { type: 7, ip: a } : { type: 2, value: a }));
+    // Nur gültige Hostnamen als DNS-Eintrag: Anzeigenamen wie „Docker Server 1“ machen das Zertifikat für Apple ungültig
+    const altNames = [...new Set(addresses)].filter((a) => isIP(a) || DNS_NAME.test(a)).map((a) => (isIP(a) ? { type: 7, ip: a } : { type: 2, value: a }));
     cert.setExtensions([
       { name: 'basicConstraints', cA: false },
       { name: 'keyUsage', digitalSignature: true, keyEncipherment: true, critical: true },

@@ -1,4 +1,4 @@
-import type { VideoProvider, VideoSources, VideoStream, VideoStreamState } from '@elvis/shared';
+import type { VideoConnect, VideoProvider, VideoSources, VideoStream, VideoStreamState } from '@elvis/shared';
 
 /** Von einem Addon gemeldetes Gateway (provides.videoSources, Platzhalter bereits ersetzt) */
 export interface VideoProvision {
@@ -8,13 +8,25 @@ export interface VideoProvision {
   webrtc: string;
 }
 
-/** Statusdatei des Gateways (siehe addons/ndi-gateway/files/docker/gateway.py) */
+/** Status des Gateways (siehe addons/ndi-gateway/files/docker/gateway.py, addons/screencast/files/docker/receiver.py) */
 interface GatewayStatus {
   encoder?: string;
   resolution?: string;
   problem?: string;
   sources?: string[];
-  streams?: { name: string; path: string; state: string; error?: string }[];
+  streams?: { name: string; path: string; state: string; error?: string; sender?: string | null; via?: string | null; connect?: VideoConnect }[];
+}
+
+const STATES: VideoStreamState[] = ['idle', 'starting', 'running', 'error'];
+
+/** Nur Text-Felder übernehmen – der Status kommt aus dem Netz */
+function connectOf(c: unknown): VideoConnect | undefined {
+  if (!c || typeof c !== 'object') return undefined;
+  const { airplay, shareUrl } = c as Record<string, unknown>;
+  const out: VideoConnect = {};
+  if (typeof airplay === 'string' && airplay) out.airplay = airplay.slice(0, 80);
+  if (typeof shareUrl === 'string' && /^https?:\/\//.test(shareUrl)) out.shareUrl = shareUrl.slice(0, 300);
+  return Object.keys(out).length ? out : undefined;
 }
 
 type Fetch = (url: string) => Promise<GatewayStatus>;
@@ -73,13 +85,18 @@ export class VideoSourceService {
       });
       if (!s?.online) continue;
       for (const x of status?.streams ?? []) {
+        const connect = connectOf(x.connect);
         streams.push({
           id: `${p.id}:${x.path}`,
           providerId: p.id,
           name: x.name,
-          state: (['starting', 'running', 'error'].includes(x.state) ? x.state : 'error') as VideoStreamState,
+          state: STATES.includes(x.state as VideoStreamState) ? (x.state as VideoStreamState) : 'error',
           error: x.error || null,
           url: `${p.webrtc.replace(/\/+$/, '')}/${encodeURIComponent(x.path)}`,
+          // Felder der Bildschirmübertragung nur, wenn das Gateway sie meldet (NDI bleibt unverändert)
+          ...(x.sender !== undefined && { sender: typeof x.sender === 'string' ? x.sender.slice(0, 80) : null }),
+          ...(x.via !== undefined && { via: x.via === 'airplay' || x.via === 'browser' ? x.via : null }),
+          ...(connect && { connect }),
         });
       }
     }
