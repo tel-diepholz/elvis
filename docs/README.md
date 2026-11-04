@@ -20,6 +20,7 @@
 - [E-Mail](funktionen/email.md) – Postfach des ELW über das Relay, OpenPGP
 - [Nachrichten](funktionen/nachrichten.md) – SMS, Signal, Threema, WhatsApp und Telegram in einer Ansicht
 - [Dokumente, Vorlagen und Collabora](funktionen/dokumente.md)
+- [Einsatzbericht](funktionen/einsatzbericht.md) – PDF mit allen erfassten Daten und Dokumenten, automatisch beim Beenden
 - [Drucken](funktionen/drucken.md) – Druckserver (CUPS), Lagekarten, Gastdrucker
 - [Scannen](funktionen/scannen.md) – Scan an E-Mail in den Posteingang
 - [Bildschirme](funktionen/bildschirme.md) – Kacheln, Szenen, Kiosk und Smart-TV

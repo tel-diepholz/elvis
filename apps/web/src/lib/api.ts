@@ -246,6 +246,8 @@ export const api = {
   journal: (id: number) => request<JournalEntry[]>('GET', `/api/incidents/${id}/journal`),
   addJournal: (id: number, entry: NewJournalEntry) => request<JournalEntry>('POST', `/api/incidents/${id}/journal`, entry),
   journalCsvUrl: (id: number) => `/api/incidents/${id}/journal.csv`,
+  /** Einsatzbericht (PDF) frisch erzeugen – kann bei vielen Dokumenten etwas dauern */
+  incidentReport: (id: number) => fetchPdf(`/api/incidents/${id}/report.pdf`, undefined, 'Einsatzbericht.pdf'),
 
   units: (id: number) => request<Unit[]>('GET', `/api/incidents/${id}/units`),
   radioIds: (id: number) => request<RadioIdentity[]>('GET', `/api/incidents/${id}/radio-ids`),
@@ -662,15 +664,11 @@ export const api = {
   },
 };
 
-/** POST mit JSON, Antwort als PDF samt Dateiname aus Content-Disposition */
+/** POST mit JSON (ohne body: GET), Antwort als PDF samt Dateiname aus Content-Disposition */
 async function fetchPdf(url: string, body: unknown, fallbackName: string): Promise<{ res: Response; pdf: Blob; filename: string }> {
   let res: Response;
   try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    res = await fetch(url, body === undefined ? undefined : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   } catch {
     throw new ApiError(0, 'Server nicht erreichbar');
   }

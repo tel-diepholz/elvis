@@ -58,7 +58,7 @@ const INCIDENT_FIELD_LABELS: Record<keyof IncidentPatch, string | null> = {
  */
 export class IncidentService {
   private readonly removedListeners: ((o: MapObject) => void)[] = [];
-  private readonly closedListeners: ((incident: Incident) => void)[] = [];
+  private readonly closedListeners: ((incident: Incident, operator: string) => void)[] = [];
 
   constructor(
     private readonly store: Store,
@@ -129,12 +129,12 @@ export class IncidentService {
       return this.store.closeIncident(id);
     });
     this.notify(['incident', 'journal', 'cameraPresets']);
-    for (const fn of this.closedListeners) fn(closed);
+    for (const fn of this.closedListeners) fn(closed, operator);
     return closed;
   }
 
   /** Aufräumen nach dem Einsatzende (z. B. Tastenbelegung der Telefone zurücksetzen) */
-  onClosed(fn: (incident: Incident) => void): void {
+  onClosed(fn: (incident: Incident, operator: string) => void): void {
     this.closedListeners.push(fn);
   }
 

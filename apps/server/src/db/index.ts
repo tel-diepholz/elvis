@@ -1065,6 +1065,11 @@ const MIGRATIONS: Migration[] = [
       assign.run(id, s.incident_id, s.name);
     }
   },
+  // Von ELVIS selbst erzeugte Dokumente (z. B. 'report' = Einsatzbericht); nicht Teil eines späteren Berichts
+  (db) => {
+    const cols = db.prepare("SELECT name FROM pragma_table_info('documents')").all() as { name: string }[];
+    if (!cols.some((c) => c.name === 'generated')) db.exec('ALTER TABLE documents ADD COLUMN generated TEXT');
+  },
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */
