@@ -29,10 +29,23 @@ ELVIS A ──signiert, verschlüsselt──▶ Relay ──WebSocket-Anstoß─
    anfragen** schickt der Gegenseite, wer fragt (Name und Rolle) und von welchem Fahrzeug.
 2. **Annehmen:** In der angefragten Installation erscheint bei allen Angemeldeten unten links „… möchte einen Chat
    aufbauen“ mit Ton. Jeder Angemeldete kann annehmen oder ablehnen.
-3. **Chatten:** Nach dem Annehmen sehen beide im Gesprächskopf, wer im anderen Fahrzeug angemeldet ist, mit Rollen. Die
-   Liste folgt An- und Abmeldungen. Unten schreibt man wie in jedem Kanal, Dokumente aus der Lage lassen sich anhängen.
-   An jeder eingegangenen Nachricht steht, wer sie geschrieben hat.
-4. **Beenden** kann jede Seite. Danach lässt sich der Chat erneut anfragen.
+3. **Chatten:** Einmal angenommen, bleibt der Chat dauerhaft verbunden. Während einer Lage sieht jede Seite im
+   Gesprächskopf, wer im anderen Fahrzeug angemeldet ist, mit Rollen. Die Liste folgt An- und Abmeldungen. Ohne
+   laufende Lage wird keine Besatzung geteilt. Unten schreibt man wie in jedem Kanal, Dokumente aus der Lage lassen sich
+   anhängen. An jeder eingegangenen Nachricht steht, wer sie geschrieben hat.
+4. Eine eigene, noch offene Anfrage lässt sich **zurückziehen**. Abgelehnte Chats lassen sich erneut anfragen. Mit
+   **Abmelden** unter *Einstellungen → Cloud Messaging* enden alle Chats.
+
+## Meldungen an andere ELVIS-Installationen
+
+- In einem Fahrzeug-Chat ordnet **Kraft zuordnen** das Fahrzeug einer Kraft der laufenden Lage zu. Das gilt nur für
+  diese Lage, wie bei einer Rufnummer.
+- Eine Ausgangsmeldung an diese Kraft übermittelt der Fernmelder mit **Per Fahrzeug-Chat**. Die Meldung gilt danach als
+  erledigt und steht auch im Chatverlauf.
+- **Beim Empfänger** mit laufender Lage entsteht eine **Eingangsmeldung**. Sie wartet beim Dispatcher bzw. Fernmelder
+  auf Verteilung, wie ein erfasster Funkspruch. Absender ist die Kraft, der das sendende Fahrzeug dort zugeordnet ist,
+  sonst dessen Funkrufname mit der Absenderrolle. Unter dem Text steht, woher die Meldung kommt (Fahrzeug, Nummer,
+  Absender, Empfänger, Lage). Ohne laufende Lage kommt sie nur im Chat an.
 
 Anfragen, Annahme, Ablehnung, Ende und Schlüsselwechsel der Gegenseite stehen im Bedienprotokoll (Ziel `messaging`).
 
@@ -48,6 +61,6 @@ Anfragen, Annahme, Ablehnung, Ende und Schlüsselwechsel der Gegenseite stehen i
 
 ## Erweiterbar
 
-Der Umschlag hat ein Feld `kind` (`request`, `crew`, `text`, `file`, `location`, siehe
+Der Umschlag hat ein Feld `kind` (`request`, `crew`, `text`, `file`, `location`, `meldung`, siehe
 `packages/shared/src/messaging.ts`). Weitere Arten, z. B. eine synchrone Lagekarte, kommen als neues `kind` dazu. Ältere
 Installationen schreiben unbekannte Arten ins Bedienprotokoll und verwerfen sie ohne Fehler.

@@ -9,6 +9,7 @@ import {
   mailSignaturePayload,
   messagingConnectSchema,
   messagingRegisterSchema,
+  messagingSendMeldungSchema,
   vehicleLabel,
   type ChatChannelInfo,
   type Conversation,
@@ -24,9 +25,11 @@ import {
   type MessagingProfileStatus,
   type MessagingStatus,
   type MessagingVehicle,
+  type Message,
   type Region,
   type RegionWithPath,
   type Topic,
+  type Unit,
   type VehicleInfo,
 } from '@elvis/shared';
 import type { Db } from '../../db/index.js';
@@ -90,6 +93,22 @@ interface ConversationRow {
 /** Was der Fahrzeug-Chat von den Nachrichten braucht (ChatService) */
 export interface ChatSink {
   ingest(m: IncomingChat): Promise<unknown>;
+  recordSent(m: { channel: 'elvis'; peer: string; text: string; externalId: string; createdBy: string }): unknown;
+}
+
+/** Meldungen und Kräfte der Lage (MessageService, Store) */
+export interface MeldungSink {
+  /** Laufende Lage; null = keine */
+  incident(): { id: number; label: string } | null;
+  units(incidentId: number): Unit[];
+  message(id: number): Message;
+  receive(incidentId: number, sender: { unitId: number | null; text: string }, body: string, createdBy: string): Message;
+}
+
+/** Besetzung, wie sie gespeichert ist (ältere Stände: nur die Liste) */
+function parseCrew(raw: string): { crew: CrewMember[]; incident: boolean } {
+  const v = JSON.parse(raw) as CrewMember[] | { crew: CrewMember[]; incident: boolean };
+  return Array.isArray(v) ? { crew: v, incident: true } : v;
 }
 
 export interface MessagingDeps {
@@ -101,6 +120,7 @@ export interface MessagingDeps {
   vehicle: () => VehicleInfo;
   /** Angemeldete Benutzer mit Rollen */
   crew: () => CrewMember[];
+  meldungen: MeldungSink;
   log: Logger;
   fetch?: MessagingFetch;
   socketFactory?: SocketFactory;
@@ -369,7 +389,8 @@ export class MessagingService {
       direction: r.direction,
       state: r.state,
       requestedBy: r.requested_by ? (JSON.parse(r.requested_by) as CrewMember) : null,
-      peerCrew: JSON.parse(r.peer_crew) as CrewMember[],
+      peerCrew: parseCrew(r.peer_crew).crew,
+      peerIncident: parseCrew(r.peer_crew).incident,
       decidedBy: r.decided_by,
       threadKey: threadKeyOf(r.peer_elw),
       createdAt: r.created_at,
@@ -391,8 +412,8 @@ export class MessagingService {
     return this.deps.crew().find((m) => m.name === name) ?? { name, roles: [] };
   }
 
-  private envelope<K extends Envelope['kind']>(operator: string, body: Omit<Extract<Envelope, { kind: K }>, 'v' | 'id' | 'sentAt' | 'sender'>): Envelope {
-    return { v: 1, id: randomUUID(), sentAt: new Date().toISOString(), sender: this.member(operator), ...body } as unknown as Envelope;
+  private envelope<K extends Envelope['kind']>(operator: string, body: Omit<Extract<Envelope, { kind: K }>, 'v' | 'id' | 'sentAt' | 'sender'>): Extract<Envelope, { kind: K }> {
+    return { v: 1, id: randomUUID(), sentAt: new Date().toISOString(), sender: this.member(operator), ...body } as unknown as Extract<Envelope, { kind: K }>;
   }
 
   /** Chat-Anfrage an eine andere Installation */
@@ -427,16 +448,18 @@ export class MessagingService {
     return this.conversation(id);
   }
 
+  /** Besetzung wird nur während einer Lage geteilt; ohne Lage geht eine leere Liste hinaus */
   private crewJson(): string {
-    return JSON.stringify(this.deps.crew().map(({ name, roles }) => ({ name, roles })));
+    const incident = this.deps.meldungen.incident() !== null;
+    return JSON.stringify({ crew: incident ? this.deps.crew().map(({ name, roles }) => ({ name, roles })) : [], incident });
   }
 
   private async sendCrew(conversationId: string): Promise<void> {
-    const crew = JSON.parse(this.crewJson()) as CrewMember[];
-    await this.post(conversationId, this.envelope<'crew'>('System', { kind: 'crew', crew }), null);
+    const { crew, incident } = JSON.parse(this.crewJson()) as { crew: CrewMember[]; incident: boolean };
+    await this.post(conversationId, this.envelope<'crew'>('System', { kind: 'crew', crew, incident }), null);
   }
 
-  /** Besetzung hat sich geändert (An-/Abmeldung, Rollenwechsel): allen verbundenen Gegenseiten melden */
+  /** Besetzung oder Lage hat sich geändert (An-/Abmeldung, Rollenwechsel, Lage auf/zu): allen verbundenen Gegenseiten melden */
   async checkCrew(): Promise<void> {
     const s = this.state();
     if (!s.registered || !this.deps.mail.activeCrypto()) return;
@@ -583,10 +606,13 @@ export class MessagingService {
     };
     switch (env.kind) {
       case 'crew':
-        this.deps.db.prepare('UPDATE messaging_conversations SET peer_crew = ? WHERE id = ?').run(JSON.stringify(env.crew), row.id);
+        this.deps.db.prepare('UPDATE messaging_conversations SET peer_crew = ? WHERE id = ?').run(JSON.stringify({ crew: env.crew, incident: env.incident }), row.id);
         this.deps.notify(['messaging']);
         return;
       case 'request':
+        return;
+      case 'meldung':
+        await this.receiveMeldung(env, row.peer_elw, peer, base);
         return;
       case 'text':
         await this.ingest({ ...base, text: env.text, attachment: null, location: null });
@@ -602,6 +628,53 @@ export class MessagingService {
         return;
       }
     }
+  }
+
+  /** Ausgangsmeldung an eine Kraft, die per Fahrzeug-Chat erreichbar ist, an deren ELVIS-Installation übermitteln */
+  async sendMeldung(input: unknown, operator: string): Promise<{ info: string }> {
+    const { messageId } = messagingSendMeldungSchema.parse(input);
+    this.requireRegistered();
+    const m = this.deps.meldungen.message(messageId);
+    if (m.direction !== 'out') throw new HttpError(400, 'Nur Ausgangsmeldungen werden übermittelt');
+    if (m.doneAt) throw new HttpError(409, 'Meldung ist bereits erledigt');
+    const unit = m.recipientUnitId !== null ? this.deps.meldungen.units(m.incidentId).find((u) => u.id === m.recipientUnitId) : undefined;
+    if (!unit?.messagingPeer) throw new HttpError(409, 'Die Empfänger-Kraft ist keiner ELVIS-Installation zugeordnet (Nachrichten › Kraft zuordnen)');
+    const conv = this.deps.db.prepare("SELECT * FROM messaging_conversations WHERE peer_elw = ? AND state = 'accepted' ORDER BY updated_at DESC").get(unit.messagingPeer) as ConversationRow | undefined;
+    if (!conv) throw new HttpError(409, `Kein verbundener Fahrzeug-Chat mit ${unit.name} – erst anfragen`);
+    const incident = this.deps.meldungen.incident();
+    const env = this.envelope<'meldung'>(operator, {
+      kind: 'meldung',
+      number: m.id,
+      from: m.sender,
+      to: m.recipient ?? unit.name,
+      lage: incident?.id === m.incidentId ? incident.label : '',
+      body: m.body,
+      createdAt: m.createdAt,
+    });
+    await this.post(conv.id, env, null);
+    this.deps.db.prepare('UPDATE messaging_conversations SET updated_at = ? WHERE id = ?').run(new Date().toISOString(), conv.id);
+    this.chat?.recordSent({ channel: 'elvis', peer: unit.messagingPeer, text: meldungText(env), externalId: `${conv.id}:${env.id}`, createdBy: operator });
+    const peer = toPeer(this.peerRow(unit.messagingPeer)!);
+    const info = `Meldung #${m.id} an ${vehicleLabel(peer.vehicle)} übermittelt`;
+    this.audit(operator, 'meldung', peer.address, true, info);
+    this.deps.notify(['audit']);
+    return { info };
+  }
+
+  /** Meldung einer anderen Installation: mit laufender Lage als Eingangsmeldung, immer auch im Chat */
+  private async receiveMeldung(env: Extract<Envelope, { kind: 'meldung' }>, elwId: string, peer: MessagingPeer, base: Omit<IncomingChat, 'text' | 'attachment' | 'location'>): Promise<void> {
+    await this.ingest({ ...base, text: meldungText(env), attachment: null, location: null });
+    const incident = this.deps.meldungen.incident();
+    if (!incident) {
+      this.audit('System', 'meldung-in', peer.address, true, `Meldung #${env.number} von ${vehicleLabel(peer.vehicle)} ohne laufende Lage – nur im Fahrzeug-Chat`);
+      this.deps.notify(['audit']);
+      return;
+    }
+    const unit = this.deps.meldungen.units(incident.id).find((u) => u.messagingPeer === elwId && u.status !== 'entlassen');
+    const text = unit ? unit.name : `${peer.vehicle.callsign || peer.vehicle.name} (${env.from})`;
+    const created = this.deps.meldungen.receive(incident.id, { unitId: unit?.id ?? null, text }, meldungBody(env, peer), `Fahrzeug-Chat: ${crewLabel(env.sender)}`);
+    this.audit('System', 'meldung-in', peer.address, true, `Meldung #${env.number} von ${vehicleLabel(peer.vehicle)} als Eingangsmeldung #${created.id}`);
+    this.deps.notify(['audit']);
   }
 
   private async ingest(m: IncomingChat): Promise<void> {
@@ -643,6 +716,16 @@ export class MessagingService {
   private audit(operator: string, action: string, params: string, success: boolean, message: string): void {
     this.deps.store.addAudit({ operator, target: 'messaging', action, params, success, message });
   }
+}
+
+/** Meldung im Chatverlauf */
+function meldungText(env: Extract<Envelope, { kind: 'meldung' }>): string {
+  return `Meldung #${env.number} von ${env.from} an ${env.to}${env.lage ? ` (${env.lage})` : ''}:\n${env.body}`;
+}
+
+/** Text der Eingangsmeldung: Herkunft vorn, damit sie beim Verteilen klar ist */
+function meldungBody(env: Extract<Envelope, { kind: 'meldung' }>, peer: MessagingPeer): string {
+  return `${env.body}\n\n_Per Fahrzeug-Chat von ${vehicleLabel(peer.vehicle)}: Meldung #${env.number} von ${env.from} an ${env.to}${env.lage ? `, Lage „${env.lage}“` : ''}._`;
 }
 
 function profileOf(r: MessagingProfileStatus): MessagingStatus['profile'] {

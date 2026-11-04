@@ -116,7 +116,10 @@ export function ChatPage() {
   const unitsOf = useMemo(() => {
     const byNumber = new Map<string, Unit[]>();
     for (const u of units) if (u.mobile && u.status !== 'entlassen') byNumber.set(u.mobile, [...(byNumber.get(u.mobile) ?? []), u]);
-    return (t: Pick<ChatThread, 'numbers'>) => [...new Set(t.numbers.flatMap((n) => byNumber.get(n) ?? []))];
+    // Fahrzeug-Chat: Kräfte, die dieser ELVIS-Installation zugeordnet sind
+    const byPeer = new Map<string, Unit[]>();
+    for (const u of units) if (u.messagingPeer && u.status !== 'entlassen') byPeer.set(u.messagingPeer, [...(byPeer.get(u.messagingPeer) ?? []), u]);
+    return (t: Pick<ChatThread, 'numbers' | 'key'>) => [...new Set([...t.numbers.flatMap((n) => byNumber.get(n) ?? []), ...(byPeer.get(elvisPeer(t.key) ?? '') ?? [])])];
   }, [units]);
 
   // ?t=<Gespräch>, aus den Kontakten ?an=<Rufnummer>&kanal=<Kanal>
@@ -250,7 +253,7 @@ export function ChatPage() {
               onDocument={incident ? setAsDocument : undefined}
               onContact={setAsContact}
               units={unitsOf(selected)}
-              onAssign={incident && selected.numbers.length ? () => setAsUnit(selected) : undefined}
+              onAssign={incident && (selected.numbers.length || elvisPeer(selected.key)) ? () => setAsUnit(selected) : undefined}
             />
           ) : (
             <EmptyState icon={<MessagesSquare size={32} />} title="Gespräch wählen">
@@ -281,7 +284,13 @@ export function ChatPage() {
         {asDocument && incident && <ChatToDocumentForm incident={incident} msg={asDocument} onDone={() => setAsDocument(null)} />}
       </Modal>
       <Modal open={asUnit !== null && !!incident} title="Kraft zuordnen" onClose={() => setAsUnit(null)}>
-        {asUnit && incident && <AssignUnitForm incident={incident} thread={asUnit} units={units} assigned={unitsOf(asUnit)} onDone={() => setAsUnit(null)} />}
+        {asUnit &&
+          incident &&
+          (elvisPeer(asUnit.key) ? (
+            <CloudAssignUnitForm incident={incident} elwId={elvisPeer(asUnit.key)!} name={asUnit.name ?? 'Fahrzeug'} units={units} assigned={unitsOf(asUnit)} onDone={() => setAsUnit(null)} />
+          ) : (
+            <AssignUnitForm incident={incident} thread={asUnit} units={units} assigned={unitsOf(asUnit)} onDone={() => setAsUnit(null)} />
+          ))}
       </Modal>
       <Modal open={asContact !== null} title="Als Kontakt anlegen" onClose={() => setAsContact(null)} wide>
         {asContact !== null && <NewContact number={asContact} onDone={() => setAsContact(null)} />}
@@ -381,7 +390,7 @@ function ThreadView({
           </button>
         )}
         {onAssign && (
-          <button className="btn btn-sm thread-head-btn" title="Rufnummer einer Kraft der Lage zuordnen (nur für diese Lage)" onClick={onAssign}>
+          <button className="btn btn-sm thread-head-btn" title={cloudChat ? 'Fahrzeug einer Kraft der Lage zuordnen – Meldungen an sie gehen dann per Fahrzeug-Chat (nur für diese Lage)' : 'Rufnummer einer Kraft der Lage zuordnen (nur für diese Lage)'} onClick={onAssign}>
             <Truck size={16} /> <span>Kraft zuordnen</span>
           </button>
         )}
@@ -489,9 +498,9 @@ function CloudChatBar({ chat }: { chat: MessagingConversation }) {
         {chat.state === 'requested' && chat.direction === 'out' && chat.requestedBy && <span className="muted small">angefragt von {crewLabel(chat.requestedBy)}</span>}
         {(chat.state === 'declined' || chat.state === 'closed') && chat.decidedBy && <span className="muted small">von {chat.decidedBy}</span>}
         <span className="spacer" />
-        {(chat.state === 'accepted' || (chat.state === 'requested' && chat.direction === 'out')) && (
-          <button className="btn btn-sm" disabled={close.isPending} onClick={() => window.confirm(`Chat mit ${vehicleLabel(chat.peer.vehicle)} beenden?`) && close.mutate()}>
-            {chat.state === 'accepted' ? 'Chat beenden' : 'Anfrage zurückziehen'}
+        {chat.state === 'requested' && chat.direction === 'out' && (
+          <button className="btn btn-sm" disabled={close.isPending} onClick={() => window.confirm(`Anfrage an ${vehicleLabel(chat.peer.vehicle)} zurückziehen?`) && close.mutate()}>
+            Anfrage zurückziehen
           </button>
         )}
         {(chat.state === 'declined' || chat.state === 'closed') && (
@@ -502,8 +511,14 @@ function CloudChatBar({ chat }: { chat: MessagingConversation }) {
       </div>
       {chat.state === 'accepted' && (
         <div className="cloud-chat-crew small">
-          <span className="muted">Im Fahrzeug angemeldet: </span>
-          {chat.peerCrew.length ? chat.peerCrew.map((m, i) => <span key={i} className="cloud-chat-member">{crewLabel(m)}</span>) : <span className="muted">niemand</span>}
+          {!chat.peerIncident ? (
+            <span className="muted">Dort läuft keine Lage – die Besatzung wird nur während einer Lage angezeigt.</span>
+          ) : (
+            <>
+              <span className="muted">Im Fahrzeug angemeldet: </span>
+              {chat.peerCrew.length ? chat.peerCrew.map((m, i) => <span key={i} className="cloud-chat-member">{crewLabel(m)}</span>) : <span className="muted">niemand</span>}
+            </>
+          )}
         </div>
       )}
       <PeerContacts peer={chat.peer} />
@@ -683,6 +698,81 @@ function AssignUnitForm({ incident, thread, units, assigned, onDone }: { inciden
       {active.length === 0 && <p className="muted">In der Lage sind noch keine Kräfte erfasst.</p>}
       <div className="form-actions">
         <button type="submit" className="btn btn-primary" disabled={!unit || !number || patch.isPending}>
+          <Truck size={14} /> Zuordnen
+        </button>
+        <button type="button" className="btn" onClick={onDone}>
+          Schließen
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Fahrzeug-Chat einer Kraft der laufenden Lage zuordnen (nur in diesem Einsatz). Ausgangsmeldungen an die Kraft lassen
+ * sich dann „Per Fahrzeug-Chat“ übermitteln; dort werden sie zur Eingangsmeldung. Meldungen von dort tragen die Kraft als Absender.
+ */
+function CloudAssignUnitForm({ incident, elwId, name, units, assigned, onDone }: { incident: Incident; elwId: string; name: string; units: Unit[]; assigned: Unit[]; onDone: () => void }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [unitId, setUnitId] = useState<number | null>(null);
+  const patch = useMutation({
+    mutationFn: ({ unit, peer }: { unit: Unit; peer: string }) => api.patchUnit(unit.id, { messagingPeer: peer }),
+    onSuccess: (u, v) => {
+      toast('success', v.peer ? `${u.name} ist jetzt per Fahrzeug-Chat (${name}) erreichbar` : `Zuordnung zu ${u.name} gelöst`);
+      void qc.invalidateQueries({ queryKey: ['units', incident.id] });
+      if (v.peer) onDone();
+    },
+    onError: (e) => toast('error', e.message),
+  });
+  const active = units.filter((u) => u.status !== 'entlassen').sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  const unit = active.find((u) => u.id === unitId);
+  return (
+    <form
+      className="form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (unit) patch.mutate({ unit, peer: elwId });
+      }}
+    >
+      {assigned.length > 0 && (
+        <div className="field">
+          <span className="field-label">Zugeordnet</span>
+          <ul className="assign-list">
+            {assigned.map((u) => (
+              <li key={u.id}>
+                <span className="chat-unit-tag">
+                  <Truck size={11} /> {u.name}
+                </span>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={patch.isPending} onClick={() => patch.mutate({ unit: u, peer: '' })}>
+                  Lösen
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <Field
+        label={`Kraft in der Lage „${incident.title}“`}
+        hint={
+          unit?.messagingPeer && unit.messagingPeer !== elwId
+            ? `${unit.name} ist schon einer anderen ELVIS-Installation zugeordnet – die Zuordnung wird ersetzt.`
+            : `Ausgangsmeldungen an die Kraft gehen dann „Per Fahrzeug-Chat“ an ${name} und kommen dort als Eingangsmeldung an. Gilt nur für diese Lage.`
+        }
+      >
+        <select value={unitId ?? ''} onChange={(e) => setUnitId(e.target.value ? Number(e.target.value) : null)} autoFocus>
+          <option value="">Kraft wählen …</option>
+          {active.map((u) => (
+            <option key={u.id} value={u.id} disabled={u.messagingPeer === elwId}>
+              {u.name}
+              {u.messagingPeer === elwId ? ' (bereits zugeordnet)' : u.messagingPeer ? ' – andere Installation' : ''}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {active.length === 0 && <p className="muted">In der Lage sind noch keine Kräfte erfasst.</p>}
+      <div className="form-actions">
+        <button type="submit" className="btn btn-primary" disabled={!unit || patch.isPending}>
           <Truck size={14} /> Zuordnen
         </button>
         <button type="button" className="btn" onClick={onDone}>

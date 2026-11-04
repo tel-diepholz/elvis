@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { AlarmClock, ArrowRight, AtSign, Check, CheckCheck, ListPlus, MessageSquareText, PackagePlus, Paperclip, Reply, Send, Undo2, UserCheck } from 'lucide-react';
+import { AlarmClock, ArrowRight, AtSign, Check, CheckCheck, ListPlus, MessageSquareText, PackagePlus, Paperclip, RadioTower, Reply, Send, Undo2, UserCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MESSAGE_BODY_MAX, MESSAGE_REMIND_MINUTES, CHAT_TEXT_MAX, formatPhone, TASK_SUMMARY_MAX, REQUEST_STATUS_LABELS, requestLabel, requestOpen, type Incident, type Message, type MessageInput, type RequestInput, type TaskInput } from '@elvis/shared';
 import { api } from '../../lib/api';
@@ -64,6 +64,10 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
     : toForce
       ? (catalog.find((f) => f.id === m.recipientForceUnitId)?.mobile ?? '')
       : '';
+  // Kraft einer anderen ELVIS-Installation zugeordnet (Nachrichten › Kraft zuordnen): direkt per Fahrzeug-Chat übermitteln
+  const recipientUnit = toUnit ? units.find((u) => u.id === m.recipientUnitId) : undefined;
+  const cloudReady = !!chat?.channels.find((c) => c.channel === 'elvis')?.available;
+  const viaCloud = m.direction === 'out' && cloudReady && !!recipientUnit?.messagingPeer;
   const mine = m.claimedByUserId === user?.id;
   // Andere aktive Übernahme: der Server meldet dann für mich nichts zu tun
   const claimedByOther = handler && !mine && m.claimedBy !== null && m.pending === null;
@@ -87,6 +91,11 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
     onSuccess: (r) => (toast('success', `Anforderung ${requestLabel(r)} angelegt`), onClose(), navigate(`${REQUESTS_PATH}?id=${r.id}`)),
     onError,
   });
+  const sendCloud = useMutation({
+    mutationFn: () => api.messagingSendMeldung(m.id),
+    onSuccess: (r) => (toast('success', r.info), done.mutate()),
+    onError,
+  });
   const respond = useMutation({ mutationFn: (input: MessageInput) => api.createMessage(incident.id, input), ...closing('Antwort als Ausgangsmeldung erstellt') });
 
   // Beim Öffnen übernehmen, wenn niemand anderes sie gerade bearbeitet
@@ -105,7 +114,7 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
     api.ackMessage(m.id).catch(() => undefined);
   }, [m.id, m.pending]);
 
-  const busy = [claim, release, snooze, done, answer, route, ack, respond].some((x) => x.isPending);
+  const busy = [claim, release, snooze, done, answer, route, ack, respond, sendCloud].some((x) => x.isPending);
 
   // Aufgabe aus der Meldung: Meldungstext als Beschreibung, Kurztext aus der ersten Zeile, an die Zielrolle
   if (mode === 'task') {
@@ -226,6 +235,11 @@ function MessageDetail({ incident, message: m, onClose }: { incident: Incident; 
             {recipientEmail && (
               <button className="btn" disabled={busy} onClick={() => setMode('mail')} title={`An ${recipientEmail} senden und als erledigt markieren`}>
                 <AtSign size={16} /> Per E-Mail senden
+              </button>
+            )}
+            {viaCloud && (
+              <button className="btn" disabled={busy} onClick={() => sendCloud.mutate()} title={`An die ELVIS-Installation von ${recipientUnit!.name} übermitteln (dort Eingangsmeldung) und als erledigt markieren`}>
+                <RadioTower size={16} /> Per Fahrzeug-Chat
               </button>
             )}
             {chatAvailable && (

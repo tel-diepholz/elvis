@@ -27,8 +27,26 @@ const base = {
 export const envelopeSchema = z.discriminatedUnion('kind', [
   /** Chat-Anfrage: wer fragt, von welchem Fahrzeug */
   z.object({ ...base, kind: z.literal('request'), vehicle: messagingVehicleSchema, crew: z.array(crewMemberSchema).max(50) }),
-  /** Besetzung: angemeldete Benutzer mit ihren Rollen (nach dem Annehmen und bei jeder Änderung) */
-  z.object({ ...base, kind: z.literal('crew'), crew: z.array(crewMemberSchema).max(50) }),
+  /**
+   * Besetzung: angemeldete Benutzer mit ihren Rollen (nach dem Annehmen und bei jeder Änderung). Nur während einer Lage;
+   * ohne Lage (incident false) ist die Liste leer
+   */
+  z.object({ ...base, kind: z.literal('crew'), crew: z.array(crewMemberSchema).max(50), incident: z.boolean().default(true) }),
+  /** Meldung (Ausgang beim Absender) – wird beim Empfänger mit laufender Lage zur Eingangsmeldung */
+  z.object({
+    ...base,
+    kind: z.literal('meldung'),
+    /** Nummer beim Absender */
+    number: z.number().int().positive(),
+    /** Absenderrolle bzw. -name beim Absender, z. B. „Einsatzleiter“ */
+    from: z.string().max(200),
+    /** Empfänger, wie er beim Absender eingetragen ist */
+    to: z.string().max(200),
+    /** Lage beim Absender (Stichwort und Titel) */
+    lage: z.string().max(300).default(''),
+    body: z.string().min(1).max(4000),
+    createdAt: z.string(),
+  }),
   z.object({ ...base, kind: z.literal('text'), text: z.string().max(4000) }),
   /** Datei: verschlüsselter Inhalt beim Relay; Schlüssel (AES-256-GCM, base64) und Prüfsumme reisen hier mit */
   z.object({
@@ -72,6 +90,9 @@ export type MessagingRegisterInput = z.input<typeof messagingRegisterSchema>;
 
 export const messagingConnectSchema = z.object({ elwId: z.string().uuid() });
 
+/** Ausgangsmeldung an eine Kraft, die per Fahrzeug-Chat erreichbar ist, übermitteln */
+export const messagingSendMeldungSchema = z.object({ messageId: z.number().int().positive() });
+
 export interface MessagingPeer {
   elwId: string;
   vehicle: MessagingVehicle;
@@ -88,8 +109,10 @@ export interface MessagingConversation {
   state: ConversationState;
   /** Wer angefragt hat (bei eingehenden Anfragen die Person in der anderen Installation) */
   requestedBy: CrewMember | null;
-  /** Besetzung der Gegenseite (erst nach dem Annehmen) */
+  /** Besetzung der Gegenseite (erst nach dem Annehmen, nur während einer Lage dort) */
   peerCrew: CrewMember[];
+  /** Bei der Gegenseite läuft eine Lage (laut letzter Besetzungsmeldung) */
+  peerIncident: boolean;
   /** Wer hier angenommen, abgelehnt oder beendet hat */
   decidedBy: string | null;
   /** Gesprächsschlüssel in den Nachrichten (siehe ChatThread.key) */

@@ -344,6 +344,15 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     mail,
     vehicle: () => settings.get().vehicle,
     crew: () => sessions.activeMembers().map(({ name, roles }) => ({ name, roles })),
+    meldungen: {
+      incident: () => {
+        const i = store.activeIncident();
+        return i ? { id: i.id, label: [i.keyword, i.title].filter(Boolean).join(' ') } : null;
+      },
+      units: (incidentId) => store.units(incidentId),
+      message: (id) => messages.get(id, null),
+      receive: (incidentId, sender, body, createdBy) => messages.receive(incidentId, sender, body, createdBy),
+    },
     log: server.log,
     fetch: opts.messagingFetch,
     socketFactory: opts.messagingSocket,

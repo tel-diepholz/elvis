@@ -250,6 +250,15 @@ export class ChatService {
     return this.message(Number(info.lastInsertRowid));
   }
 
+  /** Anderswo versandt (z. B. Meldung per Fahrzeug-Chat): im Verlauf unter „Gesendet“ ablegen */
+  recordSent(m: { channel: 'elvis'; peer: string; text: string; externalId: string; createdBy: string }): ChatMessage {
+    const info = this.db
+      .prepare("INSERT INTO chat_messages (channel, folder, peer, number, text, status, seen, date, created_by, external_id) VALUES (?, 'sent', ?, NULL, ?, 'sent', 1, ?, ?, ?)")
+      .run(m.channel, m.peer, m.text, new Date().toISOString(), m.createdBy, m.externalId);
+    this.deps.notify(['chat']);
+    return this.message(Number(info.lastInsertRowid));
+  }
+
   private receipt(r: ChatReceipt): void {
     const row = this.db.prepare("SELECT id, status FROM chat_messages WHERE channel = ? AND external_id = ? AND folder = 'sent'").get(r.channel, r.externalId) as
       | { id: number; status: ChatStatus }

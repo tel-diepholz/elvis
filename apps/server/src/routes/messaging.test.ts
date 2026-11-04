@@ -13,6 +13,10 @@ import {
   type ChatMessage,
   type Conversation,
   type ConversationState,
+  type Incident,
+  type Message,
+  type Role,
+  type Unit,
   type MessagingConversation,
   type MessagingEvent,
   type MessagingPeer,
@@ -164,7 +168,7 @@ interface Node {
   db: Database.Database;
   admin: string;
   token: string;
-  req<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: unknown, cookie?: string): Promise<{ status: number; body: T }>;
+  req<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: unknown, cookie?: string): Promise<{ status: number; body: T }>;
 }
 
 let relay: FakeRelay;
@@ -280,6 +284,10 @@ describe('Cloud Messaging', () => {
     await settle();
     expect(((await b.req<{ items: ChatMessage[] }>('GET', '/api/chat/messages?folder=sent')).body.items[0])).toMatchObject({ status: 'failed', error: expect.stringMatching(/erst anfragen/) });
 
+    // Besatzung wird nur während einer Lage geteilt
+    await a.req('POST', '/api/incidents', { title: 'Hochwasser', keyword: 'TH' });
+    await b.req('POST', '/api/incidents', { title: 'Hochwasser', keyword: 'TH' });
+
     // b nimmt an → beide sehen die Besatzung der Gegenseite
     const accepted = await b.req<MessagingConversation>('POST', `/api/messaging/conversations/${conv.id}/accept`);
     expect(accepted.body).toMatchObject({ state: 'accepted', decidedBy: 'Max ELW2Weyhe' });
@@ -287,6 +295,7 @@ describe('Cloud Messaging', () => {
     const atA = (await a.req<MessagingConversation[]>('GET', '/api/messaging/conversations')).body[0]!;
     expect(atA.state).toBe('accepted');
     expect(atA.peerCrew).toEqual([{ name: 'Max ELW2Weyhe', roles: [] }]);
+    expect(atA.peerIncident).toBe(true);
     const atB = (await b.req<MessagingConversation[]>('GET', '/api/messaging/conversations')).body[0]!;
     expect(atB.peerCrew.map((m) => m.name).sort()).toEqual(['Anna Funk', 'Max ELW1Stuhr']);
 
@@ -315,11 +324,65 @@ describe('Cloud Messaging', () => {
     const file = await a.app.server.inject({ method: 'GET', url: `/api/chat/files/${inboxA[0]!.attachment!.id}`, headers: { cookie: a.admin } });
     expect(file.rawPayload.equals(pdf)).toBe(true);
 
-    // Beenden: danach keine Nachrichten mehr
+    // Lage bei b zu: a sieht keine Besatzung mehr, der Chat bleibt verbunden
+    const lageB = (await b.req<Incident>('GET', '/api/incidents/active')).body;
+    await b.req('POST', `/api/incidents/${lageB.id}/close`);
+    await b.app.messaging.checkCrew();
+    await settle();
+    expect((await a.req<MessagingConversation[]>('GET', '/api/messaging/conversations')).body[0]).toMatchObject({ state: 'accepted', peerCrew: [], peerIncident: false });
+
+    // Beenden (z. B. Anfrage zurückziehen, Abmelden): danach keine Nachrichten mehr
     await a.req('POST', `/api/messaging/conversations/${conv.id}/close`);
     await settle();
     expect((await b.req<MessagingConversation[]>('GET', '/api/messaging/conversations')).body[0]!.state).toBe('closed');
     expect(relay.events.filter((e) => e.to === relay.installs.get(a.token)!.elwId || e.to === relay.installs.get(b.token)!.elwId)).toEqual([]);
+  });
+
+  it('Meldung an eine zugeordnete Kraft kommt bei der anderen Installation als Eingangsmeldung an', async () => {
+    const a = await install('ELW 1 Stuhr', 'elw1-stuhr');
+    const b = await install('ELW 2 Weyhe', 'elw2-weyhe');
+    await a.req('PUT', '/api/system/messaging', { regionArs: '03' });
+    await b.req('PUT', '/api/system/messaging', { regionArs: '03' });
+    const aId = relay.installs.get(a.token)!.elwId;
+    const bId = relay.installs.get(b.token)!.elwId;
+    const conv = (await a.req<MessagingConversation>('POST', '/api/messaging/conversations', { elwId: bId })).body;
+    await settle();
+    await b.req('POST', `/api/messaging/conversations/${conv.id}/accept`);
+    await settle();
+
+    // a: Lage, Kraft „ELW 2 Weyhe“ dem Fahrzeug-Chat mit b zugeordnet, Rolle Einsatzleiter
+    const lageA = (await a.req<Incident>('POST', '/api/incidents', { title: 'Hochwasser Stuhr', keyword: 'TH 2' })).body;
+    const unit = (await a.req<Unit>('POST', `/api/incidents/${lageA.id}/units`, { name: 'ELW 2 Weyhe' })).body;
+    expect((await a.req<Unit>('PATCH', `/api/units/${unit.id}`, { messagingPeer: bId })).body.messagingPeer).toBe(bId);
+    const el = (await a.req<Role>('POST', '/api/system/roles', { name: 'Einsatzleiter' })).body;
+    await a.req('PUT', '/api/auth/role', { roleIds: [el.id] });
+    const out = (await a.req<Message>('POST', `/api/incidents/${lageA.id}/messages`, { direction: 'out', senderRoleId: el.id, recipient: { unitId: unit.id, text: 'ELW 2 Weyhe' }, body: 'Abschnitt Nord übernehmen' })).body;
+
+    // b ohne Lage: nur im Chat
+    expect((await a.req<{ info: string }>('POST', '/api/messaging/meldungen', { messageId: out.id })).body.info).toMatch(/übermittelt/);
+    await settle();
+    const chatB = (await b.req<{ items: ChatMessage[] }>('GET', '/api/chat/messages?folder=inbox')).body.items;
+    expect(chatB[0]!.text).toBe(`Meldung #${out.id} von Einsatzleiter an ELW 2 Weyhe (TH 2 Hochwasser Stuhr):\nAbschnitt Nord übernehmen`);
+    // Beim Absender im Verlauf
+    expect((await a.req<{ items: ChatMessage[] }>('GET', '/api/chat/messages?folder=sent')).body.items[0]).toMatchObject({ channel: 'elvis', peer: bId, status: 'sent' });
+
+    // b mit Lage und zugeordneter Kraft „ELW 1 Stuhr“: Eingangsmeldung mit der Kraft als Absender, wartet auf Verteilung
+    const lageB = (await b.req<Incident>('POST', '/api/incidents', { title: 'Hochwasser', keyword: 'TH' })).body;
+    const back = (await b.req<Unit>('POST', `/api/incidents/${lageB.id}/units`, { name: 'ELW 1 Stuhr' })).body;
+    await b.req('PATCH', `/api/units/${back.id}`, { messagingPeer: aId });
+    const out2 = (await a.req<Message>('POST', `/api/incidents/${lageA.id}/messages`, { direction: 'out', senderRoleId: el.id, recipient: { unitId: unit.id, text: 'ELW 2 Weyhe' }, body: 'Lage um 14 Uhr' })).body;
+    await a.req('POST', '/api/messaging/meldungen', { messageId: out2.id });
+    await settle();
+    const inB = (await b.req<Message[]>('GET', `/api/incidents/${lageB.id}/messages`)).body;
+    expect(inB).toHaveLength(1);
+    expect(inB[0]).toMatchObject({ direction: 'in', sender: 'ELW 1 Stuhr', senderUnitId: back.id, recipient: null });
+    expect(inB[0]!.body).toContain('Lage um 14 Uhr');
+    expect(inB[0]!.body).toContain(`Meldung #${out2.id} von Einsatzleiter`);
+
+    // Ohne Zuordnung der Kraft geht es nicht
+    const other = (await a.req<Unit>('POST', `/api/incidents/${lageA.id}/units`, { name: 'RTW' })).body;
+    const out3 = (await a.req<Message>('POST', `/api/incidents/${lageA.id}/messages`, { direction: 'out', senderRoleId: el.id, recipient: { unitId: other.id, text: 'RTW' }, body: 'x' })).body;
+    expect((await a.req('POST', '/api/messaging/meldungen', { messageId: out3.id })).status).toBe(409);
   });
 
   it('verwirft Nachrichten mit falscher Signatur und ignoriert unbekannte Arten', async () => {

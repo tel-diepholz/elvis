@@ -311,6 +311,7 @@ export const api = {
   messagingDirectory: (q: string, region: string) => request<MessagingPeer[]>('GET', `/api/messaging/directory?${new URLSearchParams({ q, region })}`),
   messagingConversations: () => request<MessagingConversation[]>('GET', '/api/messaging/conversations'),
   messagingRequest: (elwId: string) => request<MessagingConversation>('POST', '/api/messaging/conversations', { elwId }),
+  messagingSendMeldung: (messageId: number) => request<{ info: string }>('POST', '/api/messaging/meldungen', { messageId }),
   messagingDecide: (id: string, action: 'accept' | 'decline' | 'close') => request<MessagingConversation>('POST', `/api/messaging/conversations/${id}/${action}`),
   chatAvailable: () => request<ChatAvailability>('GET', '/api/chat/available'),
   chatUnread: () => request<{ count: number }>('GET', '/api/chat/unread'),
