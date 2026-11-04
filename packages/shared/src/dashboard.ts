@@ -34,7 +34,8 @@ export const DASHBOARD_TILE_TYPES: Record<DashboardTileType, DashboardTileTypeIn
   forces: fromDisplay('forces', 6, 6, { requiresLogin: true }),
   damage: fromDisplay('damage', 6, 4, { requiresLogin: true }),
   map: fromDisplay('map', 6, 6),
-  weather: fromDisplay('weather', 4, 3),
+  // zeigt die Wetterstation im Fahrzeug
+  weather: fromDisplay('weather', 4, 3, { requiresVehicle: true }),
   forecast: fromDisplay('forecast', 8, 4),
   clock: fromDisplay('clock', 4, 3),
   alerts: fromDisplay('alerts', 4, 4, { label: 'Fahrzeugmeldungen', requiresVehicle: true }),
@@ -116,9 +117,8 @@ export const LITE_DASHBOARD: DashboardLayout = {
     { id: 'clock', type: 'clock', x: 8, y: 0, w: 4, h: 3, config: {} },
     { id: 'journal', type: 'journal', x: 0, y: 3, w: 8, h: 4, config: {} },
     { id: 'messages', type: 'messages', x: 8, y: 3, w: 4, h: 4, config: {} },
-    { id: 'weather', type: 'weather', x: 0, y: 7, w: 4, h: 3, config: {} },
-    { id: 'mail', type: 'mail', x: 4, y: 7, w: 4, h: 5, config: {} },
-    { id: 'chat', type: 'chat', x: 8, y: 7, w: 4, h: 5, config: {} },
+    { id: 'mail', type: 'mail', x: 0, y: 7, w: 6, h: 5, config: {} },
+    { id: 'chat', type: 'chat', x: 6, y: 7, w: 6, h: 5, config: {} },
   ],
 };
 

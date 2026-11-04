@@ -1,6 +1,7 @@
 node_modules/
 dist/
 data/
+data-*/
 *.log
 .env
 config/elvis.json
@@ -8,3 +9,4 @@ deploy/compose.override.yaml
 apps/windows/release/
 apps/windows/stage/
 apps/windows/.cache/
+/temp/

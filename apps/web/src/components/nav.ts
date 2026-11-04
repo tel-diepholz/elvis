@@ -53,6 +53,8 @@ export interface NavItem {
   requiresMail?: boolean;
   /** Nur mit einem Kanal für Nachrichten (SMS über die Telefonie oder ein Messenger) */
   requiresChat?: boolean;
+  /** Nur mit mindestens einem Druckserver (Addon) */
+  requiresPrinting?: boolean;
   /** Zähler für Ungelesenes (siehe Layout) */
   badge?: 'personnelSheets' | 'messages' | 'mail' | 'chat';
 }
@@ -77,7 +79,7 @@ export const NAV: NavGroup[] = [
       { to: '/monitoring', label: 'Monitoring', icon: Activity, requiresVehicle: true },
       { to: '/kameras', label: 'Kameras', icon: Cctv, requiresVehicle: true },
       { to: '/bildschirme', label: 'Bildschirme', icon: MonitorSmartphone, requiresVehicle: true },
-      { to: '/drucken', label: 'Drucken', icon: Printer },
+      { to: '/drucken', label: 'Drucken', icon: Printer, requiresPrinting: true },
       { to: '/scans', label: 'Posteingang', icon: ScanLine, requiresLogin: true, badge: 'personnelSheets' },
       { to: '/mail', label: 'E-Mail', icon: AtSign, requiresLogin: true, requiresMail: true, badge: 'mail' },
       { to: '/nachrichten', label: 'Nachrichten', icon: MessagesSquare, requiresLogin: true, requiresChat: true, badge: 'chat' },
