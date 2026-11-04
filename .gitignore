@@ -5,4 +5,6 @@ data/
 .env
 config/elvis.json
 deploy/compose.override.yaml
-apps/desktop/release/
+apps/windows/release/
+apps/windows/stage/
+apps/windows/.cache/

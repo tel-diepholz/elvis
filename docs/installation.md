@@ -34,26 +34,29 @@ cp config/elvis.example.json config/elvis.json   # anpassen
 npm start                                        # http://<host>:8080
 ```
 
-## ELVIS lite (Windows-Desktop, ELW 1)
+## ELVIS lite (Windows, ELW 1)
 
-Für kleinere Fahrzeuge ohne Fahrzeugserver gibt es ELVIS als Windows-App: Einsatzführung (Tagebuch, Kräfte,
-Meldungen, Schadenkonten, Dokumente, Archiv) und Kommunikation (E-Mail, Kontakte, Nachrichten über Threema,
-WhatsApp oder Telegram). Fahrzeugmodule (Funk, Netzwerk, Kameras …) und Addons gibt es dort nicht. Der Laptop ist
-zugleich Server: Tablets im selben Netz öffnen `http://<Laptop-IP>:8222` im Browser (Adresse im Infobereich unter
-„Adresse für Tablets …“). Das Fenster zu schließen beendet ELVIS nicht – beenden über das Symbol im Infobereich.
+Für kleinere Fahrzeuge ohne Fahrzeugserver läuft ELVIS als Windows-Dienst auf einem Laptop: Einsatzführung (Tagebuch,
+Kräfte, Meldungen, Schadenkonten, Dokumente, Archiv) und Kommunikation (E-Mail, Kontakte, Nachrichten über Threema,
+WhatsApp oder Telegram). Fahrzeugmodule (Funk, Netzwerk, Kameras …) und Addons gibt es dort nicht. Bedient wird im
+Browser – auf dem Laptop über die Verknüpfung „ELVIS lite“ (`http://localhost:8222`), auf Tablets im selben Netz über
+`http://<Laptop-IP>:8222` (Startmenü → ELVIS lite → „Adresse für Tablets“).
 
 - **Installer:** GitHub Actions → Workflow „ELVIS lite (Windows)“ → Artefakt `elvis-lite-installer`, oder selbst bauen
-  (unter Windows): `npm ci && npm run dist -w @elvis/desktop` → `apps/desktop/release/*.exe`.
-- **Firewall:** Der Installer gibt ELVIS lite (das Programm, unabhängig vom Port) für private und Domänen-Netzwerke frei.
-  Ist das Fahrzeugnetz in Windows als „Öffentlich“ eingestuft, auf „Privat“ umstellen – sonst erreichen Tablets den
-  Laptop nicht.
+  (Windows oder Linux mit NSIS): `npm ci && npm run dist -w @elvis/windows` → `apps/windows/release/*.exe`.
+  Er bringt Node.js mit und richtet den Dienst „ELVIS lite“ ein, der mit Windows startet – auch ohne Anmeldung.
+  Ein Update ist eine Installation über die bestehende.
+- **Firewall:** Der Installer gibt `node.exe` von ELVIS lite für private und Domänen-Netzwerke frei. Ist das
+  Fahrzeugnetz in Windows als „Öffentlich“ eingestuft, auf „Privat“ umstellen – sonst erreichen Tablets den Laptop
+  nicht.
 - **Port:** Standard ist 8222 (nicht 8080, damit es keinen Konflikt mit einer ELVIS-Entwicklerinstanz gibt – auch nicht
-  in WSL, deren Ports Windows weiterleitet). Ist er belegt, meldet ELVIS das beim Start und beendet sich. Anderer Port:
-  `desktop.json` im Datenordner anlegen, z. B. `{ "port": 8223 }`. Keine Ports 6665–6669 – die sperren Browser.
-- **Daten:** `%APPDATA%\ELVIS lite\` – `data\` (Datenbank, Dokumente), `elvis.json` (optionale Serverkonfiguration),
-  `desktop.json` (optional, abweichender Port), `logs\server.log`. Backup und Wiederherstellung wie in der Vollversion unter Einstellungen.
-- **Entwicklung:** `ELVIS_EDITION=lite npm run dev` zeigt die lite-Oberfläche im Browser; die App selbst mit
-  `npm run dev -w @elvis/desktop` (lädt die Oberfläche vom Vite-Server).
+  in WSL, deren Ports Windows weiterleitet). Ist er belegt, melden Installer und Verknüpfung „Achtung: Port … ist
+  belegt. Der Server kann nicht starten.“ Anderer Port: `port` in `elvis.json` ändern und den Dienst neu starten.
+  Keine Ports 6665–6669 – die sperren Browser.
+- **Daten:** `%ProgramData%\ELVIS lite\` – `data\` (Datenbank, Dokumente), `elvis.json` (Serverkonfiguration wie
+  `config/elvis.json`), `logs\` (Dienstprotokolle). Bleibt bei Updates und beim Deinstallieren erhalten. Backup und
+  Wiederherstellung wie in der Vollversion unter Einstellungen.
+- **Entwicklung:** `ELVIS_EDITION=lite npm run dev` zeigt die lite-Oberfläche im Browser.
 
 Weitere Befehle (Tests, Typprüfung, Labor): siehe [Entwicklung → Tests](entwicklung/tests.md).
 

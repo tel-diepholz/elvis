@@ -3,9 +3,9 @@ name: ELVIS lite (Windows)
 on:
   push:
     branches: [main]
-    paths: ['apps/**', 'packages/**', 'package-lock.json', '.github/workflows/desktop.yml']
+    paths: ['apps/**', 'packages/**', 'package-lock.json', '.github/workflows/windows.yml']
   pull_request:
-    paths: ['apps/**', 'packages/**', 'package-lock.json', '.github/workflows/desktop.yml']
+    paths: ['apps/**', 'packages/**', 'package-lock.json', '.github/workflows/windows.yml']
   workflow_dispatch:
 
 jobs:
@@ -22,8 +22,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - run: npm test
 
   installer:
@@ -36,9 +34,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run dist -w @elvis/desktop
+      - name: NSIS bereitstellen
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and -not (Test-Path 'C:\Program Files (x86)\NSIS\makensis.exe')) { choco install nsis -y --no-progress }
+      - run: npm run dist -w @elvis/windows
       - uses: actions/upload-artifact@v4
         with:
           name: elvis-lite-installer
-          path: apps/desktop/release/*.exe
+          path: apps/windows/release/*.exe
           if-no-files-found: error
