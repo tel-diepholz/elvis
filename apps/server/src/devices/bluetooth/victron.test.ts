@@ -82,5 +82,9 @@ describe('Victron Instant Readout', () => {
     expect(victronRead(victronEncode(lithium, key, { iv: 0x1234 }), key)).toEqual(lithium);
     const shunt = { type: 'battery-monitor' as const, remainingMin: 600, voltageV: 12.9, currentA: -4.25, consumedAh: -12.3, socPct: 87.5, temperatureC: null, starterVoltageV: null, midpointVoltageV: null, alarms: [] };
     expect(victronRead(victronEncode(shunt, key, { iv: 65535 }), key)).toEqual(shunt);
+    const solar = { type: 'solar' as const, state: 3, error: 0, voltageV: 13.6, currentA: -1.5, yieldTodayWh: 840, pvPowerW: 210, loadCurrentA: null };
+    expect(victronRead(victronEncode(solar, key, { iv: 7 }), key)).toEqual(solar);
+    const orion = { type: 'dcdc' as const, state: 3, error: null, inputVoltageV: 14.1, outputVoltageV: 13.9, offReason: 0 };
+    expect(victronRead(victronEncode(orion, key, { iv: 8 }), key)).toEqual(orion);
   });
 });

@@ -24,6 +24,8 @@ VictronConnect lässt sich weiter parallel nutzen.
   Batteriefehler und Zellspannung außerhalb des Bereichs (Alarm), Alarme des Batteriemonitors (Alarm), Störung eines
   Ladereglers (Warnung) und Unterschreiten der eigenen Spannungsgrenze (Warnung). Ist der Bluetooth-Adapter nicht
   nutzbar, meldet ELVIS „Bluetooth nicht erreichbar“ mit dem Grund auf der Seite Energie und versucht es alle 15 s erneut.
+- **Simulation:** Eingetragene Geräte senden als Lithium-Batterie; mit „Shunt“/„BMV“ im Namen als Batteriemonitor,
+  mit „Solar“/„MPPT“ als Solarladeregler, mit „Orion“/„DC-DC“ als DC/DC-Lader.
 - **Treiber:** „Simulation“ (Vorgabe) oder „Bluetooth-Adapter des Servers (BlueZ)“ mit Adapter (`hci0`) und der Zeit
   bis „kein Empfang“. ELVIS spricht dazu bluetoothd des Hosts über den D-Bus-System-Bus an. Es braucht keine
   besonderen Rechte und kein Host-Netzwerk.
