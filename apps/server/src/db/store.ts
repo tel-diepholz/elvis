@@ -561,6 +561,16 @@ export class Store {
     return doc;
   }
 
+  /** Von ELVIS erzeugtes Dokument kennzeichnen (z. B. 'report') */
+  markGenerated(id: number, kind: string): void {
+    this.db.prepare('UPDATE documents SET generated = ? WHERE id = ?').run(kind, id);
+  }
+
+  /** Ids der von ELVIS erzeugten Dokumente einer Art */
+  generatedDocumentIds(incidentId: number, kind: string): Set<number> {
+    return new Set((this.db.prepare('SELECT id FROM documents WHERE incident_id = ? AND generated = ?').all(incidentId, kind) as { id: number }[]).map((r) => r.id));
+  }
+
   patchDocument(id: number, p: { folderId?: number | null; filename?: string; description?: string }): void {
     const doc = this.document(id)!;
     this.db

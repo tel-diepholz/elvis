@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Archive, ArrowLeft } from 'lucide-react';
 import { api } from '../lib/api';
 import { fmtDateTime, fmtDuration } from '../lib/format';
+import { ReportButton } from '../components/ReportButton';
 import { Badge, Card, EmptyState, Loading, PageHeader, Segmented } from '../components/ui';
 import { DocumentsView } from './incident/DocumentsView';
 import { JournalView } from './incident/JournalView';
@@ -70,9 +71,12 @@ export function ArchivedIncidentPage() {
         title={[incident.keyword, incident.title].filter(Boolean).join(' · ')}
         subtitle={`${fmtDateTime(incident.startedAt)} – ${incident.closedAt ? fmtDateTime(incident.closedAt) : 'läuft'} · ${incident.location || 'ohne Ortsangabe'}`}
         actions={
-          <Link to="/archiv" className="btn">
-            <ArrowLeft size={16} /> Archiv
-          </Link>
+          <>
+            <ReportButton incidentId={incident.id} />
+            <Link to="/archiv" className="btn">
+              <ArrowLeft size={16} /> Archiv
+            </Link>
+          </>
         }
       />
       <Segmented<Tab>
