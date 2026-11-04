@@ -56,6 +56,13 @@ Browser – auf dem Laptop über die Verknüpfung „ELVIS lite“ (`http://loca
 - **Daten:** `%ProgramData%\ELVIS lite\` – `data\` (Datenbank, Dokumente), `elvis.json` (Serverkonfiguration wie
   `config/elvis.json`), `logs\` (Dienstprotokolle). Bleibt bei Updates und beim Deinstallieren erhalten. Backup und
   Wiederherstellung wie in der Vollversion unter Einstellungen.
+- **Update:** Einstellungen → Update → „Nach Updates suchen“ fragt die GitHub-Releases ab, „Update installieren“ lädt den
+  neuen Installer, prüft Prüfsumme und Signatur und installiert ihn im Hintergrund (ELVIS ist dabei einige Minuten nicht
+  erreichbar). Startet die neue Version nicht, stellt der Installer die bisherige Version samt Datenbank wieder her.
+  Jedes Update steht im Bedienprotokoll.
+- **Release erstellen:** GitHub-Release mit Tag `vX.Y.Z` veröffentlichen → Workflow „ELVIS lite – Release“ baut den
+  Installer, signiert ihn mit dem Secret `ELVIS_UPDATE_SIGNING_KEY` (Ed25519, passend zu `UPDATE_PUBLIC_KEY` in
+  `apps/server/src/services/updates.ts`) und hängt `ELVIS-lite-X.Y.Z-setup.exe` samt `.sig` an das Release.
 - **Entwicklung:** `ELVIS_EDITION=lite npm run dev` zeigt die lite-Oberfläche im Browser.
 
 Weitere Befehle (Tests, Typprüfung, Labor): siehe [Entwicklung → Tests](entwicklung/tests.md).

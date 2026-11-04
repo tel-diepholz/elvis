@@ -8,6 +8,7 @@ import {
   CloudSun,
   Database,
   DatabaseBackup,
+  Download,
   FolderTree,
   Laptop,
   ListTodo,
@@ -40,6 +41,7 @@ import { Loading, PageHeader } from '../components/ui';
 import { AppRelayCard } from './system/AppRelayCard';
 import { MailCard } from './system/MailCard';
 import { BackupCard } from './system/BackupCard';
+import { UpdatesCard } from './system/UpdatesCard';
 import { BluetoothCard } from './system/BluetoothCard';
 import { CamerasCard } from './system/CamerasCard';
 import { DisplaysCard } from './system/DisplaysCard';
@@ -101,7 +103,8 @@ const MODULE_PARTS: Partial<Record<DeviceId, { icon: ReactNode; devices?: ReactN
 export function SettingsPage() {
   const vehicle = useSettings().data?.vehicle;
   // ELVIS lite: keine Dienste, die Fahrzeugtechnik voraussetzen (Bildschirme, PXE, Energie, Scan, DECT, Snom)
-  const full = useInfo().data?.edition !== 'lite';
+  const info = useInfo().data;
+  const full = info?.edition !== 'lite';
   const { data: modules } = useQuery({ queryKey: ['devices'], queryFn: api.deviceModules });
 
   return (
@@ -184,6 +187,11 @@ export function SettingsPage() {
           <SettingsSection id="backup" title="Backup" icon={<DatabaseBackup {...ICON} />} summary="Verschlüsselte Sicherung, Wiederherstellen bei Neuinstallation">
             <BackupCard />
           </SettingsSection>
+          {!full && (
+            <SettingsSection id="update" title="Update" icon={<Download {...ICON} />} summary={info?.version ? `Version ${info.version} · nach Updates suchen und installieren` : 'Nach Updates suchen und installieren'}>
+              <UpdatesCard />
+            </SettingsSection>
+          )}
         </SettingsGroup>
 
         <SettingsGroup title="Einsatz">

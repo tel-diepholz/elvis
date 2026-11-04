@@ -1,5 +1,5 @@
 import type { DamageAccount, DamageAccountInput, DamageAccountPatch, DamageCountBooking, DamageCountInput, DamageEntry, DamageEntryInput, DamageEntryPatch } from '@elvis/shared';
-import type { EnergyFlowInput, EnergyFlowSettings } from '@elvis/shared';
+import type { EnergyFlowInput, EnergyFlowSettings, UpdateStatus } from '@elvis/shared';
 import type { Phone, PhoneConfigInput, PhoneInput, PhoneKeyInput, PhoneKeySlot, PhoneSystemStatus, PagingZone } from '@elvis/shared';
 import {
   type CallRecord,
@@ -271,6 +271,9 @@ export const api = {
   mailAccount: () => request<MailAccountStatus>('GET', '/api/system/mail'),
   requestMailAccount: (input: MailAccountRequest) => request<MailAccountStatus>('POST', '/api/system/mail', input),
   cancelMailAccount: () => request<void>('DELETE', '/api/system/mail'),
+  updateStatus: () => request<UpdateStatus>('GET', '/api/system/updates'),
+  checkUpdates: () => request<UpdateStatus>('POST', '/api/system/updates/check'),
+  installUpdate: () => request<UpdateStatus>('POST', '/api/system/updates/install'),
   backupStatus: () => request<BackupStatus>('GET', '/api/system/backup'),
   updateBackup: (input: BackupSettingsInput) => request<BackupStatus>('PUT', '/api/system/backup', input),
   disableBackup: () => request<void>('DELETE', '/api/system/backup'),

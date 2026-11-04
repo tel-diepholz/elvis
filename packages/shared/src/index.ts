@@ -1,5 +1,6 @@
 export * from './devices';
 export * from './edition';
+export * from './updates';
 export * from './incident';
 export * from './forces';
 export * from './protocol';

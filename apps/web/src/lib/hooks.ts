@@ -8,6 +8,8 @@ import { useToast } from './toast';
 
 export interface ServerInfo {
   edition: Edition;
+  /** Version der Installation („dev“ ohne Release-Build) */
+  version: string;
   vehicle: VehicleInfo;
   drivers: Record<DeviceId, string>;
   limits: { stormWarnMs: number };
