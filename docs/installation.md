@@ -39,7 +39,7 @@ npm start                                        # http://<host>:8080
 Für kleinere Fahrzeuge ohne Fahrzeugserver gibt es ELVIS als Windows-App: Einsatzführung (Tagebuch, Kräfte,
 Meldungen, Schadenkonten, Dokumente, Archiv) und Kommunikation (E-Mail, Kontakte, Nachrichten über Threema,
 WhatsApp oder Telegram). Fahrzeugmodule (Funk, Netzwerk, Kameras …) und Addons gibt es dort nicht. Der Laptop ist
-zugleich Server: Tablets im selben Netz öffnen `http://<Laptop-IP>:8080` im Browser (Adresse im Infobereich unter
+zugleich Server: Tablets im selben Netz öffnen `http://<Laptop-IP>:8222` im Browser (Adresse im Infobereich unter
 „Adresse für Tablets …“). Das Fenster zu schließen beendet ELVIS nicht – beenden über das Symbol im Infobereich.
 
 - **Installer:** GitHub Actions → Workflow „ELVIS lite (Windows)“ → Artefakt `elvis-lite-installer`, oder selbst bauen
@@ -47,11 +47,11 @@ zugleich Server: Tablets im selben Netz öffnen `http://<Laptop-IP>:8080` im Bro
 - **Firewall:** Der Installer gibt ELVIS lite (das Programm, unabhängig vom Port) für private und Domänen-Netzwerke frei.
   Ist das Fahrzeugnetz in Windows als „Öffentlich“ eingestuft, auf „Privat“ umstellen – sonst erreichen Tablets den
   Laptop nicht.
-- **Port:** Standard ist 8080. Ist er belegt (z. B. durch einen anderen Webserver oder eine ELVIS-Entwicklerinstanz in
-  WSL, deren Ports Windows weiterleitet), schlägt ELVIS beim Start einen freien Port vor und merkt ihn sich in
-  `desktop.json`.
+- **Port:** Standard ist 8222 (nicht 8080, damit es keinen Konflikt mit einer ELVIS-Entwicklerinstanz gibt – auch nicht
+  in WSL, deren Ports Windows weiterleitet). Ist er belegt, meldet ELVIS das beim Start und beendet sich. Anderer Port:
+  `desktop.json` im Datenordner anlegen, z. B. `{ "port": 8223 }`. Keine Ports 6665–6669 – die sperren Browser.
 - **Daten:** `%APPDATA%\ELVIS lite\` – `data\` (Datenbank, Dokumente), `elvis.json` (optionale Serverkonfiguration),
-  `desktop.json` (Port), `logs\server.log`. Backup und Wiederherstellung wie in der Vollversion unter Einstellungen.
+  `desktop.json` (optional, abweichender Port), `logs\server.log`. Backup und Wiederherstellung wie in der Vollversion unter Einstellungen.
 - **Entwicklung:** `ELVIS_EDITION=lite npm run dev` zeigt die lite-Oberfläche im Browser; die App selbst mit
   `npm run dev -w @elvis/desktop` (lädt die Oberfläche vom Vite-Server).
 

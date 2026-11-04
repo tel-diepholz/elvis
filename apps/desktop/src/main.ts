@@ -6,7 +6,7 @@
  * Fahrzeug verbinden sich per Browser) und liefert die Oberfläche aus, die das Fenster über http://127.0.0.1 lädt.
  * Schließen des Fensters legt die App in den Infobereich – der Server bleibt für die Tablets erreichbar.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, type WriteStream } from 'node:fs';
+import { createWriteStream, mkdirSync, readFileSync, type WriteStream } from 'node:fs';
 import { createServer } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
@@ -17,7 +17,12 @@ interface DesktopSettings {
   port: number;
 }
 
-const DEFAULTS: DesktopSettings = { port: 8080 };
+/**
+ * 8222 statt 8080, damit ELVIS lite nicht mit einer ELVIS-Entwicklerinstanz (auch in WSL, deren Ports Windows
+ * weiterleitet) oder anderen Webservern kollidiert. Achtung bei Änderungen: Browser sperren manche Ports (z. B.
+ * 6665–6669) als unsicher – Tablets könnten ELVIS dort nicht öffnen.
+ */
+const DEFAULTS: DesktopSettings = { port: 8222 };
 /** Entwicklung: Oberfläche vom Vite-Server laden, den Server startet `ELVIS_EDITION=lite npm run dev` */
 const DEV_URL = process.env.ELVIS_DEV_URL;
 
@@ -105,35 +110,19 @@ function portFree(port: number): Promise<boolean> {
 }
 
 /**
- * Belegten Port vor dem Start erkennen (z. B. ein anderer Webserver oder eine ELVIS-Entwicklerinstanz in WSL, deren
- * Ports Windows weiterleitet) und einen freien vorschlagen. Liefert false, wenn ELVIS nicht starten soll.
+ * Belegten Port vor dem Start erkennen (z. B. ein anderer Webserver) und klar melden, statt den Server in einer
+ * Absturzschleife zu starten. Kein Ausweichen auf einen anderen Port: Tablets und Lesezeichen kennen nur diesen einen.
  */
 async function ensurePort(): Promise<boolean> {
   if (await portFree(settings.port)) return true;
-  let next: number | null = null;
-  for (let p = settings.port + 1; p <= settings.port + 50 && p <= 65535; p++) {
-    if (await portFree(p)) {
-      next = p;
-      break;
-    }
-  }
-  if (next === null) {
-    dialog.showErrorBox('Port belegt', `Port ${settings.port} und die folgenden sind belegt. Bitte in ${settingsFile} einen freien Port eintragen.`);
-    return false;
-  }
-  const choice = dialog.showMessageBoxSync({
-    type: 'warning',
+  dialog.showMessageBoxSync({
+    type: 'error',
     title: 'Port belegt',
-    message: `Port ${settings.port} wird bereits von einem anderen Programm verwendet.`,
-    detail: `ELVIS kann stattdessen Port ${next} verwenden. Tablets erreichen ELVIS dann unter dieser neuen Adresse (siehe „Adresse für Tablets …“ im Infobereich).`,
-    buttons: [`Port ${next} verwenden`, 'Beenden'],
-    defaultId: 0,
-    cancelId: 1,
+    message: `Achtung: Port ${settings.port} ist belegt. Der Server kann nicht starten.`,
+    detail: `Ein anderes Programm verwendet Port ${settings.port}. Dieses Programm beenden und ELVIS neu starten – oder in ${settingsFile} einen anderen Port eintragen, z. B. { "port": 8223 }.`,
+    buttons: ['Beenden'],
   });
-  if (choice !== 0) return false;
-  settings = { ...settings, port: next };
-  writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
-  return true;
+  return false;
 }
 
 /** Wartet, bis der Server antwortet (Datenbank-Migrationen können beim ersten Start etwas dauern) */
@@ -233,8 +222,8 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(async () => {
     app.setAppUserModelId('app.einsatzleitwagen.elvis.lite');
     mkdirSync(userData, { recursive: true });
+    // Nur lesen: desktop.json enthält ausschließlich bewusst gesetzte Abweichungen, Vorgaben gelten sonst immer
     settings = loadSettings();
-    if (!existsSync(settingsFile)) writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
     Menu.setApplicationMenu(null);
     if (!DEV_URL) {
       if (!(await ensurePort())) {
