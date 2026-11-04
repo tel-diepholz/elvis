@@ -268,7 +268,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const phones = new PhoneService(db, {
     contacts: () => contacts.list(),
     activeIncident: () => incidents.active(),
-    phonebookToken: () => phonebook.token(),
+    phonebook: () => phonebook.entries(),
     log: server.log,
     fetch: opts.phoneFetch,
     pushDelayMs: opts.phonePushDelayMs,
