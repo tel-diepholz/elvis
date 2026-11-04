@@ -112,6 +112,10 @@ describe('Updates (ELVIS lite)', () => {
     mkdirSync(join(dir, 'updates'), { recursive: true });
     writeFileSync(join(dir, 'updates', 'result.json'), '{"from":"1.1.0","to":"1.2.0","ok":false,"rolledBack":true}');
     expect(service({}).status().lastResult).toMatchObject({ from: '1.1.0', to: '1.2.0', ok: false, rolledBack: true, at: expect.any(String) });
+    // Installer gab auf, die neue Version läuft aber (Dienst von Hand gestartet): gilt als geklappt
+    writeFileSync(join(dir, 'updates', 'result.json'), '{"from":"1.1.0","to":"1.2.0","ok":false,"rolledBack":false}');
+    expect(service({}, { current: '1.2.0' }).status().lastResult).toMatchObject({ ok: true });
+    expect(service({}, { current: '1.1.0' }).status().lastResult).toMatchObject({ ok: false });
   });
 });
 

@@ -202,7 +202,10 @@ export class UpdateService {
     if (!existsSync(file)) return null;
     try {
       const r = JSON.parse(readFileSync(file, 'utf8')) as Omit<UpdateResult, 'at'>;
-      return { from: String(r.from), to: String(r.to), ok: !!r.ok, rolledBack: !!r.rolledBack, at: statSync(file).mtime.toISOString() };
+      // Läuft die Zielversion (z. B. nach einem Neustart von Hand), hat das Update geklappt – auch wenn der Installer
+      // beim Warten auf den Start aufgegeben hat
+      const ok = !!r.ok || (!r.rolledBack && compareVersions(this.current, String(r.to)) === 0);
+      return { from: String(r.from), to: String(r.to), ok, rolledBack: !!r.rolledBack, at: statSync(file).mtime.toISOString() };
     } catch {
       return null;
     }

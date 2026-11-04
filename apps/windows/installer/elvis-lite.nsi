@@ -10,6 +10,7 @@ Unicode true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "x64.nsh"
+!include "FileFunc.nsh"
 
 !ifndef VERSION
   !error "VERSION fehlt (/DVERSION=x.y.z)"
@@ -50,6 +51,7 @@ Var OldVersion
 Var Installed
 Var Ok
 Var RolledBack
+Var Output
 
 Function .onInit
   ${IfNot} ${RunningX64}
@@ -68,14 +70,72 @@ Function OpenElvis
   Exec '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\elvis-oeffnen.ps1"'
 FunctionEnd
 
-; Port aus elvis.json (Vorgabe ${DEFAULT_PORT}); als PowerShell-Ausschnitt für die Prüfungen unten
-!define PS `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command`
-!define PS_PORT `$$p = ${DEFAULT_PORT}; $$c = Join-Path $$env:ProgramData '${APP}\elvis.json'; if (Test-Path $$c) { $$v = (Get-Content $$c -Raw | ConvertFrom-Json).port; if ($$v) { $$p = [int]$$v } };`
+; PowerShell-Aufrufe geben ihr Ergebnis als Text aus und enden immer mit ausdrücklichem exit – der Exit-Code von
+; „-Command“ hängt sonst auch an unterdrückten Fehlern (Get-NetTCPConnection meldet bei freiem Port einen Fehler).
+!define PS `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command`
+; Port aus elvis.json (Vorgabe ${DEFAULT_PORT})
+!define PS_PORT `$$p = ${DEFAULT_PORT}; $$c = Join-Path $$env:ProgramData '${APP}\elvis.json'; if (Test-Path $$c) { try { $$v = (Get-Content $$c -Raw | ConvertFrom-Json).port; if ($$v) { $$p = [int]$$v } } catch {} };`
 
-; Wartet bis zu 2 Minuten, bis der Dienst mit der neuen Version antwortet. Ergebnis auf dem Stack: 0 = läuft
+; Zeile mit Zeitstempel in %ProgramData%\ELVIS lite\logs\installer.log (und in die Detailansicht)
+!macro Log text
+  DetailPrint "${text}"
+  Push "${text}"
+  Call WriteLog
+!macroend
+Function WriteLog
+  Exch $R0
+  Push $R1
+  Push $R2
+  Push $R3
+  Push $R4
+  Push $R5
+  Push $R6
+  Push $R7
+  Push $R8
+  ${GetTime} "" "L" $R2 $R3 $R4 $R5 $R6 $R7 $R8
+  CreateDirectory "$DataDir\logs"
+  FileOpen $R1 "$DataDir\logs\installer.log" a
+  FileSeek $R1 0 END
+  FileWrite $R1 "$R4-$R3-$R2 $R6:$R7:$R8  [${VERSION}] $R0$\r$\n"
+  FileClose $R1
+  Pop $R8
+  Pop $R7
+  Pop $R6
+  Pop $R5
+  Pop $R4
+  Pop $R3
+  Pop $R2
+  Pop $R1
+  Pop $R0
+FunctionEnd
+
+; Port lesen → $Port
+Function ReadPort
+  nsExec::ExecToStack `${PS} "${PS_PORT} [Console]::Write($$p); exit 0"`
+  Pop $0
+  Pop $Port
+  ${If} $Port == ""
+    StrCpy $Port ${DEFAULT_PORT}
+  ${EndIf}
+FunctionEnd
+
+; Wartet bis zu 2 Minuten, bis der Dienst mit der neuen Version antwortet → $Output „OK“ oder Grund
 Function WaitHealthy
-  DetailPrint "Warte, bis ELVIS ${VERSION} antwortet …"
-  nsExec::ExecToLog `${PS} "${PS_PORT} $$until = (Get-Date).AddSeconds(120); while ((Get-Date) -lt $$until) { try { $$r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 ('http://127.0.0.1:' + $$p + '/api/info'); if ($$r.Content -match '\"version\":\"${VERSION}\"') { exit 0 } } catch {}; Start-Sleep -Seconds 2 }; exit 1"`
+  !insertmacro Log "Warte, bis ELVIS ${VERSION} auf Port $Port antwortet …"
+  nsExec::ExecToStack `${PS} "${PS_PORT} $$last = 'keine Antwort'; $$until = (Get-Date).AddSeconds(120); while ((Get-Date) -lt $$until) { try { $$j = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 ('http://127.0.0.1:' + $$p + '/api/info')).Content | ConvertFrom-Json; if ($$j.version -eq '${VERSION}') { [Console]::Write('OK'); exit 0 }; $$last = 'antwortet mit Version ' + $$j.version } catch { $$last = $$_.Exception.Message }; Start-Sleep -Seconds 2 }; [Console]::Write($$last); exit 0"`
+  Pop $0
+  Pop $Output
+  ${If} $0 != 0
+    StrCpy $Output "PowerShell: $0 $Output"
+  ${EndIf}
+FunctionEnd
+
+; Wer belegt den Port? → $Output „FREI“, „EIGEN …“ (node.exe dieses Programmordners) oder „BELEGT <Programm>“.
+; Lauschende Sockets = ohne Gegenstelle; nicht über -State Listen, das zeigt Windows je nach Sitzung als „Closed“.
+Function PortOwner
+  nsExec::ExecToStack `${PS} "${PS_PORT} $$o = 'FREI'; foreach ($$l in @(Get-NetTCPConnection -LocalPort $$p -ErrorAction SilentlyContinue | Where-Object { $$_.RemotePort -eq 0 })) { $$pr = Get-Process -Id $$l.OwningProcess -ErrorAction SilentlyContinue; if ($$pr -and $$pr.Path -eq '$INSTDIR\node.exe') { $$o = 'EIGEN ELVIS (PID ' + $$pr.Id + ')' } elseif ($$pr) { $$o = 'BELEGT ' + $$pr.ProcessName + ' (PID ' + $$pr.Id + ')' } }; [Console]::Write($$o); exit 0"`
+  Pop $0
+  Pop $Output
 FunctionEnd
 
 Section "ELVIS lite"
@@ -106,11 +166,11 @@ Section "ELVIS lite"
     ${If} $OldVersion == ""
       StrCpy $OldVersion "unbekannt"
     ${EndIf}
-    DetailPrint "Beende den laufenden Dienst (Version $OldVersion) …"
+    !insertmacro Log "Update von $OldVersion: beende den laufenden Dienst"
     nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" stop'
     nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" uninstall'
     ; Programmordner und Datenbank sichern (Datenbank-Änderungen einer neuen Version lassen sich nicht zurücknehmen)
-    DetailPrint "Sichere Version $OldVersion und Datenbank …"
+    !insertmacro Log "Sichere Version $OldVersion und Datenbank nach $Prev"
     RMDir /r "$Prev"
     CreateDirectory "$Prev\program"
     CopyFiles /SILENT "$INSTDIR\*.*" "$Prev\program"
@@ -137,31 +197,35 @@ Section "ELVIS lite"
   nsExec::Exec 'netsh advfirewall firewall delete rule name="${APP}"'
   nsExec::Exec 'netsh advfirewall firewall add rule name="${APP}" dir=in action=allow program="$INSTDIR\node.exe" enable=yes profile=private,domain'
 
-  ; Dienst anmelden
-  DetailPrint "Richte den Dienst „${APP}“ ein …"
-  nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" install'
+  ; Dienst anmelden und immer starten – ein gestoppter Dienst ist der schlechteste Ausgang. Belegt ein anderes Programm
+  ; den Port, startet der Dienst von selbst neu (onfailure), sobald der Port frei wird.
+  nsExec::ExecToStack '"$INSTDIR\elvis-lite-dienst.exe" install'
   Pop $0
+  Pop $Output
+  !insertmacro Log "Dienst eingerichtet (Code $0) $Output"
   ${If} $0 != 0
     MessageBox MB_ICONSTOP "Der Dienst „${APP}“ konnte nicht eingerichtet werden (Code $0)." /SD IDOK
   ${EndIf}
-
-  ; Port prüfen (der eigene Dienst ist gestoppt, also belegt ihn ein fremdes Programm); gibt den Port aus
-  nsExec::ExecToStack `${PS} "${PS_PORT} [Console]::Write($$p); if (Get-NetTCPConnection -LocalPort $$p -State Listen -ErrorAction SilentlyContinue) { exit 1 }"`
+  Call ReadPort
+  nsExec::ExecToStack '"$INSTDIR\elvis-lite-dienst.exe" start'
   Pop $0
-  Pop $Port
-  ${If} $0 == 1
-    MessageBox MB_ICONEXCLAMATION "Achtung: Port $Port ist belegt. Der Server kann nicht starten.$\r$\n$\r$\nDas andere Programm beenden und danach den Dienst „${APP}“ starten – oder in $DataDir\elvis.json einen anderen Port eintragen." /SD IDOK
+  Pop $Output
+  !insertmacro Log "Dienst gestartet (Code $0) $Output"
+  Call WaitHealthy
+  !insertmacro Log "Ergebnis: $Output"
+  ${If} $Output == "OK"
+    StrCpy $Ok "true"
   ${Else}
-    DetailPrint "Starte den Dienst …"
-    nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" start'
-    Call WaitHealthy
-    Pop $0
-    ${If} $0 == 0
-      StrCpy $Ok "true"
+    Call PortOwner
+    !insertmacro Log "Port $Port: $Output"
+    StrCpy $1 $Output 6
+    ${If} $1 == "BELEGT"
+      ; Zurückrollen hilft nicht – die alte Version bräuchte denselben Port
+      MessageBox MB_ICONEXCLAMATION "Achtung: Port $Port ist belegt ($Output). Der Server kann nicht starten.$\r$\n$\r$\nDas andere Programm beenden – ELVIS startet dann von selbst – oder in $DataDir\elvis.json einen anderen Port eintragen und den Dienst „${APP}“ neu starten." /SD IDOK
     ${ElseIf} $OldVersion != ""
     ${AndIf} ${FileExists} "$Prev\program\elvis-lite-dienst.exe"
       ; Neue Version kommt nicht hoch: alte Version samt Datenbank zurück
-      DetailPrint "ELVIS ${VERSION} startet nicht – stelle Version $OldVersion wieder her …"
+      !insertmacro Log "ELVIS ${VERSION} startet nicht – stelle Version $OldVersion wieder her"
       nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" stop'
       nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" uninstall'
       RMDir /r "$INSTDIR\server"
@@ -171,7 +235,10 @@ Section "ELVIS lite"
       Delete "$DataDir\data\elvis.sqlite*"
       CopyFiles /SILENT "$Prev\data\*.*" "$DataDir\data"
       nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" install'
-      nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" start'
+      nsExec::ExecToStack '"$INSTDIR\elvis-lite-dienst.exe" start'
+      Pop $0
+      Pop $Output
+      !insertmacro Log "Version $OldVersion wiederhergestellt, Dienst gestartet (Code $0)"
       StrCpy $RolledBack "true"
       StrCpy $Installed $OldVersion
       MessageBox MB_ICONSTOP "ELVIS ${VERSION} ist nicht gestartet. Version $OldVersion und die Datenbank wurden wiederhergestellt.$\r$\n$\r$\nProtokolle: $DataDir\logs" /SD IDOK
