@@ -8,7 +8,7 @@ Zustand aus `packages/shared/src/devices.ts`. Für einen echten Treiber:
 2. In `devices/drivers.ts` registrieren: `power: { drivers: { sim: …, victron: (o) => new VictronPower(o) } }`.
 3. In `config/elvis.json` auswählen: `"devices": { "power": { "driver": "victron", "options": { "host": "…" } } }`.
 
-Typische Schnittstellen: Victron/Modbus-TCP (Energie), CAN/FMS-Gateway (Fahrgestell), Relais-/SPS-I/O
+Typische Schnittstellen: Victron VE.Bus über MK3 (Energie, siehe [Wechselrichter](../fahrzeugmodule/wechselrichter-victron-vebus.md) – Protokoll, Emulator und Treiber in `devices/drivers/victron-vebus/` sind ein Vorbild für serielle Geräte, auch über Serial over IP), Victron/Modbus-TCP, CAN/FMS-Gateway (Fahrgestell), Relais-/SPS-I/O
 (Licht, Mast), TETRA-PEI (Funk), Router-API/SNMP (Netzwerk), RS-232/IP (Videomatrix), ONVIF (Kameras).
 Befehle mit dem Präfix `sim.` gibt es nur im Simulator.
 

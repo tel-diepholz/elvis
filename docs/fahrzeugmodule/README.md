@@ -32,6 +32,7 @@ Läuft ELVIS im Container, muss das USB-Gerät durchgereicht werden (`devices:` 
 | WhatsApp (Simulation, Cloud API) | [whatsapp-cloud-api.md](whatsapp-cloud-api.md) |
 | Threema (Simulation, Gateway E2E) | [threema-gateway.md](threema-gateway.md) |
 | Wetterstation Airmar 150WX | [wetterstation-airmar.md](wetterstation-airmar.md) |
+| Wechselrichter: Victron MultiPlus am VE.Bus (MK3, z. B. am Router) | [wechselrichter-victron-vebus.md](wechselrichter-victron-vebus.md) |
 | Bluetooth: Victron-Akkus und weitere Geräte | [bluetooth-victron.md](bluetooth-victron.md) |
 | Kameras (Axis über VAPIX) | [kameras-axis.md](kameras-axis.md) |
 | Türstation 2N (Kamerabild) | [kameras-2n.md](kameras-2n.md) |

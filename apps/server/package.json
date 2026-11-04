@@ -11,7 +11,9 @@
     "typecheck": "tsc -p .",
     "test": "vitest run",
     "n2k:monitor": "tsx src/tools/n2k-monitor.ts",
-    "zbe:sim": "tsx src/tools/zbe-sim.ts"
+    "zbe:sim": "tsx src/tools/zbe-sim.ts",
+    "vebus": "tsx src/tools/vebus.ts",
+    "vebus:sim": "tsx src/tools/vebus-sim.ts"
   },
   "dependencies": {
     "@elvis/shared": "*",

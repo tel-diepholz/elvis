@@ -34,7 +34,7 @@ export const DASHBOARD_TILE_TYPES: Record<DashboardTileType, DashboardTileTypeIn
   alerts: fromDisplay('alerts', 4, 4, { label: 'Fahrzeugmeldungen' }),
   radio: { label: 'Funk', description: 'Funkgeräte, Erreichbarkeit und aktueller Funkverkehr', size: { w: 4, h: 3 } },
   network: fromDisplay('network', 4, 3),
-  energy: { label: 'Energie', description: 'Batterien und Ladegeräte (Victron über Bluetooth)', size: { w: 4, h: 3 } },
+  energy: { label: 'Energie', description: 'Wechselrichter (VE.Bus), Batterien und Ladegeräte (Victron über Bluetooth)', size: { w: 4, h: 3 } },
   monitoring: { label: 'Monitoring', description: 'Erreichbarkeit der überwachten Systeme', size: { w: 4, h: 3 } },
   camera: fromDisplay('camera', 4, 4),
   video: fromDisplay('video', 4, 4),

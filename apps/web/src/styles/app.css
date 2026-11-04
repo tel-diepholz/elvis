@@ -4485,6 +4485,92 @@ select.unit-status.has-children {
   margin-bottom: 16px;
 }
 
+/* Wechselrichter am VE.Bus */
+.inverter {
+  margin-bottom: 16px;
+}
+.inverter .card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.inverter .card-body > p {
+  margin: 0;
+}
+.inverter-alarms,
+.inverter-leds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.inverter-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.inverter-limit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inverter-limit-row input {
+  width: 6.5em;
+}
+.inverter-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.inverter-flow > div {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.inverter-flow .section-title {
+  margin: 0;
+}
+.inverter-led {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+.inverter-led.on {
+  color: var(--text);
+  border-color: var(--ok);
+}
+.inverter-led.blink {
+  color: var(--text);
+  border-color: var(--warn);
+  animation: inverter-blink 1s steps(2, start) infinite;
+}
+@keyframes inverter-blink {
+  to {
+    border-color: transparent;
+  }
+}
+.inverter-bus summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.inverter-bus .kv {
+  margin-bottom: 10px;
+}
+@media (max-width: 720px) {
+  .inverter-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .inverter-flow {
+    gap: 10px;
+  }
+  .inverter-flow .stat-value {
+    font-size: 20px;
+  }
+}
+
 /* Lithium-Batterie als Block: Gehäuse mit Pol rechts, je Zelle eine Säule */
 .battery {
   display: flex;

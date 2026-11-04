@@ -8,6 +8,7 @@ import type { BluetoothState } from './bluetooth';
 import type { MonitoringState } from './monitoring';
 import type { TelephonyState } from './telephony';
 import type { MessengerState } from './chat';
+import type { InverterState } from './inverter';
 
 export type SystemId = 'energy' | 'vehicle' | 'comms' | 'media' | 'weather';
 
@@ -351,7 +352,7 @@ export interface VideoProvider {
   name: string;
   /** Gateway antwortet */
   online: boolean;
-  /** z. B. „Encoder nicht verfügbar“ oder „NDI-Laufzeit fehlt“ */
+  /** z. B. „Encoder nicht verfügbar“, „NDI-Laufzeit fehlt“ oder „MediaMTX antwortet nicht“ */
   problem: string | null;
   encoder: string | null;
   resolution: string | null;
@@ -446,6 +447,7 @@ export interface DeviceStateMap {
   weather: WeatherState;
   monitoring: MonitoringState;
   bluetooth: BluetoothState;
+  inverter: InverterState;
   telephony: TelephonyState;
   signal: MessengerState;
   threema: MessengerState;

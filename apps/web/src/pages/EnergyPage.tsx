@@ -1,12 +1,13 @@
 import { BatteryCharging, Bluetooth } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { VICTRON_BALANCER_LABELS, VICTRON_READOUT_LABELS, VICTRON_STATE_LABELS, type BluetoothDeviceLive, type VictronCellVoltage, type VictronReadout } from '@elvis/shared';
+import { VICTRON_BALANCER_LABELS, VICTRON_READOUT_LABELS, VICTRON_STATE_LABELS, type BluetoothDeviceLive, type DeviceSnapshot, type VictronCellVoltage, type VictronReadout } from '@elvis/shared';
 import { useAuth } from '../lib/auth';
 import { fmtDateTime, fmtMinutes, fmtNum, fmtOpt, fmtTime } from '../lib/format';
 import { useDevice } from '../lib/live';
 import { ModuleDisabled } from '../components/ModuleDisabled';
 import { Badge, Card, EmptyState, Meter, PageHeader, Stat, type Tone } from '../components/ui';
+import { InverterCard } from './energy/InverterCard';
 
 const state = (s: number | null) => (s === null ? '–' : (VICTRON_STATE_LABELS[s] ?? `Zustand ${s}`));
 
@@ -164,46 +165,58 @@ function DeviceCard({ d }: { d: BluetoothDeviceLive }) {
   );
 }
 
-/** Akkus, Laderegler und Ladegeräte im Fahrzeug (live vom Modul „Bluetooth“) */
-export function EnergyPage() {
-  const bt = useDevice('bluetooth');
+/** Akkus, Laderegler und Ladegeräte über Bluetooth (Modul „Bluetooth“) */
+function BluetoothSection({ bt }: { bt: DeviceSnapshot<'bluetooth'> }) {
   const user = useAuth().user;
-  if (!bt) return <ModuleDisabled name="Bluetooth" module="bluetooth" />;
-  const { devices, adapter } = bt.state;
+  const { devices } = bt.state;
   const packs = devices.filter((d) => d.readout?.type === 'lithium');
   const others = devices.filter((d) => d.readout?.type !== 'lithium');
+  if (devices.length === 0) {
+    return (
+      <EmptyState icon={<Bluetooth size={32} />} title="Keine Bluetooth-Geräte eingetragen">
+        {user?.isAdmin ? (
+          <>
+            Akkus und andere Bluetooth-Geräte unter <Link to="/einstellungen#modul-bluetooth">Einstellungen → Bluetooth</Link> hinzufügen.
+          </>
+        ) : (
+          'Ein Admin kann die Geräte in den Einstellungen eintragen.'
+        )}
+      </EmptyState>
+    );
+  }
+  return (
+    <>
+      {packs.length > 0 && (
+        <div className="energy-packs">
+          {packs.map((d) => (
+            <DeviceCard key={d.id} d={d} />
+          ))}
+        </div>
+      )}
+      {others.length > 0 && (
+        <div className="grid">
+          {others.map((d) => (
+            <DeviceCard key={d.id} d={d} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Energie im Fahrzeug: Wechselrichter am VE.Bus und Victron-Geräte über Bluetooth (je nach aktivierten Modulen) */
+export function EnergyPage() {
+  const inverter = useDevice('inverter');
+  const bt = useDevice('bluetooth');
+  if (!inverter && !bt) return <ModuleDisabled name="Energie (Wechselrichter, Bluetooth)" />;
+  const adapter = bt?.state.adapter;
+  const subtitle = !bt ? 'Wechselrichter am VE.Bus' : adapter?.error ? <span className="tone-alarm">{adapter.error}</span> : adapter?.scanning ? `Bluetooth (${adapter.name})` : 'Bluetooth wird gestartet …';
 
   return (
     <>
-      <PageHeader title="Energie" subtitle={adapter.error ? <span className="tone-alarm">{adapter.error}</span> : adapter.scanning ? `Bluetooth (${adapter.name})` : 'Bluetooth wird gestartet …'} />
-      {devices.length === 0 ? (
-        <EmptyState icon={<Bluetooth size={32} />} title="Keine Geräte eingetragen">
-          {user?.isAdmin ? (
-            <>
-              Akkus und andere Bluetooth-Geräte unter <Link to="/einstellungen#modul-bluetooth">Einstellungen → Bluetooth</Link> hinzufügen.
-            </>
-          ) : (
-            'Ein Admin kann die Geräte in den Einstellungen eintragen.'
-          )}
-        </EmptyState>
-      ) : (
-        <>
-          {packs.length > 0 && (
-            <div className="energy-packs">
-              {packs.map((d) => (
-                <DeviceCard key={d.id} d={d} />
-              ))}
-            </div>
-          )}
-          {others.length > 0 && (
-            <div className="grid">
-              {others.map((d) => (
-                <DeviceCard key={d.id} d={d} />
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      <PageHeader title="Energie" subtitle={subtitle} />
+      {inverter && <InverterCard snap={inverter} />}
+      {bt && <BluetoothSection bt={bt} />}
     </>
   );
 }

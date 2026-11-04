@@ -1,4 +1,4 @@
-import { MESSENGER_IDS, VICTRON_STATE_LABELS, type Alert, type AlertSeverity, type DeviceId, type DeviceStateMap } from '@elvis/shared';
+import { MESSENGER_IDS, VICTRON_STATE_LABELS, inverterAlarms, type Alert, type AlertSeverity, type DeviceId, type DeviceStateMap } from '@elvis/shared';
 import type { ElvisConfig } from './config.js';
 import { DEVICE_DEFINITIONS } from './devices/drivers.js';
 
@@ -104,6 +104,16 @@ export function evaluateAlerts(get: StateGetter, offline: DeviceId[], limits: El
       if (d.warnBelowV !== null && voltage !== null && voltage < d.warnBelowV) {
         add({ id: `${id}:low`, severity: 'warn', system: 'energy', title: `${d.name}: Spannung niedrig`, detail: `${volts(voltage)} (Grenze ${volts(d.warnBelowV)})` });
       }
+    }
+  }
+
+  const inverter = get('inverter');
+  if (inverter && !offline.includes('inverter') && inverter.link.connected) {
+    // Nicht erreichbar meldet bereits „offline“; hier, was bei bestehender Verbindung zum MK3 auffällt
+    if (inverter.link.error) add({ id: 'inverter:bus', severity: 'warn', system: 'energy', title: `Wechselrichter: ${inverter.link.error}` });
+    for (const a of inverterAlarms(inverter.leds)) add({ id: `inverter:${a.id}`, severity: a.severity, system: 'energy', title: `Wechselrichter: ${a.title}` });
+    if (inverter.remotePanel) {
+      add({ id: 'inverter:panel', severity: 'info', system: 'energy', title: 'Wechselrichter: Fernbedienung am VE.Bus', detail: 'Ihr Schalter hat Vorrang – Schalten aus ELVIS kann wirkungslos sein' });
     }
   }
 
