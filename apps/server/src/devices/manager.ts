@@ -46,7 +46,7 @@ export class DeviceManager {
   constructor(
     private readonly config: ElvisConfig,
     private readonly log: Logger,
-    private readonly configs: DeviceConfigStore = new DeviceConfigStore(null, config.devices),
+    private readonly configs: DeviceConfigStore = new DeviceConfigStore(null, config.devices, config.edition),
     private readonly deps: DriverDeps = {
       cameras: { list: () => [], onChange: () => () => {} },
       wifi: { list: () => [], onChange: () => () => {}, storeClients: () => {}, clearClients: () => {} },
@@ -105,7 +105,7 @@ export class DeviceManager {
 
   /** Alle Module mit Konfiguration und verfügbaren Treibern (für die Einstellungen). */
   modules(): DeviceModule[] {
-    return DEVICE_IDS.map((id) => this.module(id));
+    return DEVICE_IDS.filter((id) => this.configs.allows(id)).map((id) => this.module(id));
   }
 
   module(id: DeviceId, known?: DeviceModuleConfig): DeviceModule {

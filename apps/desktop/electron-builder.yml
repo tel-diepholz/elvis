@@ -1,0 +1,34 @@
+# ELVIS lite – Windows-Installer (NSIS). Bauen: npm run dist -w @elvis/desktop
+appId: app.einsatzleitwagen.elvis.lite
+productName: ELVIS lite
+copyright: MIT-Lizenz
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - "!dist/web/**"
+  - package.json
+extraResources:
+  - from: dist/web
+    to: web
+  - from: build/icon.png
+    to: icon.png
+asar: true
+asarUnpack:
+  - "**/*.node"
+# Kein Neuübersetzen: better-sqlite3 (ab 12) bringt N-API-Prebuilds mit, die auch unter Electron laufen; die
+# optionalen nativen Teile von ssh2 (über dockerode, in lite ungenutzt) fängt ssh2 selbst ab.
+npmRebuild: false
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: ELVIS lite
+  include: build/installer.nsh

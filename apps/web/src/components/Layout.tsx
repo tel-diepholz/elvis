@@ -14,7 +14,7 @@ import { AccountMenu } from './auth/AccountMenu';
 import { DueTasksButton, DueTasksPanel } from './tasks/DueTasks';
 import { MessagesButton, MessagesPanel } from './messages/MessageAlerts';
 import { useMessageAttention } from './messages/messageHooks';
-import { MOBILE_PRIMARY, NAV, type NavItem } from './nav';
+import { inEdition, MOBILE_PRIMARY, NAV, type NavItem } from './nav';
 import { MESSENGER_IDS, type MessengerState, type TelephonyState } from '@elvis/shared';
 
 /** Neue Personalbögen im Posteingang */
@@ -88,6 +88,9 @@ export function Layout() {
   const badges: Badges = { personnelSheets: unreadSheets, messages: messageCount, mail: mail.unread, chat: chat.unread };
 
   useEffect(() => setDrawerOpen(false), [location.pathname]);
+  useEffect(() => {
+    document.title = vehicle?.name ? `ELVIS · ${vehicle.name}` : 'ELVIS';
+  }, [vehicle?.name]);
 
   const alarmCount = alerts.filter((a) => a.severity === 'alarm').length;
   const alertTone = alarmCount > 0 ? 'alarm' : alerts.some((a) => a.severity === 'warn') ? 'warn' : 'muted';
@@ -102,7 +105,7 @@ export function Layout() {
             {group.label === 'Einsatz' && incident && <span className="nav-live">aktiv</span>}
           </div>
           {group.items
-            .filter((item) => (!item.requiresDocker || dockerEnabled) && (!item.requiresAdmin || user?.isAdmin) && (!item.requiresMail || mail.available) && (!item.requiresChat || chat.available))
+            .filter((item) => inEdition(item, info?.edition) && (!item.requiresDocker || dockerEnabled) && (!item.requiresAdmin || user?.isAdmin) && (!item.requiresMail || mail.available) && (!item.requiresChat || chat.available))
             .map((item) => {
               const needsLogin = !!item.requiresLogin && !user;
               const noIncident = !!item.requiresIncident && !incident;
@@ -185,7 +188,7 @@ export function Layout() {
       </main>
 
       <nav className="bottombar" aria-label="Schnellnavigation">
-        {MOBILE_PRIMARY.map((to) => {
+        {MOBILE_PRIMARY.filter((to) => inEdition(allItems.find((i) => i.to === to)!, info?.edition)).map((to) => {
           const item = allItems.find((i) => i.to === to)!;
           const Icon = item.icon;
           return (

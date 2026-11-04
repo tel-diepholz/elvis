@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
-import { DEVICE_IDS, type DeviceId } from '@elvis/shared';
+import { DEVICE_IDS, EDITIONS, type DeviceId, type Edition } from '@elvis/shared';
 
 /** Vorgabe je Fahrzeugmodul; in den Einstellungen gespeicherte Werte haben Vorrang. */
 const driverSchema = z.object({
@@ -29,6 +29,8 @@ const mapSourceSchema = z.object({
 export type MapSourceConfig = z.infer<typeof mapSourceSchema>;
 
 const configSchema = z.object({
+  /** Ausbaustufe: „full“ (Fahrzeugserver) oder „lite“ (Desktop-App ohne Fahrzeugtechnik, siehe applyEdition). */
+  edition: z.enum(EDITIONS as [Edition, ...Edition[]]).default('full'),
   host: z.string().default('0.0.0.0'),
   port: z.coerce.number().int().default(8080),
   dataDir: z.string().default('./data'),
@@ -160,9 +162,10 @@ export type ElvisConfig = z.infer<typeof configSchema>;
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ElvisConfig {
   const file = resolve(env.ELVIS_CONFIG ?? 'config/elvis.json');
   const fromFile = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
-  return configSchema.parse({
+  return parseConfig({
     ...fromFile,
     configFile: file,
+    ...(env.ELVIS_EDITION && { edition: env.ELVIS_EDITION }),
     ...(env.HOST && { host: env.HOST }),
     ...(env.PORT && { port: env.PORT }),
     ...(env.ELVIS_DATA_DIR && { dataDir: env.ELVIS_DATA_DIR }),
@@ -183,5 +186,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ElvisConfig {
 }
 
 export function parseConfig(input: unknown): ElvisConfig {
-  return configSchema.parse(input);
+  return configSchema.parse(applyEdition(input));
+}
+
+type RawConfig = Record<string, Record<string, unknown> | unknown> & { edition?: unknown };
+
+/**
+ * Vorgaben der Ausbaustufe vor den allgemeinen Vorgaben anwenden. ELVIS lite hat keine Docker-/Addon-Verwaltung
+ * (erzwungen), empfängt standardmäßig keine Scans per SMTP und heißt „ELW 1“; ausdrückliche Angaben in der
+ * Konfiguration (außer Docker) gelten weiter. Gerätemodule begrenzt der DeviceConfigStore.
+ */
+function applyEdition(input: unknown): unknown {
+  if (!input || typeof input !== 'object') return input;
+  const raw = input as RawConfig;
+  if (raw.edition !== 'lite') return raw;
+  const section = (key: string) => (raw[key] && typeof raw[key] === 'object' ? (raw[key] as Record<string, unknown>) : {});
+  return {
+    ...raw,
+    docker: { ...section('docker'), enabled: false },
+    scan: { smtpPort: null, ...section('scan') },
+    vehicle: { name: 'ELW 1', ...section('vehicle') },
+  };
 }

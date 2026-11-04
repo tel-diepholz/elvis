@@ -1,4 +1,4 @@
-import { optionsSchema, type AddonOption, type DeviceId, type DeviceModuleConfig, type OptionValues } from '@elvis/shared';
+import { editionAllowsDevice, optionsSchema, type AddonOption, type Edition, type DeviceId, type DeviceModuleConfig, type OptionValues } from '@elvis/shared';
 import type { ElvisConfig } from '../config.js';
 import type { Db } from '../db/index.js';
 import { HttpError } from '../errors.js';
@@ -40,18 +40,25 @@ export class DeviceConfigStore {
   constructor(
     private readonly db: Db | null,
     private readonly defaults: ElvisConfig['devices'],
+    private readonly edition: Edition = 'full',
   ) {}
+
+  /** Kann das Modul in dieser Ausbaustufe eingerichtet werden? (ELVIS lite: nur einzelne Messenger) */
+  allows(id: DeviceId): boolean {
+    return editionAllowsDevice(this.edition, id);
+  }
 
   get(id: DeviceId): { config: DeviceModuleConfig; source: 'settings' | 'config' } {
     const row = this.db?.prepare('SELECT value FROM settings WHERE key = ?').get(`device:${id}`) as { value: string } | undefined;
     const stored = row ? (JSON.parse(row.value) as Partial<DeviceModuleConfig>) : null;
-    const fallback = this.defaults[id] ?? { enabled: true, driver: '', options: {} };
+    // ELVIS lite: ohne Einrichtung bleibt jedes Modul aus (keine Simulation), nicht erlaubte Module immer
+    const fallback = this.defaults[id] ?? { enabled: this.edition === 'full', driver: '', options: {} };
     const raw = stored ?? fallback;
     const drivers = DEVICE_DEFINITIONS[id].drivers as Record<string, { options: Record<string, AddonOption> }>;
     // Vorgabe: Simulation, bei Modulen ohne Simulator der erste Treiber
     const driver = raw.driver && drivers[raw.driver] ? raw.driver : drivers.sim ? 'sim' : Object.keys(drivers)[0]!;
     return {
-      config: { enabled: raw.enabled ?? true, driver, options: normalizeOptions(drivers[driver]!.options, (raw.options ?? {}) as Record<string, unknown>) },
+      config: { enabled: (raw.enabled ?? true) && this.allows(id), driver, options: normalizeOptions(drivers[driver]!.options, (raw.options ?? {}) as Record<string, unknown>) },
       source: stored ? 'settings' : 'config',
     };
   }
@@ -59,6 +66,7 @@ export class DeviceConfigStore {
   /** Prüft gegen das Formular des Treibers und speichert; liefert die bereinigte Konfiguration. */
   set(id: DeviceId, input: DeviceModuleConfig, actor: string): DeviceModuleConfig {
     if (!this.db) throw new HttpError(500, 'Keine Datenbank für die Modulkonfiguration');
+    if (!this.allows(id)) throw new HttpError(404, `Modul ${id} gibt es in dieser Ausbaustufe nicht`);
     const drivers = DEVICE_DEFINITIONS[id].drivers as Record<string, { options: Record<string, AddonOption> }>;
     const def = drivers[input.driver];
     if (!def) throw new HttpError(400, `Unbekannter Treiber „${input.driver}“`);

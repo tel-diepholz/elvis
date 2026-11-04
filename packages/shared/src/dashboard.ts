@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Edition } from './edition';
 import { DISPLAY_TEXT_MAX, DISPLAY_TILE_TYPES, tilesOverlap, type DisplayTileType, type DisplayTileTypeInfo } from './displays';
 
 /**
@@ -12,6 +13,8 @@ export type DashboardTileType = Exclude<DisplayTileType, 'scenes'> | 'incident' 
 export interface DashboardTileTypeInfo extends DisplayTileTypeInfo {
   /** Inhalt nur für angemeldete Benutzer (Einsatzdaten) */
   requiresLogin?: boolean;
+  /** Braucht Fahrzeugtechnik (Gerätemodule) – in ELVIS lite nicht im Angebot */
+  requiresVehicle?: boolean;
 }
 
 /** Kachel der Bildschirme mit eigener Startgröße für die Übersicht (Zeilen sind niedriger als auf einem Bildschirm) */
@@ -34,20 +37,24 @@ export const DASHBOARD_TILE_TYPES: Record<DashboardTileType, DashboardTileTypeIn
   weather: fromDisplay('weather', 4, 3),
   forecast: fromDisplay('forecast', 8, 4),
   clock: fromDisplay('clock', 4, 3),
-  alerts: fromDisplay('alerts', 4, 4, { label: 'Fahrzeugmeldungen' }),
-  radio: { label: 'Funkgeräte', description: 'Alle Funkgeräte mit Erreichbarkeit, Rufgruppe und Status – nicht erreichbare rot', size: { w: 4, h: 4 } },
-  radioTimeline: { label: 'Funkverkehr', description: 'Verlauf der Funksprüche auf den eigenen Funkgeräten, wie auf der Seite „Funk“', size: { w: 4, h: 7 } },
-  network: fromDisplay('network', 4, 3),
-  energy: { label: 'Energie', description: 'Wechselrichter (VE.Bus), Batterien und Ladegeräte (Victron über Bluetooth)', size: { w: 4, h: 3 } },
-  monitoring: { label: 'Monitoring', description: 'Erreichbarkeit der überwachten Systeme', size: { w: 4, h: 3 } },
-  camera: fromDisplay('camera', 4, 4),
-  video: fromDisplay('video', 4, 4),
+  alerts: fromDisplay('alerts', 4, 4, { label: 'Fahrzeugmeldungen', requiresVehicle: true }),
+  radio: { label: 'Funkgeräte', description: 'Alle Funkgeräte mit Erreichbarkeit, Rufgruppe und Status – nicht erreichbare rot', size: { w: 4, h: 4 }, requiresVehicle: true },
+  radioTimeline: { label: 'Funkverkehr', description: 'Verlauf der Funksprüche auf den eigenen Funkgeräten, wie auf der Seite „Funk“', size: { w: 4, h: 7 }, requiresVehicle: true },
+  network: fromDisplay('network', 4, 3, { requiresVehicle: true }),
+  energy: { label: 'Energie', description: 'Wechselrichter (VE.Bus), Batterien und Ladegeräte (Victron über Bluetooth)', size: { w: 4, h: 3 }, requiresVehicle: true },
+  monitoring: { label: 'Monitoring', description: 'Erreichbarkeit der überwachten Systeme', size: { w: 4, h: 3 }, requiresVehicle: true },
+  camera: fromDisplay('camera', 4, 4, { requiresVehicle: true }),
+  video: fromDisplay('video', 4, 4, { requiresVehicle: true }),
   text: fromDisplay('text', 4, 2),
   image: fromDisplay('image', 4, 4, { requiresLogin: true }),
-  guestWifi: fromDisplay('guestWifi', 4, 4, { requiresLogin: true }),
+  guestWifi: fromDisplay('guestWifi', 4, 4, { requiresLogin: true, requiresVehicle: true }),
 };
 
 export const DASHBOARD_TILE_IDS = Object.keys(DASHBOARD_TILE_TYPES) as DashboardTileType[];
+
+/** Kacheltypen, die in dieser Ausbaustufe angeboten werden (ELVIS lite: ohne Fahrzeugtechnik) */
+export const dashboardTileIds = (edition: Edition): DashboardTileType[] =>
+  edition === 'full' ? DASHBOARD_TILE_IDS : DASHBOARD_TILE_IDS.filter((t) => !DASHBOARD_TILE_TYPES[t].requiresVehicle);
 
 /** Spalten des Rasters; auf schmalen Bildschirmen werden die Kacheln untereinander gezeigt */
 export const DASHBOARD_COLS = 12;
@@ -101,6 +108,21 @@ export const DEFAULT_DASHBOARD: DashboardLayout = {
     { id: 'network', type: 'network', x: 0, y: 10, w: 4, h: 3, config: {} },
   ],
 };
+
+/** Grundeinstellung in ELVIS lite: Einsatz, Kommunikation und Lage statt Fahrzeugtechnik */
+export const LITE_DASHBOARD: DashboardLayout = {
+  tiles: [
+    { id: 'incident', type: 'incident', x: 0, y: 0, w: 8, h: 3, config: {} },
+    { id: 'clock', type: 'clock', x: 8, y: 0, w: 4, h: 3, config: {} },
+    { id: 'journal', type: 'journal', x: 0, y: 3, w: 8, h: 4, config: {} },
+    { id: 'messages', type: 'messages', x: 8, y: 3, w: 4, h: 4, config: {} },
+    { id: 'weather', type: 'weather', x: 0, y: 7, w: 4, h: 3, config: {} },
+    { id: 'mail', type: 'mail', x: 4, y: 7, w: 4, h: 5, config: {} },
+    { id: 'chat', type: 'chat', x: 8, y: 7, w: 4, h: 5, config: {} },
+  ],
+};
+
+export const defaultDashboard = (edition: Edition): DashboardLayout => (edition === 'lite' ? LITE_DASHBOARD : DEFAULT_DASHBOARD);
 
 type Box = Pick<DashboardTile, 'x' | 'y' | 'w' | 'h'>;
 

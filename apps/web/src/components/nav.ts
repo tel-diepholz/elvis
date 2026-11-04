@@ -33,6 +33,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
+import type { Edition } from '@elvis/shared';
 
 export interface NavItem {
   to: string;
@@ -42,6 +43,8 @@ export interface NavItem {
   requiresIncident?: boolean;
   /** Hidden when the Docker/addon management is disabled in the server config. */
   requiresDocker?: boolean;
+  /** Braucht Fahrzeugtechnik (Gerätemodule) – in ELVIS lite ausgeblendet */
+  requiresVehicle?: boolean;
   /** Locked for anonymous workstations. */
   requiresLogin?: boolean;
   /** Only shown to admins. */
@@ -66,14 +69,14 @@ export const NAV: NavGroup[] = [
       { to: '/', label: 'Übersicht', icon: LayoutDashboard },
       { to: '/karte', label: 'Karte', icon: Map },
       { to: '/wetter', label: 'Wetter', icon: CloudSun },
-      { to: '/energie', label: 'Energie', icon: BatteryCharging },
-      { to: '/funk', label: 'Funk', icon: Radio },
-      { to: '/telefonie', label: 'Telefonie', icon: Phone },
-      { to: '/telefone', label: 'Telefone', icon: PhoneCall, requiresLogin: true },
-      { to: '/netzwerk', label: 'Netzwerk', icon: Network },
-      { to: '/monitoring', label: 'Monitoring', icon: Activity },
-      { to: '/kameras', label: 'Kameras', icon: Cctv },
-      { to: '/bildschirme', label: 'Bildschirme', icon: MonitorSmartphone },
+      { to: '/energie', label: 'Energie', icon: BatteryCharging, requiresVehicle: true },
+      { to: '/funk', label: 'Funk', icon: Radio, requiresVehicle: true },
+      { to: '/telefonie', label: 'Telefonie', icon: Phone, requiresVehicle: true },
+      { to: '/telefone', label: 'Telefone', icon: PhoneCall, requiresLogin: true, requiresVehicle: true },
+      { to: '/netzwerk', label: 'Netzwerk', icon: Network, requiresVehicle: true },
+      { to: '/monitoring', label: 'Monitoring', icon: Activity, requiresVehicle: true },
+      { to: '/kameras', label: 'Kameras', icon: Cctv, requiresVehicle: true },
+      { to: '/bildschirme', label: 'Bildschirme', icon: MonitorSmartphone, requiresVehicle: true },
       { to: '/drucken', label: 'Drucken', icon: Printer },
       { to: '/scans', label: 'Posteingang', icon: ScanLine, requiresLogin: true, badge: 'personnelSheets' },
       { to: '/mail', label: 'E-Mail', icon: AtSign, requiresLogin: true, requiresMail: true, badge: 'mail' },
@@ -111,3 +114,6 @@ export const NAV: NavGroup[] = [
 
 /** Primary destinations in the mobile bottom bar; everything else lives in the menu drawer. */
 export const MOBILE_PRIMARY = ['/', '/karte', '/wetter', '/einsatz'];
+
+/** Nav-Einträge, die die Ausbaustufe überhaupt anbietet (ELVIS lite: ohne Fahrzeugtechnik) */
+export const inEdition = (item: NavItem, edition: Edition | undefined) => !item.requiresVehicle || edition !== 'lite';

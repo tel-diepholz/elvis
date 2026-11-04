@@ -1,9 +1,12 @@
-import { DEFAULT_DASHBOARD, dashboardLayoutSchema, type DashboardLayout, type DashboardResponse } from '@elvis/shared';
+import { dashboardLayoutSchema, defaultDashboard, type DashboardLayout, type DashboardResponse, type Edition } from '@elvis/shared';
 import type { Db } from '../db/index.js';
 
 /** Übersicht: Kachelanordnung je Benutzer – ohne eigene Anordnung gilt die Grundeinstellung */
 export class DashboardService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly edition: Edition = 'full',
+  ) {}
 
   get(userId: number): DashboardResponse {
     const r = this.db.prepare('SELECT layout_json, updated_at FROM user_dashboards WHERE user_id = ?').get(userId) as { layout_json: string; updated_at: string } | undefined;
@@ -12,7 +15,7 @@ export class DashboardService {
       const parsed = dashboardLayoutSchema.safeParse(JSON.parse(r.layout_json));
       if (parsed.success) return { layout: parsed.data, custom: true, updatedAt: r.updated_at };
     }
-    return { layout: DEFAULT_DASHBOARD, custom: false, updatedAt: null };
+    return { layout: defaultDashboard(this.edition), custom: false, updatedAt: null };
   }
 
   save(userId: number, layout: DashboardLayout): DashboardResponse {

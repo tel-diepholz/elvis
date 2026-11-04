@@ -161,7 +161,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const relay = new RelayClient(db, config.app.relayUrl, opts.relayFetch);
   const hooks = new HookService(db, relay, server.log);
   const messengerServices = new MessengerProvisions();
-  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices), { cameras, wifi, monitoring, bluetooth, telephony: telephonyBus, messenger: messengerBus, vault: dbVault(db), hooks, messengerServices });
+  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices, config.edition), { cameras, wifi, monitoring, bluetooth, telephony: telephonyBus, messenger: messengerBus, vault: dbVault(db), hooks, messengerServices });
   const settings = new SettingsService(db, { vehicle: config.vehicle });
   const hub = new LiveHub(devices, () => settings.get().vehicle);
   settings.onChange(() => hub.invalidate(['settings']));
@@ -402,6 +402,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     hub.register(api);
     api.get('/api/health', async () => ({ ok: true, time: new Date().toISOString() }));
     api.get('/api/info', async () => ({
+      edition: config.edition,
       vehicle: settings.get().vehicle,
       drivers: Object.fromEntries(devices.snapshots().map((d) => [d.id, d.driver])),
       limits: config.alerts,
@@ -449,7 +450,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     contactRoutes(api, { contacts, personnel });
     phonebookRoutes(api, { phonebook, store, notify: (t) => hub.invalidate(t) });
     phoneRoutes(api, { phones, store, notify: (t) => hub.invalidate(t) });
-    dashboardRoutes(api, { dashboards: new DashboardService(db) });
+    dashboardRoutes(api, { dashboards: new DashboardService(db, config.edition) });
     backupRoutes(api, { backup, restore });
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
