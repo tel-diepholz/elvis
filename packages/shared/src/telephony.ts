@@ -22,6 +22,12 @@ export function phoneKey(number: string): string {
   return d;
 }
 
+/** Alphanumerischer SMS-Absender („Telegram“, „DHL“): enthält Buchstaben, ist also keine Rufnummer */
+export const isAlphaSender = (sender: string) => /\p{L}/u.test(sender);
+
+/** Absender einer empfangenen SMS: Rufnummer als phoneKey, alphanumerischer Absender unverändert (getrimmt) */
+export const smsSenderKey = (sender: string) => (isAlphaSender(sender) ? sender.trim() : phoneKey(sender));
+
 /** Deutsche Mobilfunknummer (+4915…, +4916…, +4917…) */
 export const isMobileNumber = (number: string) => /^\+491[5-7]\d{6,}$/.test(phoneKey(number));
 

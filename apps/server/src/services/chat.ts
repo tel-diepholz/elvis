@@ -13,6 +13,7 @@ import {
   chatThreadKey,
   chatPeer,
   chatSettingsSchema,
+  isAlphaSender,
   isChatImage,
   isMessenger,
   locationLink,
@@ -199,10 +200,13 @@ export class ChatService {
   // --- Eingang ---
 
   ingestSms(s: IncomingSms): ChatMessage {
-    const number = phoneKey(s.number);
+    // Alphanumerischer Absender („Telegram“): keine Rufnummer, das Gespräch läuft über „sms:<Absender>“
+    const alpha = isAlphaSender(s.number);
+    const peer = alpha ? s.number.trim() : phoneKey(s.number);
+    const number = alpha ? null : peer;
     const info = this.db
       .prepare("INSERT INTO chat_messages (channel, folder, peer, number, text, port, status, seen, date, created_by) VALUES ('sms', 'inbox', ?, ?, ?, ?, 'received', 0, ?, 'Gateway')")
-      .run(number, number, s.text, s.port, s.receivedAt);
+      .run(peer, number, s.text, s.port, s.receivedAt);
     this.deps.notify(['chat']);
     return this.message(Number(info.lastInsertRowid));
   }

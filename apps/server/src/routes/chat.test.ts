@@ -122,6 +122,18 @@ describe('Nachrichten: SMS', () => {
     expect((await req('GET', '/api/chat/messages', undefined, '')).status).toBe(401);
   });
 
+  it('öffnet Gespräche mit alphanumerischem Absender, je Absender getrennt', async () => {
+    received('Telegram', 'Dein Code 1234');
+    received('DHL', 'Paket kommt');
+    const threads = (await req<ChatThread[]>('GET', '/api/chat/threads')).body;
+    const tg = threads.find((t) => t.key === 'sms:Telegram');
+    expect(tg).toMatchObject({ peer: 'Telegram', numbers: [], count: 1 });
+    expect(threads.some((t) => t.key === 'sms:DHL')).toBe(true);
+    expect(threads.some((t) => t.key === '')).toBe(false);
+    const msgs = (await req<ChatMessage[]>('GET', `/api/chat/thread?key=${encodeURIComponent('sms:Telegram')}`)).body;
+    expect(msgs).toMatchObject([{ text: 'Dein Code 1234', number: null, peer: 'Telegram' }]);
+  });
+
   it('sendet über das Gateway, Ergebnis im Ordner „Gesendet“ und im Bedienprotokoll', async () => {
     const res = await req<ChatMessage[]>('POST', '/api/chat/send', { to: [{ channel: 'sms', to: '0171 1234567' }], text: 'Bitte Rückruf' });
     expect(res.status).toBe(202);
