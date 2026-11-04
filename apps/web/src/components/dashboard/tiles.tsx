@@ -28,9 +28,9 @@ import {
   Wifi,
   type LucideIcon,
 } from 'lucide-react';
-import { CHAT_CHANNEL_LABEL, DASHBOARD_TILE_TYPES, formatPhone, JOURNAL_CATEGORY_LABELS, bluetoothSummary, formatStrength, sumStrength, type DashboardTile, type DashboardTileType, type DisplayTile, type Incident, type MessageInput } from '@elvis/shared';
+import { CHAT_CHANNEL_LABEL, DASHBOARD_TILE_TYPES, formatPhone, JOURNAL_CATEGORY_LABELS, bluetoothSummary, formatStrength, INVERTER_STATE_LABELS, inverterAlarms, type InverterState, sumStrength, type DashboardTile, type DashboardTileType, type DisplayTile, type Incident, type MessageInput } from '@elvis/shared';
 import { api } from '../../lib/api';
-import { fmtAgo, fmtDateTime, fmtDuration, fmtTime } from '../../lib/format';
+import { fmtAgo, fmtDateTime, fmtDuration, fmtNum, fmtTime } from '../../lib/format';
 import { useActiveIncident, useNow } from '../../lib/hooks';
 import { useDevice } from '../../lib/live';
 import { useAuth } from '../../lib/auth';
@@ -322,13 +322,29 @@ function RadioTimelineTile() {
   );
 }
 
+/** Kurzfassung des Wechselrichters: Zustand, Ausgang, Batterie */
+function inverterSummary(s: InverterState): string {
+  const out = s.outputW !== null ? `${fmtNum(s.outputW, 0)} W` : s.phases[0]?.acOut.a != null ? `${fmtNum(s.phases[0].acOut.a, 1)} A` : null;
+  const dc = s.dc.v !== null ? `${fmtNum(s.dc.v, 1)} V` : null;
+  return [s.opState ? INVERTER_STATE_LABELS[s.opState] : null, out, dc].filter(Boolean).join(' · ') || '–';
+}
+
 function EnergyTile() {
   const bt = useDevice('bluetooth');
-  if (!bt) return <Empty>Bluetooth (Victron) nicht aktiviert</Empty>;
-  const { devices } = bt.state;
-  if (!devices.length) return <Empty>Keine Geräte eingerichtet</Empty>;
+  const inv = useDevice('inverter');
+  if (!bt && !inv) return <Empty>Wechselrichter und Bluetooth (Victron) nicht aktiviert</Empty>;
+  const devices = bt?.state.devices ?? [];
+  if (!devices.length && !inv) return <Empty>Keine Geräte eingerichtet</Empty>;
+  const invAlarms = inv ? inverterAlarms(inv.state.leds) : [];
   return (
     <ul className="dash-status-list">
+      {inv && (
+        <li>
+          <Dot tone={!inv.online ? 'alarm' : invAlarms.some((a) => a.severity === 'alarm') ? 'alarm' : invAlarms.length || inv.state.link.error ? 'warn' : inv.state.opState === 'off' ? 'muted' : 'ok'} />
+          <span className="ellipsis">Wechselrichter</span>
+          <span className="mono">{!inv.online ? 'nicht verbunden' : (invAlarms[0]?.title ?? inverterSummary(inv.state))}</span>
+        </li>
+      )}
       {devices.map((d) => {
         const low = d.readout && 'voltageV' in d.readout && d.readout.voltageV !== null && d.warnBelowV !== null && d.readout.voltageV < d.warnBelowV;
         return (

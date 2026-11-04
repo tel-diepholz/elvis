@@ -9,6 +9,8 @@ import { OpenWrtWifiAdapter, type WifiSource } from './drivers/openwrt.js';
 import { RADIOS_PATTERN, ReichertZbeAdapter, parseRadios } from './drivers/reichert/adapter.js';
 import { DEFAULT_PORT as ZBE_PORT } from './drivers/reichert/protocol.js';
 import { TeltonikaAdapter } from './drivers/teltonika.js';
+import { VictronVebusAdapter, serialOpener, tcpOpener } from './drivers/victron-vebus/adapter.js';
+import { EmulatorLink, MultiPlusEmulator } from './drivers/victron-vebus/emulator.js';
 import { TRUNKS_PATTERN, YeastarTgAdapter, parseTrunks } from './drivers/yeastar/adapter.js';
 import { DEFAULT_PORT as TG_PORT } from './drivers/yeastar/protocol.js';
 import { MediaSim } from './sim/media.js';
@@ -207,6 +209,74 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
         },
         create: (o, deps) =>
           new BluetoothAdapter('bluez', deps.bluetooth, new BluezScanner(String(o.adapter || 'hci0'), undefined, { passive: o.passive !== false }), { staleMs: Number(o.staleSeconds || 60) * 1000 }),
+      },
+    },
+  },
+  inverter: {
+    name: 'Wechselrichter',
+    system: 'energy',
+    drivers: {
+      sim: {
+        label: 'Simulation',
+        description: 'Simulierter MultiPlus 24 V hinter einem MK3 – spricht dasselbe VE.Bus-Protokoll wie das echte Gerät. Landstrom ist abwechselnd 20 Minuten da und 10 Minuten weg.',
+        options: { units: { type: 'int', label: 'Geräte am Bus', required: false, default: 1, min: 1, max: 4, help: 'Mehrere parallel geschaltete Geräte auf einer Phase (Adresse 0 ist Master).' } },
+        create: (o) => {
+          const emulator = new MultiPlusEmulator({ units: Number(o.units || 1), shoreCycle: [1200, 600] });
+          return new VictronVebusAdapter({
+            driver: 'sim',
+            target: 'Simulation',
+            open: async () => {
+              emulator.start();
+              return new EmulatorLink(emulator);
+            },
+            pollMs: 2000,
+            reconnectMs: 5000,
+            repeatPanelState: true,
+          });
+        },
+      },
+      'victron-vebus': {
+        label: 'Victron VE.Bus über MK3-USB',
+        description:
+          'MultiPlus/Quattro am VE.Bus über ein MK3-USB-Interface – direkt am Server oder an einem Router, der die Schnittstelle als TCP-Port bereitstellt (Teltonika „Serial over IP“, 2400 Baud 8N1). Erkennt die Geräte am Bus, zeigt Messwerte und schaltet wie ein Digital Multi Control. Ein DMC am Bus hat Vorrang. Zum Testen ohne Gerät: „npm run vebus:sim -w @elvis/server“.',
+        options: {
+          transport: {
+            type: 'select',
+            label: 'Anschluss des MK3',
+            required: true,
+            default: 'tcp',
+            choices: [
+              { value: 'tcp', label: 'Über das Netzwerk (Router mit Serial over IP)' },
+              { value: 'serial', label: 'USB am ELVIS-Server' },
+            ],
+          },
+          host: { type: 'string', label: 'Adresse des Routers', required: false, default: '192.168.1.1', help: 'Nur bei Anschluss über das Netzwerk: IP-Adresse oder Hostname des Routers, an dem das MK3 steckt.' },
+          port: { type: 'int', label: 'TCP-Port', required: false, default: 4001, min: 1, max: 65535, help: 'Port aus „Serial over IP“ (Modus TCP-Server) im Router.' },
+          serialPort: { type: 'serialport', label: 'Serielle Schnittstelle', required: false, help: 'Nur bei USB am Server: das MK3 meldet sich als FTDI-Gerät.' },
+          repeatPanelState: {
+            type: 'bool',
+            label: 'Betriebsart dauerhaft halten',
+            required: false,
+            default: true,
+            help: 'Das MK3 wiederholt die zuletzt gewählte Betriebsart alle ½ s selbst – wie ein Digital Multi Control, auch wenn ELVIS aus ist.',
+          },
+          pollSeconds: { type: 'int', label: 'Abfrageintervall (Sekunden)', required: false, default: 3, min: 1, max: 60 },
+          reconnectSeconds: { type: 'int', label: 'Neuer Verbindungsversuch nach (Sekunden)', required: false, default: 10, min: 2, max: 300 },
+        },
+        create: (o) => {
+          const serial = o.transport === 'serial';
+          const host = String(o.host || '192.168.1.1');
+          const port = Number(o.port || 4001);
+          const path = String(o.serialPort || '/dev/ttyUSB0');
+          return new VictronVebusAdapter({
+            driver: 'victron-vebus',
+            target: serial ? path : `${host}:${port}`,
+            open: serial ? serialOpener(path) : tcpOpener(host, port),
+            pollMs: Number(o.pollSeconds || 3) * 1000,
+            reconnectMs: Number(o.reconnectSeconds || 10) * 1000,
+            repeatPanelState: o.repeatPanelState !== false,
+          });
+        },
       },
     },
   },

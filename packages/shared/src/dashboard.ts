@@ -38,7 +38,7 @@ export const DASHBOARD_TILE_TYPES: Record<DashboardTileType, DashboardTileTypeIn
   radio: { label: 'Funkgeräte', description: 'Alle Funkgeräte mit Erreichbarkeit, Rufgruppe und Status – nicht erreichbare rot', size: { w: 4, h: 4 } },
   radioTimeline: { label: 'Funkverkehr', description: 'Verlauf der Funksprüche auf den eigenen Funkgeräten, wie auf der Seite „Funk“', size: { w: 4, h: 7 } },
   network: fromDisplay('network', 4, 3),
-  energy: { label: 'Energie', description: 'Batterien und Ladegeräte (Victron über Bluetooth)', size: { w: 4, h: 3 } },
+  energy: { label: 'Energie', description: 'Wechselrichter (VE.Bus), Batterien und Ladegeräte (Victron über Bluetooth)', size: { w: 4, h: 3 } },
   monitoring: { label: 'Monitoring', description: 'Erreichbarkeit der überwachten Systeme', size: { w: 4, h: 3 } },
   camera: fromDisplay('camera', 4, 4),
   video: fromDisplay('video', 4, 4),

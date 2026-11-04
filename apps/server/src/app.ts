@@ -45,6 +45,7 @@ import { RadarService, type RadarFetch } from './services/radar.js';
 import { WeatherAlertWatch, WeatherService, type WeatherFetch } from './services/weather.js';
 import { weatherRoutes } from './routes/weather.js';
 import { trafficRoutes } from './routes/traffic.js';
+import { energyFlowRoutes } from './routes/energyflow.js';
 import { TrafficService, type AisSocketFactory, type TrafficFetch } from './services/traffic.js';
 import { AppLinkService } from './services/applinks.js';
 import { RelayClient, type RelayFetch } from './services/relay.js';
@@ -438,6 +439,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       stormLimitMs: config.alerts.stormWarnMs,
     });
     trafficRoutes(api, { traffic, store, notify: (t) => hub.invalidate(t) });
+    energyFlowRoutes(api, { db, store, notify: (t) => hub.invalidate(t) });
     appLinkRoutes(api, appLinks);
     personnelRoutes(api, personnel);
     mailRoutes(api, mail);

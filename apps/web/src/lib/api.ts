@@ -1,4 +1,5 @@
 import type { DamageAccount, DamageAccountInput, DamageAccountPatch, DamageCountBooking, DamageCountInput, DamageEntry, DamageEntryInput, DamageEntryPatch } from '@elvis/shared';
+import type { EnergyFlowInput, EnergyFlowSettings } from '@elvis/shared';
 import type { Phone, PhoneConfigInput, PhoneInput, PhoneKeyInput, PhoneKeySlot, PhoneSystemStatus, PagingZone } from '@elvis/shared';
 import {
   type CallRecord,
@@ -647,6 +648,8 @@ export const api = {
   trafficSearch: (q: string) => request<TrafficResult<TrafficHit>>('GET', `/api/traffic/search?${new URLSearchParams({ q })}`),
   trafficSettings: () => request<TrafficSettings>('GET', '/api/system/traffic'),
   saveTrafficSettings: (input: TrafficSettingsInput) => request<TrafficSettings>('PUT', '/api/system/traffic', input),
+  energyFlow: () => request<EnergyFlowSettings>('GET', '/api/energy-flow'),
+  saveEnergyFlow: (input: EnergyFlowInput) => request<EnergyFlowSettings>('PUT', '/api/system/energy-flow', input),
   weather: (pos: { lat: number; lon: number }) => request<WeatherReport>('GET', `/api/weather?lat=${pos.lat}&lon=${pos.lon}`),
   /** Liefert das PDF als Blob; Fehler kommen wie bei den übrigen Aufrufen als ApiError. */
   printMap: async (req: MapPrintRequest): Promise<{ pdf: Blob; filename: string; missingTiles: number }> => {
