@@ -39,16 +39,26 @@ Schleswig-Holstein und Thüringen bereit (Sachsen-Anhalt hat derzeit keinen erre
 Quellenangaben folgen den Dienstbeschreibungen. Vor dem Einsatz die Lizenz des Landes prüfen. Weitere WMS-Dienste lassen
 sich genauso eintragen, sofern sie EPSG:3857 unterstützen.
 
+**Fahrzeugstandort:** Das eigene Fahrzeug steht an der Position aus dem GPS der Wetterstation. Hat es keinen
+GPS-Empfang oder ist kein GPS-Empfänger eingerichtet, zeigt die Objektliste beim eigenen Fahrzeug das Stift-Symbol:
+Danach in die Karte tippen (oder „Am Einsatzort“ wählen). Der Papierkorb daneben entfernt die gesetzte Position. Das geht
+nach Anmeldung und nicht im Verlauf. Das Popup des Fahrzeugs zeigt, wer die Position wann gesetzt hat, und bietet
+ebenfalls „Verschieben“ und „Entfernen“.
+Die Reihenfolge ist: GPS mit Fix, sonst die von Hand gesetzte Position, sonst die letzte GPS-Position. Sobald wieder ein
+GPS-Fix vorliegt, verwirft ELVIS die von Hand gesetzte Position. Sie gilt überall, wo der Fahrzeugstandort gebraucht
+wird: Karte, Bildschirme, Wetter und Unwetterwarnungen, Luft- und Schiffsverkehr, Standort in Nachrichten
+(`/api/map/vehicle-position`, Setzen und Entfernen im Bedienprotokoll).
+
 **Bedienung:** Oben links stehen Suche, das Menü „Objekte“ (Einsatzort setzen, Gauß-Fahne oder Sektor 60°
 einfügen ([Ausbreitung](ausbreitung.md)), Flugzeug oder Schiff suchen ([Luft- und Schiffsverkehr](luft-und-schiffsverkehr.md)), Route planen, OpenStreetMap abfragen) und „Drucken“, oben rechts die Wahl des Kartenstils, unten links der Wind. Rechts liegt die einklappbare
-**Objektliste** des laufenden Einsatzes: an erster Stelle das eigene Fahrzeug (nur ausblendbar), dann Einsatzort,
+**Objektliste** der laufenden Lage: an erster Stelle das eigene Fahrzeug (nur ausblendbar), dann Einsatzort,
 Ausbreitungen und übernommene Such- und Overpass-Treffer (Punkte, Flächen, Linien). Ein Klick fliegt
 hin; Objekte lassen sich ein- und ausblenden, einstellen, einfärben (Flächen, Linien, Punkte, Sektoren – Gauß-Fahnen
 behalten ihre Stufenfarben) und entfernen. Punkte bekommen über denselben Knopf auf Wunsch ein Symbol aus allen
 rund 1.500 [Lucide](https://lucide.dev)-Icons (Suche mit englischen Namen, häufige Einsatzbegriffe wie „Feuer“,
-„Hydrant“ oder „Krankenhaus“ auch deutsch). Es erscheint auf Karte, Bildschirmen und im Druck. Die Objekte gehören zum Einsatz
+„Hydrant“ oder „Krankenhaus“ auch deutsch). Es erscheint auf Karte, Bildschirmen und im Druck. Die Objekte gehören zur Lage
 (`/api/incidents/:id/objects`): Alle Arbeitsplätze und die Kartenkacheln der Bildschirme sehen sie, sie erscheinen
-im Druck, Hinzufügen und Entfernen stehen im Einsatztagebuch, und nach dem Einsatz bleiben sie im Archiv lesbar.
+im Druck, Hinzufügen und Entfernen stehen im Einsatztagebuch, und nach der Lage bleiben sie im Archiv lesbar.
 
 **Ortssuche:** Das Suchfeld oben links in der Karte findet Straßen, Orte und Adressen. Treffer in der Nähe der
 Kartenmitte stehen vorn. Ein Treffer fliegt die Karte an, setzt eine Markierung mit UTMREF und lässt sich per
@@ -72,8 +82,8 @@ Feuerwehrhäuser. Jede Vorlage steht in der Karte direkt im Menü **Objekte** un
 aktuellen Kartenausschnitt ab. ELVIS bringt keine eigenen Vorlagen mit. **Objekte → OpenStreetMap abfragen …** öffnet
 einen Bereich für eigene Abfragen: als einfacher Tag-Filter (z. B. `amenity` = `fire_station`, alle Filter müssen
 zutreffen) oder direkt in [Overpass QL](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL). Dort steht
-`{{bbox}}` für den Ausschnitt, und `out geom;` liefert auch Linien und Flächen. Abfragen lassen sich im laufenden
-Einsatz speichern (`/api/incidents/:id/overpass-queries`).
+`{{bbox}}` für den Ausschnitt, und `out geom;` liefert auch Linien und Flächen. Abfragen lassen sich in der laufenden
+Lage speichern (`/api/incidents/:id/overpass-queries`).
 
 Eine Abfrage kann ein Symbol (Lucide-Icon) und ein Schild mit Tag-Werten festlegen, z. B. `DN {fire_hydrant:diameter}`.
 Fehlen alle verwendeten Tags, entfällt das Schild. Die Treffer erscheinen wie Suchtreffer: Punkte als Kreis oder mit
@@ -98,7 +108,7 @@ beachtet.
 
 Ab zwei Halten berechnet ELVIS die Route und zeigt sie als Linie auf der Karte, mit nummerierten Halten (Start grün,
 Ziel rot), dazu Strecke und Fahrzeit.
-- **In Objektliste übernehmen** legt die Route als Linie im Einsatz ab, z. B. „3,1 km · 11 min · LKW“. Sie erscheint
+- **In Objektliste übernehmen** legt die Route als Linie in der Lage ab, z. B. „3,1 km · 11 min · LKW“. Sie erscheint
   damit auch auf Bildschirmen und in der Lagekarte.
 - **Route drucken** erzeugt ein A4-PDF (`POST /api/print/route`) mit Übersichtskarte und Halten. Danach folgen die
   Fahrhinweise als Text, jeder mit einem kleinen Kartenausschnitt um die Stelle und einem Pfeil in die neue

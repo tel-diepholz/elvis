@@ -13,8 +13,7 @@ import {
   type ChatMessage,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
-import { useActiveIncident } from '../../lib/hooks';
-import { useDevice } from '../../lib/live';
+import { useActiveIncident, useVehiclePosition } from '../../lib/hooks';
 import { useToast } from '../../lib/toast';
 import { ChannelIcon } from './ChannelIcon';
 import { AttachmentChip, DocumentAttachButton, attachmentProblem } from './DocumentAttach';
@@ -39,7 +38,7 @@ export function ThreadReply({ target, lastChannel, preset, onSent }: { target: R
   const { data: reach = {} } = useQuery({ queryKey: ['chat', 'reachability'], queryFn: api.chatReachability });
   const { data: waWindow = {} } = useQuery({ queryKey: ['chat', 'whatsappWindow'], queryFn: api.whatsappWindow });
   const { data: incident } = useActiveIncident();
-  const vehicle = useDevice('weather')?.state.position ?? null;
+  const vehicle = useVehiclePosition().position;
   const [number, setNumber] = useState<string | null>(target.numbers[0] ?? null);
   const [chosen, setChosen] = useState<ChatChannel | null>(null);
   const [text, setText] = useState('');

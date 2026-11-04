@@ -177,7 +177,7 @@ function CallLog() {
               </td>
               <td>{c.trunk ?? '–'}</td>
               <td className="nowrap">{c.answeredAt ? duration(c.durationS) : c.direction === 'in' ? <span className="tone-alarm">verpasst</span> : 'nicht erreicht'}</td>
-              <td>{c.incidentId ? <Link to="/einsatz/tagebuch">eingetragen</Link> : <span className="muted">–</span>}</td>
+              <td>{c.incidentId ? <Link to="/lage/tagebuch">eingetragen</Link> : <span className="muted">–</span>}</td>
             </tr>
           ))}
         </tbody>
@@ -223,7 +223,7 @@ export function TelefoniePage() {
           {calls.length ? <ActiveCalls calls={calls} trunks={trunks} /> : <p className="muted">Gerade kein Gespräch.</p>}
         </Card>
         <Card title="Anrufliste" icon={<History size={18} />} className="span-3">
-          <p className="muted">Laufende Einsätze bekommen jedes Gespräch als Eintrag „Telefon“ im Einsatztagebuch.</p>
+          <p className="muted">Laufende Lagen bekommen jedes Gespräch als Eintrag „Telefon“ im Einsatztagebuch.</p>
           <CallLog />
         </Card>
       </div>

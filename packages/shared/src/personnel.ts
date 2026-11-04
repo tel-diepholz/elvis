@@ -130,7 +130,7 @@ export type PersonnelFormInput = z.input<typeof personnelFormInputSchema>;
 export interface PersonnelInbox {
   /** Relay eingerichtet (Online-Formular möglich) */
   relayEnabled: boolean;
-  /** Aktiver Link des laufenden Einsatzes */
+  /** Aktiver Link der laufenden Lage */
   form: PersonnelForm | null;
   sheets: PersonnelSheet[];
   lastError: string | null;

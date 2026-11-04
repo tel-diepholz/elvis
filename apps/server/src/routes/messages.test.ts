@@ -195,6 +195,15 @@ describe('Eingangsmeldungen', () => {
   const incoming = (payload: object, cookie = fm1.cookie) =>
     req<Message>('POST', `/api/incidents/${inc.id}/messages`, { direction: 'in', sender: { text: 'ELW 1' }, body: 'Lage unverändert', ...payload }, cookie);
 
+  it('ohne eingestellte Fernmelder-Rolle erfasst jeder Angemeldete, auch ohne Empfänger', async () => {
+    expect((await req<MessageContext>('GET', '/api/messages/context', undefined, stab.cookie)).body).toMatchObject({ radio: false, captureIn: false });
+    expect((await req('PUT', '/api/system/messages', { radioRoleIds: [], dispatcherRoleIds: [] })).status).toBe(200);
+    const nobody = await userCookie('Ohne', []);
+    expect((await req<MessageContext>('GET', '/api/messages/context', undefined, nobody.cookie)).body).toMatchObject({ radio: false, captureIn: true, radioConfigured: false });
+    expect((await incoming({}, nobody.cookie)).body).toMatchObject({ sender: 'ELW 1', recipient: null });
+    expect((await incoming({ recipientRoleId: lage.id }, nobody.cookie)).body).toMatchObject({ recipient: 'Lage' });
+  });
+
   it('ohne Dispatcher wählt der Fernmelder die Zielrolle', async () => {
     expect((await req<MessageContext>('GET', '/api/messages/context', undefined, fm1.cookie)).body).toMatchObject({ radio: true, dispatcherPresent: false });
     expect((await incoming({ recipientRoleId: lage.id }, stab.cookie)).status).toBe(403);

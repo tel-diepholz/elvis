@@ -27,10 +27,10 @@
   `GET /api/printing`, `POST /api/printing/jobs` (Multipart: `options` als JSON, dann `file`) und
   `GET /api/printing/jobs/:ref`; Gastdrucker: `GET /api/printing/guest`, `GET …/:id/file`, `POST …/:id/release`,
   `DELETE …/:id`.
-- **Ablage** (*Einstellungen → Druckserver*, nur Admins): Ist ein Einsatz eröffnet, landet jeder Druck als PDF in dessen
+- **Ablage** (*Einstellungen → Druckserver*, nur Admins): Ist eine Lage eröffnet, landet jeder Druck als PDF in deren
   Dokumentverwaltung. Der Ablageort lässt sich mit Platzhaltern wie bei [Vorlagen](dokumente.md) festlegen (Vorgabe `Drucke`), fehlende
-  Ordner werden angelegt. Jeder Druck steht im Bedienprotokoll, die Ablage zusätzlich im Einsatztagebuch. Ohne offenen
-  Einsatz wird gedruckt, aber nichts abgelegt. Die Karte zeigt außerdem die letzten Aufträge und den vorausgewählten Drucker.
+  Ordner werden angelegt. Jeder Druck steht im Bedienprotokoll, die Ablage zusätzlich im Einsatztagebuch. Ohne offene
+  Lage wird gedruckt, aber nichts abgelegt. Die Karte zeigt außerdem die letzten Aufträge und den vorausgewählten Drucker.
 - **Sicherheit:** Drucken über CUPS ist im Netz ohne Anmeldung möglich, die CUPS-Verwaltung braucht ein Passwort.
   Port 631 sollte nur aus dem Fahrzeug-LAN erreichbar sein.
 - **Gastdrucker (AirPrint, Android, Windows):** Mit der Addon-Option „Gastdrucker im Gastnetz“ kündigt ein zweiter
@@ -43,7 +43,7 @@
     Seiten einstellbar, nur was der Drucker kann) oder **Freigabe durch Personal**: Die Aufträge erscheinen
     angemeldet unter *Drucken* mit Vorschau, werden dort mit den üblichen Einstellungen freigegeben oder verworfen und
     nach 24 Stunden gelöscht. Höchstzahl Kopien je Auftrag einstellbar; Vorgabe: nur annehmen, solange das [Gast-WLAN](../fahrzeugmodule/wlan-openwrt.md)
-    läuft (Einsatz eröffnet). Ablage, Bedienprotokoll und Einsatztagebuch wie bei jedem Druck.
+    läuft (Lage eröffnet). Ablage, Bedienprotokoll und Einsatztagebuch wie bei jedem Druck.
   - **Netz:** Der Docker-Host braucht eine Adresse im Gastnetz (z. B. VLAN-Schnittstelle `eth0.20`). Diese
     Schnittstelle in der Option „Netzwerkschnittstelle zum Gastnetz“ eintragen: CUPS und avahi laufen dann nur dort.
     Außerdem „Adresse von ELVIS“ eintragen (wie der Docker-Host ELVIS erreicht). Per Firewall aus dem Gastnetz nur

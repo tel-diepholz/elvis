@@ -118,8 +118,8 @@ export interface WifiDeps {
 }
 
 /**
- * WLAN über OpenWrt-Accesspoints: Betriebs-WLAN dauerhaft, Gastnetz nur solange ein Einsatz läuft. Das Passwort des
- * Gastnetzes entsteht je Einsatz neu, der Netzname bekommt die Einsatznummer angehängt.
+ * WLAN über OpenWrt-Accesspoints: Betriebs-WLAN dauerhaft, Gastnetz nur solange eine Lage läuft. Das Passwort des
+ * Gastnetzes entsteht je Lage neu, der Netzname bekommt die Einsatznummer angehängt.
  */
 export class WifiService implements WifiSource {
   private readonly status = new Map<string, WifiApStatus>();
@@ -185,12 +185,12 @@ export class WifiService implements WifiSource {
     this.apListeners.forEach((l) => l());
   }
 
-  /** Gastnetz des laufenden Einsatzes; das Passwort entsteht beim ersten Abruf im Einsatz */
+  /** Gastnetz der laufenden Lage; das Passwort entsteht beim ersten Abruf im Einsatz */
   guest(): WifiGuestInfo {
     const s = this.stored().guest;
     if (!s.enabled) return { active: false, reason: 'Gastnetz ist ausgeschaltet' };
     const incident = this.deps.activeIncident();
-    if (!incident) return { active: false, reason: 'Gastnetz startet mit dem nächsten Einsatz' };
+    if (!incident) return { active: false, reason: 'Gastnetz startet mit der nächsten Lage' };
     let session = this.read<{ incidentId: number; password: string }>('wifi:guest');
     if (session?.incidentId !== incident.id) {
       session = { incidentId: incident.id, password: guestPassword() };

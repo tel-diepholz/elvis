@@ -2,29 +2,27 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { BookOpenText, FileText, MapPin, Pencil, Siren, Users } from 'lucide-react';
-import { PROCUREMENT_MODE_LABELS, formatStrength, sumStrength, type Incident } from '@elvis/shared';
+import { INCIDENT_KIND_LABELS, PROCUREMENT_MODE_LABELS, formatStrength, kindHasSite, sumStrength, type Incident } from '@elvis/shared';
 import { api } from '../lib/api';
 import { fmtDateTime, fmtDuration } from '../lib/format';
 import { useActiveIncident, useNow } from '../lib/hooks';
 import { useToast } from '../lib/toast';
-import { Card, Loading, Modal, PageHeader, Stat } from '../components/ui';
+import { Card, EmptyState, Loading, Modal, PageHeader, Stat } from '../components/ui';
+import { StartIncidentButton } from '../components/StartIncidentButton';
 import { ReportButton } from '../components/ReportButton';
 import { IncidentForm } from './incident/IncidentForm';
 import { deployedUnits } from './incident/UnitsView';
 
-function StartIncident() {
-  const toast = useToast();
-  const start = useMutation({
-    mutationFn: api.startIncident,
-    onSuccess: (i) => toast('success', `Einsatz „${i.title}“ eröffnet`),
-    onError: (e) => toast('error', e.message),
-  });
+function NoIncident() {
   return (
     <>
-      <PageHeader title="Einsatz" subtitle="Derzeit ist kein Einsatz aufgelegt" />
+      <PageHeader title="Lage" subtitle="Derzeit ist keine Lage aufgelegt" />
       <div className="grid">
-        <Card title="Neuen Einsatz anlegen" icon={<Siren size={18} />} className="span-2">
-          <IncidentForm submitLabel="Einsatz eröffnen" pending={start.isPending} onSubmit={(input) => start.mutate(input)} />
+        <Card className="span-2">
+          <EmptyState icon={<Siren size={40} />} title="Keine Lage aufgelegt">
+            <p>Eine Lage fasst alles zusammen, was zu einem Ereignis gehört – z. B. eine Unwetterlage mit vielen Einsätzen.</p>
+            <StartIncidentButton />
+          </EmptyState>
         </Card>
         <Card title="Was passiert beim Eröffnen?">
           <ul className="icon-list">
@@ -35,7 +33,7 @@ function StartIncident() {
               <Users size={18} /> Die Kräfteübersicht wird freigeschaltet.
             </li>
             <li>
-              <FileText size={18} /> Die Dokumentenverwaltung für den Einsatz wird freigeschaltet.
+              <FileText size={18} /> Die Dokumentenverwaltung für die Lage wird freigeschaltet.
             </li>
           </ul>
           <p className="muted">Fahrzeugfunktionen, Karte und Wetter stehen unabhängig davon jederzeit zur Verfügung.</p>
@@ -63,7 +61,7 @@ function ActiveIncident({ incident }: { incident: Incident }) {
   });
   const close = useMutation({
     mutationFn: () => api.closeIncident(incident.id),
-    onSuccess: () => toast('success', 'Einsatz beendet – der Einsatzbericht wird unter „Protokolle“ abgelegt'),
+    onSuccess: () => toast('success', 'Lage beendet – der Einsatzbericht wird unter „Protokolle“ abgelegt'),
     onError: (e) => toast('error', e.message),
   });
 
@@ -71,7 +69,7 @@ function ActiveIncident({ incident }: { incident: Incident }) {
   const deployed = deployedUnits(units);
   const confirmClose = () => {
     const open = active.length ? `\n\n${active.length} Einheit(en) sind noch nicht entlassen.` : '';
-    if (window.confirm(`Einsatz „${incident.title}“ wirklich beenden?${open}\n\nDanach sind keine Änderungen mehr möglich. Der Einsatzbericht (PDF) wird erstellt und unter „Protokolle“ abgelegt.`)) close.mutate();
+    if (window.confirm(`Lage „${incident.title}“ wirklich beenden?${open}\n\nDanach sind keine Änderungen mehr möglich. Der Einsatzbericht (PDF) wird erstellt und unter „Protokolle“ abgelegt.`)) close.mutate();
   };
 
   return (
@@ -90,7 +88,7 @@ function ActiveIncident({ incident }: { incident: Incident }) {
             </button>
             <ReportButton incidentId={incident.id} label="Zwischenbericht (PDF)" />
             <button className="btn btn-danger" onClick={confirmClose} disabled={close.isPending}>
-              Einsatz beenden
+              Lage beenden
             </button>
           </>
         }
@@ -98,10 +96,16 @@ function ActiveIncident({ incident }: { incident: Incident }) {
       <div className="grid">
         <Card title="Einsatzdaten" icon={<Siren size={18} />}>
           <dl className="kv">
-            <dt>Stichwort</dt>
-            <dd>{incident.keyword || '–'}</dd>
-            <dt>Einsatzort</dt>
-            <dd>{incident.location || '–'}</dd>
+            <dt>Art</dt>
+            <dd>{INCIDENT_KIND_LABELS[incident.kind]}</dd>
+            {kindHasSite(incident.kind) && (
+              <>
+                <dt>Stichwort</dt>
+                <dd>{incident.keyword || '–'}</dd>
+                <dt>Einsatzort</dt>
+                <dd>{incident.location || '–'}</dd>
+              </>
+            )}
             <dt>Position</dt>
             <dd>
               {incident.lat != null && incident.lon != null ? (
@@ -121,19 +125,19 @@ function ActiveIncident({ incident }: { incident: Incident }) {
             </dd>
           </dl>
         </Card>
-        <Link to="/einsatz/kraefte" className="card card-link">
+        <Link to="/lage/kraefte" className="card card-link">
           <Stat label="Kräfte im Einsatz" value={deployed.length} sub={`Stärke ${formatStrength(sumStrength(deployed))}`} />
           <span className="card-link-cta">
             <Users size={16} /> Kräfteübersicht
           </span>
         </Link>
-        <Link to="/einsatz/tagebuch" className="card card-link">
+        <Link to="/lage/tagebuch" className="card card-link">
           <Stat label="Tagebucheinträge" value={journal.length} sub={journal.at(-1)?.text ?? '–'} />
           <span className="card-link-cta">
             <BookOpenText size={16} /> Einsatztagebuch
           </span>
         </Link>
-        <Link to="/einsatz/dokumente" className="card card-link">
+        <Link to="/lage/dokumente" className="card card-link">
           <Stat label="Dokumente" value={docs.length} />
           <span className="card-link-cta">
             <FileText size={16} /> Dokumentenverwaltung
@@ -150,5 +154,5 @@ function ActiveIncident({ incident }: { incident: Incident }) {
 export function IncidentPage() {
   const { data: incident, isLoading } = useActiveIncident();
   if (isLoading) return <Loading />;
-  return incident ? <ActiveIncident incident={incident} /> : <StartIncident />;
+  return incident ? <ActiveIncident incident={incident} /> : <NoIncident />;
 }

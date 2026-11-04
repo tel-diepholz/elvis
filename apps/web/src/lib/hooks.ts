@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import type { DeviceId, Edition, VehicleInfo } from '@elvis/shared';
+import { canSetVehiclePosition, vehiclePosition, type DeviceId, type Edition, type VehicleInfo, type VehiclePosition } from '@elvis/shared';
 import { api } from './api';
 import { useAuth } from './auth';
-import { useLive } from './live';
+import { useDevice, useLive } from './live';
 import { useToast } from './toast';
 
 export interface ServerInfo {
@@ -66,4 +66,14 @@ export function useMediaQuery(query: string): boolean {
 /** Fahrzeugname, Funkrufname, Einheit und Kartenzeichen aus den Einstellungen. */
 export function useSettings() {
   return useQuery({ queryKey: ['settings'], queryFn: api.settings, staleTime: Infinity });
+}
+
+/**
+ * Fahrzeugstandort: GPS der Wetterstation, ohne GPS-Fix die von Hand gesetzte Position, sonst die letzte GPS-Position.
+ * canSet: von Hand setzen möglich (kein GPS-Empfang oder kein GPS-Empfänger).
+ */
+export function useVehiclePosition(): { position: VehiclePosition | null; canSet: boolean } {
+  const gps = useDevice('weather')?.state.position ?? null;
+  const { data } = useQuery({ queryKey: ['settings', 'vehiclePosition'], queryFn: api.vehiclePosition });
+  return { position: vehiclePosition(gps, data?.manual), canSet: canSetVehiclePosition(gps) };
 }

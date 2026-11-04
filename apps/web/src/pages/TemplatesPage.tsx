@@ -62,7 +62,7 @@ function TemplateForm({
       <Field label="Ordner (Vorlagen)">
         <FolderSelect folders={folders} value={v.folderId} onChange={(folderId) => set({ folderId })} rootLabel="Vorlagen (oberste Ebene)" />
       </Field>
-      <Field label="Ablageort im Einsatz" hint="Ordnerpfad mit / getrennt, fehlende Ordner werden angelegt. Leer = oberste Ebene.">
+      <Field label="Ablageort in der Lage" hint="Ordnerpfad mit / getrennt, fehlende Ordner werden angelegt. Leer = oberste Ebene.">
         <input value={v.targetPath} onChange={(e) => set({ targetPath: e.target.value })} onFocus={() => setTarget('targetPath')} placeholder="z. B. Lagemeldungen/{{datum.iso}}" maxLength={300} />
       </Field>
       <Field label="Dateiname (ohne Endung)" hint="Leer = Name der Vorlage.">
@@ -145,7 +145,7 @@ export function TemplatesPage() {
 
   return (
     <>
-      <PageHeader title="Vorlagen" subtitle="Dokumentvorlagen für Einsätze – Benutzer finden sie unter Dokumente › Aus Vorlage" />
+      <PageHeader title="Vorlagen" subtitle="Dokumentvorlagen für Lagen – Benutzer finden sie unter Dokumente › Aus Vorlage" />
       <div className="grid">
         <Card
           title="Ordner"

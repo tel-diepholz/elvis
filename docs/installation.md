@@ -42,6 +42,11 @@ WhatsApp oder Telegram). Fahrzeugmodule (Funk, Netzwerk, Kameras …) und Addons
 Browser – auf dem Laptop über die Verknüpfung „ELVIS lite“ (`http://localhost:8222`), auf Tablets im selben Netz über
 `http://<Laptop-IP>:8222` (Startmenü → ELVIS lite → „Adresse für Tablets“).
 
+Die Navigation stellt die Lage in den Vordergrund: Oben stehen *Übersicht* und die Bereiche der Lage. Karte, Wetter,
+Posteingang, E-Mail, Nachrichten, Kontakte und Taktische Zeichen liegen im aufklappbaren Menü **Werkzeuge**, Archiv,
+Benutzer und Einstellungen unter **Verwaltung**. Welche Menüs offen sind, merkt sich der Browser. Das Menü mit der
+gerade geöffneten Seite ist immer offen.
+
 - **Installer:** GitHub Actions → Workflow „ELVIS lite (Windows)“ → Artefakt `elvis-lite-installer`, oder selbst bauen
   (Windows oder Linux mit NSIS): `npm ci && npm run dist -w @elvis/windows` → `apps/windows/release/*.exe`.
   Er bringt Node.js mit und richtet den Dienst „ELVIS lite“ ein, der mit Windows startet – auch ohne Anmeldung.

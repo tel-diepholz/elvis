@@ -61,8 +61,8 @@ export function WifiCard() {
         </section>
         <section>
           <h3 className="section-title">Gastnetz</h3>
-          <Toggle label="Gastnetz im Einsatz zuschalten" checked={v.guest.enabled} onChange={(enabled) => setGuest({ enabled })} />
-          <Field label="Netzname (SSID)" hint={`Im Einsatz wird die Einsatznummer angehängt, z. B. „${v.guest.ssid || 'Gast'}-12“. Das Passwort entsteht je Einsatz neu.`}>
+          <Toggle label="Gastnetz während einer Lage zuschalten" checked={v.guest.enabled} onChange={(enabled) => setGuest({ enabled })} />
+          <Field label="Netzname (SSID)" hint={`Während einer Lage wird die Einsatznummer angehängt, z. B. „${v.guest.ssid || 'Gast'}-12“. Das Passwort entsteht je Lage neu.`}>
             <input value={v.guest.ssid} onChange={(e) => setGuest({ ssid: e.target.value })} maxLength={WIFI_GUEST_SSID_MAX} disabled={!v.guest.enabled} />
           </Field>
           {guest.active ? (

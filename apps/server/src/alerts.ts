@@ -23,7 +23,7 @@ export function evaluateAlerts(get: StateGetter, offline: DeviceId[], limits: El
       add({ id: 'weather:storm', severity: 'warn', system: 'media', title: 'Sturmböen', detail: `${weather.windGustMs.toFixed(1)} m/s` });
     }
     if (weather.position && !weather.position.fix) {
-      add({ id: 'weather:gps', severity: 'warn', system: 'media', title: 'Kein GPS-Empfang', detail: 'Fahrzeugstandort ist der zuletzt bekannte' });
+      add({ id: 'weather:gps', severity: 'warn', system: 'media', title: 'Kein GPS-Empfang', detail: 'Fahrzeugstandort ist der zuletzt bekannte – in der Karte von Hand setzbar' });
     }
   }
 

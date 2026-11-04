@@ -6,7 +6,7 @@ import { useNow } from '../../lib/hooks';
 import { fmtRelative, useDueTasks, useTaskActions } from './taskActions';
 import { REQUESTS_PATH } from '../requests/requestParts';
 
-const TASKS_PATH = '/einsatz/aufgaben';
+const TASKS_PATH = '/lage/aufgaben';
 
 /** Kopfzeile: Anzahl fälliger eigener Aufgaben, führt zur Aufgabenliste */
 export function DueTasksButton() {

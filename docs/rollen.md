@@ -1,12 +1,12 @@
-# Rollen im Einsatz
+# Rollen in der Lage
 
-Rollen bilden die Funktionen im Einsatz ab, z. B. Einsatzleiter, Führungsassistent, Fernmelder, S2 oder S4. Sie sind
+Rollen bilden die Funktionen in der Lage ab, z. B. Einsatzleiter, Führungsassistent, Fernmelder, S2 oder S4. Sie sind
 unabhängig von den [Rechten](benutzer-und-rechte.md): Eine Rolle legt fest, welche Aufgaben, Meldungen und
 Anforderungen ein Benutzer bearbeitet, nicht was er darf.
 
 ## Rollen pflegen
 
-- **Nur Admins** legen Rollen unter *Einstellungen → Einsatz → Rollen im Einsatz* an, benennen sie um, beschreiben
+- **Nur Admins** legen Rollen unter *Einstellungen → Lage → Rollen in der Lage* an, benennen sie um, beschreiben
   sie und legen die Reihenfolge fest. Namen sind eindeutig, Groß-/Kleinschreibung zählt nicht.
 - Die Liste zeigt zu jeder Rolle, wer sie gerade übernommen hat.
 - **Löschen** entfernt die Rolle auch aus den Einstellungen für Meldungen und Anforderungen und aus der gemerkten
@@ -23,7 +23,7 @@ Anforderungen ein Benutzer bearbeitet, nicht was er darf.
 - **Mehrfachbesetzung:** Eine Rolle können mehrere Benutzer gleichzeitig übernehmen, z. B. zwei Fernmelder.
 - **Besetzt** ist eine Rolle, solange eine gültige Sitzung sie hält. Mit dem Abmelden oder dem Ablauf der Sitzung
   (12 h Inaktivität, höchstens 7 Tage) wird sie wieder frei.
-- **Einsatztagebuch:** Läuft ein Einsatz, steht jeder Wechsel im Tagebuch („Rollen übernommen: …“, „Rollen
+- **Einsatztagebuch:** Läuft eine Lage, steht jeder Wechsel im Tagebuch („Rollen übernommen: …“, „Rollen
   abgegeben: …“, beim Abmelden mit dem Zusatz „(Abmeldung)“). Jede Wahl steht außerdem im Bedienprotokoll.
 
 Grundsatz: **Ist eine Rolle von niemandem besetzt, übernehmen alle ihre Arbeit.** So bleibt bei dünner Besetzung
@@ -34,14 +34,14 @@ nichts liegen.
 - Eine Aufgabe geht an **alle**, an **einen Benutzer** (nur an sich selbst) oder an **eine Rolle**.
 - Unter **Meine Aufgaben** stehen Aufgaben für alle, eigene Aufgaben und Aufgaben für die eigenen Rollen. Aufgaben
   einer unbesetzten Rolle sehen alle, sie sind mit „unbesetzt, für alle“ gekennzeichnet.
-- **Aufgabenvorlagen** (*Einstellungen → Einsatz → Aufgabenvorlagen*, nur Admins) können eine Rolle vorgeben. Beim
-  Eröffnen eines Einsatzes entstehen daraus Aufgaben für diese Rolle.
+- **Aufgabenvorlagen** (*Einstellungen → Lage → Aufgabenvorlagen*, nur Admins) können eine Rolle vorgeben. Beim
+  Eröffnen einer Lage entstehen daraus Aufgaben für diese Rolle.
 
 ## Meldungen
 
-Unter *Einstellungen → Einsatz → Meldungen* (nur Admins) ordnen Admins den Rollen ihre Aufgaben im Meldungsweg zu:
+Unter *Einstellungen → Lage → Meldungen* (nur Admins) ordnen Admins den Rollen ihre Aufgaben im Meldungsweg zu:
 
-- **Fernmelder** übermitteln Ausgangsmeldungen und erfassen Eingangsmeldungen (Funk, E-Mail). Aus der Timeline auf der Seite Funk geht das mit „Meldung erstellen“. Die gewählte Kraft merkt sich dabei die ISSI für den Einsatz (siehe [Funk](fahrzeugmodule/funk-reichert-zbe.md)).
+- **Fernmelder** übermitteln Ausgangsmeldungen und erfassen Eingangsmeldungen (Funk, E-Mail). Aus der Timeline auf der Seite Funk geht das mit „Meldung erstellen“. Die gewählte Kraft merkt sich dabei die ISSI für die Lage (siehe [Funk](fahrzeugmodule/funk-reichert-zbe.md)). Ist keine Fernmelder-Rolle eingestellt, erfasst jeder angemeldete Benutzer Eingangsmeldungen (E-Mail, Nachrichten, Funk); die Zielrolle ist dann freiwillig, ohne sie steht die Meldung nur in der Liste.
 - **Dispatcher** (optional) verteilen Eingangsmeldungen an die Zielrolle. Eine Rolle kann nicht zugleich Fernmelder
   und Dispatcher sein.
 - **Alle Eingangs-/Ausgangsmeldungen in Kopie**, z. B. für die S2 und ihr vollständiges Lagebild. Liest die
@@ -62,8 +62,12 @@ Der Weg einer Meldung:
 
 ## Anforderungen
 
-- Unter *Einstellungen → Einsatz → Anforderungen* legen Admins die **Beschaffungsrolle** fest, z. B. S4.
-- Sie plant, genehmigt und bestellt Material. Die Wiedervorlage jeder offenen Anforderung erscheint als Aufgabe für
+- Unter *Einstellungen → Lage → Anforderungen* legen Admins die **Beschaffungsrolle** fest, z. B. S4.
+- Sie plant, genehmigt und bestellt Material.
+- **Beschaffungsweg:** Er richtet sich nach der Art der Lage, einen eigenen Schalter in den Einsatzdaten gibt es nicht
+  mehr. Bei der Art **Stab** werden Anforderungen über den Stab beschafft (Beschaffung über den Stab); im Feld
+  „Stab (Empfänger)“ der Lage steht, an wen sie gehen. Bei Flächenlage und Brand/Technische Hilfe beschafft die
+  Beschaffungsrolle selbst. Die Wiedervorlage jeder offenen Anforderung erscheint als Aufgabe für
   diese Rolle.
 - Ist keine Beschaffungsrolle eingestellt oder ist sie unbesetzt, dürfen alle angemeldeten Benutzer Anforderungen
   führen.

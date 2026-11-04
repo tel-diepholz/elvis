@@ -33,7 +33,7 @@ export function PairAppForm({ unitName, pending, onSubmit }: { unitName: string;
   return (
     <form className="form" onSubmit={submit}>
       <p className="muted">
-        Die ELVIS-App zeigt nach dem Start eine App-ID und einen Code. Damit sendet sie ihre Position, bis {unitName} entkoppelt, entlassen oder der Einsatz
+        Die ELVIS-App zeigt nach dem Start eine App-ID und einen Code. Damit sendet sie ihre Position, bis {unitName} entkoppelt, entlassen oder die Lage
         beendet wird.
       </p>
       <Field label="App-ID" hint="8 Zeichen, z. B. K7M2-QX9P">

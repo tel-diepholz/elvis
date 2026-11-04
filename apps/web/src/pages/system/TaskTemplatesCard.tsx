@@ -15,7 +15,7 @@ function scheduleText(t: TaskTemplate): string {
   return s.offsetMinutes === null ? 'einmalig, ohne Termin' : `einmalig, ${afterStart(s.offsetMinutes)}`;
 }
 
-/** Aufgaben, die jeder neu eröffnete Einsatz erhält. Nur Admins. */
+/** Aufgaben, die jede neu eröffnete Lage erhält. Nur Admins. */
 export function TaskTemplatesCard() {
   const toast = useToast();
   const { data: templates } = useQuery({ queryKey: ['taskTemplates'], queryFn: api.taskTemplates });
@@ -50,7 +50,7 @@ export function TaskTemplatesCard() {
         </button>
       }
     >
-      <p className="muted">Diese Aufgaben erhält jeder neu eröffnete Einsatz. Zeiten zählen ab Einsatzbeginn; Änderungen gelten nur für künftige Einsätze.</p>
+      <p className="muted">Diese Aufgaben erhält jede neu eröffnete Lage. Zeiten zählen ab Einsatzbeginn; Änderungen gelten nur für künftige Lagen.</p>
       {templates.length === 0 ? (
         <EmptyState title="Keine Aufgabenvorlagen" />
       ) : (

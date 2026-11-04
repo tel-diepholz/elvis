@@ -72,7 +72,7 @@ export interface OverpassQuerySettings {
   updatedBy: string | null;
 }
 
-/** Im Einsatz gespeicherte Abfrage */
+/** In der Lage gespeicherte Abfrage */
 export type IncidentOverpassQuery = OverpassQuery & { id: number; incidentId: number; createdAt: string; createdBy: string };
 
 export type OverpassGeometry =

@@ -52,7 +52,7 @@ export function callJournalText(c: EndedCall, party: string, trunk: string | nul
 }
 
 /**
- * Anrufliste des GSM-Gateways. Jedes beendete Gespräch wird gespeichert und – solange ein Einsatz läuft – als
+ * Anrufliste des GSM-Gateways. Jedes beendete Gespräch wird gespeichert und – solange eine Lage läuft – als
  * Eintrag der Kategorie „Telefon“ ins Einsatztagebuch geschrieben (Zeitpunkt = Beginn des Gesprächs).
  */
 export class CallLogService {
@@ -96,7 +96,7 @@ export class CallLogService {
     return this.toRecord(this.db.prepare('SELECT * FROM calls WHERE id = ?').get(Number(info.lastInsertRowid)) as CallRow, this.deps.numbers());
   }
 
-  /** Gespräche eines Einsatzes, älteste zuerst (Einsatzbericht) */
+  /** Gespräche einer Lage, älteste zuerst (Einsatzbericht) */
   forIncident(incidentId: number): CallRecord[] {
     const rows = this.db.prepare('SELECT * FROM calls WHERE incident_id = ? ORDER BY started_at').all(incidentId) as CallRow[];
     const numbers = this.deps.numbers();

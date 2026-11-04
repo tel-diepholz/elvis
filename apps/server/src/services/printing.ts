@@ -153,7 +153,7 @@ function toJob(r: JobRow): PrintJob {
 
 /**
  * Druckaufträge über die Druckserver-Addons (CUPS per IPP). ELVIS prüft die Einstellungen gegen die Fähigkeiten des
- * Druckers, reicht das PDF weiter, merkt sich den Auftrag und legt den Druck auf Wunsch im laufenden Einsatz ab.
+ * Druckers, reicht das PDF weiter, merkt sich den Auftrag und legt den Druck auf Wunsch in der laufenden Lage ab.
  */
 export class PrintService {
   private servers: PrintServerProvision[] = [];
@@ -338,7 +338,7 @@ export class PrintService {
     const jobAttrs = res.jobs[0] ?? {};
     const ippJobId = Number(jobAttrs['job-id']?.[0]) || null;
 
-    // Ablage im laufenden Einsatz; ein Fehler dabei macht den Druck nicht ungeschehen
+    // Ablage in der laufenden Lage; ein Fehler dabei macht den Druck nicht ungeschehen
     let archived: { documentId: number; path: string } | null = null;
     let archiveError = '';
     const settings = this.settings();
@@ -450,7 +450,7 @@ export class PrintService {
     if (!token || !provision) throw new HttpError(401, 'Unbekannter Gastdrucker');
     const g = this.settings().guest;
     if (g.mode === 'off') throw new HttpError(409, 'Der Gastdrucker ist abgeschaltet');
-    if (g.onlyWithGuestWifi && !(this.deps.guestWifiActive?.() ?? false)) throw new HttpError(409, 'Der Gastdrucker nimmt nur während eines Einsatzes Aufträge an');
+    if (g.onlyWithGuestWifi && !(this.deps.guestWifiActive?.() ?? false)) throw new HttpError(409, 'Der Gastdrucker nimmt nur während einer Lage Aufträge an');
     if (!isPdf(content)) throw new HttpError(415, 'Der Gastdrucker liefert kein PDF');
 
     const user = meta.user.replace(/[^\p{L}\p{N} ._@-]/gu, '').trim().slice(0, 60);

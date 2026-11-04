@@ -248,7 +248,7 @@ export const chatRecipientSchema = z.object({
 });
 export type ChatRecipient = z.output<typeof chatRecipientSchema>;
 
-/** Bild einer Nachricht in die Dokumente eines Einsatzes übernehmen; folderId null = oberste Ebene */
+/** Bild einer Nachricht in die Dokumente einer Lage übernehmen; folderId null = oberste Ebene */
 export const chatToDocumentSchema = z.object({
   incidentId: z.number().int().positive(),
   folderId: z.number().int().positive().nullable().default(null),

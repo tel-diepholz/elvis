@@ -188,7 +188,7 @@ export function TaskForm({ initial, prefill, pending, onSubmit }: { initial?: Ta
   return (
     <FormShell onSubmit={submit} error={error} pending={pending} submitLabel={initial ? 'Speichern' : 'Aufgabe anlegen'}>
       <BaseFields summary={summary} setSummary={setSummary} description={description} setDescription={setDescription} templateId={templateId} setTemplateId={setTemplateId} />
-      <Field label="Verantwortlich" hint="Ohne Verantwortlichen erhalten alle die Aufgabe. Ist die Rolle im Einsatz unbesetzt, sehen sie alle.">
+      <Field label="Verantwortlich" hint="Ohne Verantwortlichen erhalten alle die Aufgabe. Ist die Rolle in der Lage unbesetzt, sehen sie alle.">
         <select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
           <option value="all">Alle</option>
           {user && <option value={`user:${user.id}`}>Ich selbst</option>}

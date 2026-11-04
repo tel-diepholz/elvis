@@ -303,7 +303,7 @@ export interface CameraTestResult {
   message: string;
 }
 
-/** Gespeicherte Kameraposition; gehört zum laufenden Einsatz. */
+/** Gespeicherte Kameraposition; gehört zur laufenden Lage. */
 export interface CameraPreset {
   id: number;
   incidentId: number;

@@ -43,8 +43,8 @@ export interface Actor {
 export type StoredDocument = IncidentDocument & { path: string };
 
 /**
- * Dokumente eines Einsatzes in einer virtuellen Ordnerstruktur. Die Dateien liegen flach unter UUIDs; Ordner gibt es
- * nur in der Datenbank. Beim Eröffnen eines Einsatzes wird die Vorgabe aus den Einstellungen übernommen;
+ * Dokumente einer Lage in einer virtuellen Ordnerstruktur. Die Dateien liegen flach unter UUIDs; Ordner gibt es
+ * nur in der Datenbank. Beim Eröffnen einer Lage wird die Vorgabe aus den Einstellungen übernommen;
  * danach lassen sich Ordner ergänzen, aber nicht löschen (Admins: leere, selbst angelegte Ordner).
  */
 export class DocumentService {
@@ -95,13 +95,13 @@ export class DocumentService {
 
   private incident(id: number): Incident {
     const incident = this.store.incident(id);
-    if (!incident) throw new HttpError(404, `Einsatz ${id} nicht gefunden`);
+    if (!incident) throw new HttpError(404, `Lage ${id} nicht gefunden`);
     return incident;
   }
 
   private requireOpen(id: number): Incident {
     const incident = this.incident(id);
-    if (incident.closedAt) throw new HttpError(409, 'Einsatz ist abgeschlossen und kann nicht mehr geändert werden');
+    if (incident.closedAt) throw new HttpError(409, 'Lage ist abgeschlossen und kann nicht mehr geändert werden');
     return incident;
   }
 
@@ -112,7 +112,7 @@ export class DocumentService {
   private checkFolder(incidentId: number, folderId: number | null): DocumentFolder | null {
     if (folderId === null) return null;
     const f = this.store.folder(folderId);
-    if (!f || f.incidentId !== incidentId) throw new HttpError(400, 'Ordner gehört nicht zu diesem Einsatz');
+    if (!f || f.incidentId !== incidentId) throw new HttpError(400, 'Ordner gehört nicht zu dieser Lage');
     return f;
   }
 

@@ -45,7 +45,7 @@ export function phoneRoutes(app: FastifyInstance, d: Deps): void {
     return reply.type('application/xml; charset=utf-8').header('cache-control', 'no-store').send(body);
   });
 
-  // --- Angemeldete: Telefone und Tasten, Überschreibungen im laufenden Einsatz ---
+  // --- Angemeldete: Telefone und Tasten, Überschreibungen in der laufenden Lage ---
 
   app.get('/api/phones', async () => d.phones.list());
   // Für die Auswahl beim Belegen von Durchsage-Tasten (auch im Einsatz, ohne Admin)
@@ -59,7 +59,7 @@ export function phoneRoutes(app: FastifyInstance, d: Deps): void {
     const actor = actorOf(req);
     if (body.scope === 'phone' && !actor.isAdmin) throw new HttpError(403, 'Die Grundbelegung ändern nur Admins');
     const slots = body.scope === 'phone' ? d.phones.setPhoneKey(p.id, p.idx, body.key) : d.phones.setOverride(p.id, p.idx, body.key, actor.name);
-    audit(actor.name, `telefon:${phone.id}`, body.scope === 'phone' ? 'key' : 'key-override', `${phone.name}, Taste ${p.idx + 1}${body.scope === 'incident' ? ' (Einsatz)' : ''}: ${keyText(body.key)}`);
+    audit(actor.name, `telefon:${phone.id}`, body.scope === 'phone' ? 'key' : 'key-override', `${phone.name}, Taste ${p.idx + 1}${body.scope === 'incident' ? ' (Lage)' : ''}: ${keyText(body.key)}`);
     return slots;
   });
 
@@ -70,7 +70,7 @@ export function phoneRoutes(app: FastifyInstance, d: Deps): void {
     const actor = actorOf(req);
     if (s === 'phone' && !actor.isAdmin) throw new HttpError(403, 'Die Grundbelegung ändern nur Admins');
     const slots = s === 'phone' ? d.phones.setPhoneKey(p.id, p.idx, null) : d.phones.setOverride(p.id, p.idx, null, actor.name);
-    audit(actor.name, `telefon:${phone.id}`, s === 'phone' ? 'key' : 'key-override', `${phone.name}, Taste ${p.idx + 1}${s === 'incident' ? ' (Einsatz)' : ''}: ${s === 'phone' ? 'Grundbelegung entfernt' : 'zurück auf Grundbelegung'}`);
+    audit(actor.name, `telefon:${phone.id}`, s === 'phone' ? 'key' : 'key-override', `${phone.name}, Taste ${p.idx + 1}${s === 'incident' ? ' (Lage)' : ''}: ${s === 'phone' ? 'Grundbelegung entfernt' : 'zurück auf Grundbelegung'}`);
     return slots;
   });
 

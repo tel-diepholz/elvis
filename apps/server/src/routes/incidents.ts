@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   FORCE_IMPORT_MAX_BYTES,
+  INCIDENT_KINDS,
+  incidentSettingsSchema,
   JOURNAL_CATEGORY_LABELS,
   deployUnitSchema,
   forceImportSchema,
@@ -27,13 +29,13 @@ const text = (max: number) => z.string().trim().max(max);
 const coord = (min: number, max: number) => z.number().min(min).max(max).nullable();
 
 const newIncident = z.object({
+  kind: z.enum(INCIDENT_KINDS).optional(),
   keyword: text(40).optional(),
   title: text(200).min(1, 'Bezeichnung fehlt'),
   location: text(200).optional(),
   leader: text(100).optional(),
   lat: coord(-90, 90).optional(),
   lon: coord(-180, 180).optional(),
-  procurementMode: z.enum(['self', 'staff']).optional(),
   procurementStaff: text(120).optional(),
 });
 
@@ -54,6 +56,15 @@ export function incidentRoutes(
   app: FastifyInstance,
   { incidents, forces, store, notify }: { incidents: IncidentService; forces: ForceService; store: Store; notify: (t: Topic[]) => void },
 ): void {
+  // --- Einstellungen: vordefinierte Einsatzstichworte (Ändern nur Admins) ---
+  app.get('/api/incidents/settings', async () => incidents.settings());
+  app.put('/api/system/incident', async (req) => {
+    const s = incidents.setSettings(parse(incidentSettingsSchema, req.body), operatorOf(req));
+    store.addAudit({ operator: operatorOf(req), target: 'lage', action: 'settings', params: '', success: true, message: 'Einsatzstichworte geändert' });
+    notify(['audit', 'settings']);
+    return s;
+  });
+
   app.get('/api/incidents', async () => incidents.list());
   app.get('/api/incidents/active', async () => incidents.active());
 
@@ -169,7 +180,7 @@ export function incidentRoutes(
     return incidents.patchUnit(id, parse(unitPatchSchema, req.body), operatorOf(req));
   });
 
-  // Kräfteverwaltung: lesen alle (Übernahme in den Einsatz), pflegen Admins (/api/system/)
+  // Kräfteverwaltung: lesen alle (Übernahme in die Lage), pflegen Admins (/api/system/)
   const audit = (operator: string, action: string, message: string) => {
     store.addAudit({ operator, target: 'kräfte', action, params: '', success: true, message });
     notify(['forces', 'audit']);

@@ -84,7 +84,7 @@ export function ArchiveHint({ status }: { status: PrintStatus }) {
   return (
     <p className="muted print-archive">
       <FolderInput size={16} />{' '}
-      {a.incident ? `Der Druck wird im Einsatz „${a.incident.title}“ unter „${a.path || 'Einsatz'}“ abgelegt.` : 'Kein Einsatz eröffnet – der Druck wird nicht abgelegt.'}
+      {a.incident ? `Der Druck wird in der Lage „${a.incident.title}“ unter „${a.path || 'Lage'}“ abgelegt.` : 'Keine Lage eröffnet – der Druck wird nicht abgelegt.'}
     </p>
   );
 }

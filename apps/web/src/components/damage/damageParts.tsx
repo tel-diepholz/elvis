@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 
-/** Schadenkonten eines Einsatzes (Topic „damage“) */
+/** Schadenkonten einer Lage (Topic „damage“) */
 export function useDamageAccounts(incidentId: number | null | undefined) {
   const { user } = useAuth();
   return useQuery({ queryKey: ['damage', incidentId ?? 0], queryFn: () => api.damageAccounts(incidentId!), enabled: !!user && !!incidentId });

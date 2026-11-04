@@ -35,7 +35,7 @@ function useTileSummary() {
       const text = String(t.config.text ?? '').trim();
       return text ? (text.length > 40 ? `${text.slice(0, 40)} …` : text) : 'kein Text';
     }
-    if (t.type === 'guestWifi') return String(t.config.title ?? '').trim() || 'Gastnetz des Einsatzes';
+    if (t.type === 'guestWifi') return String(t.config.title ?? '').trim() || 'Gastnetz der Lage';
     if (t.type === 'tasks') return t.config.personal === true ? 'mit persönlichen Aufgaben' : 'ohne persönliche Aufgaben';
     if (t.type === 'forces') return [t.config.subunits !== false ? 'mit Untereinheiten' : 'nur oberste Ebene', t.config.planned === true && 'mit geplanten'].filter(Boolean).join(', ');
     if (t.type === 'forecast') return t.config.range === '24h' ? '24 Stunden' : t.config.range === '7d' ? '7 Tage' : '24 Stunden und 7 Tage';
@@ -212,7 +212,7 @@ export function TileSettings({
           <Toggle label="Kartenstil in der Karte wählbar" checked={tile.config.styleControl === true} onChange={(on) => set('styleControl', on)} />
           {dashboard ? (
             <p className="field-hint">
-              Mit „mitführen“ folgt die Karte Fahrzeug bzw. Einsatzort und lässt sich nicht verschieben. Die Objektliste zeigt die Objekte und Kräfte des Einsatzes wie
+              Mit „mitführen“ folgt die Karte Fahrzeug bzw. Einsatzort und lässt sich nicht verschieben. Die Objektliste zeigt die Objekte und Kräfte der Lage wie
               auf der Karte: anfliegen, ein- und ausblenden, umbenennen, Farbe. Setzen und Formen bearbeiten geht auf der Seite „Karte“. Ein in der Karte gewählter
               Kartenstil wird für diese Kachel gespeichert.
             </p>
@@ -220,7 +220,7 @@ export function TileSettings({
             <p className="field-hint">
               Mit „mitführen“ folgt die Karte Fahrzeug bzw. Einsatzort und lässt sich nicht verschieben. Ohne Mitführen lässt sie sich am Bildschirm per Touch und unter
               „Bildschirme“ in der Vorschau verschieben und zoomen; der Bildschirm behält den zuletzt eingestellten Ausschnitt, auch nach „Neu laden“. Die Objektliste
-              zeigt Objekte und Kräfte des Einsatzes zum Anfliegen (am Bildschirm ohne Anmeldung nur lesend). Einen am Bildschirm gewählten Kartenstil behält der
+              zeigt Objekte und Kräfte der Lage zum Anfliegen (am Bildschirm ohne Anmeldung nur lesend). Einen am Bildschirm gewählten Kartenstil behält der
               Bildschirm bis zur nächsten Änderung hier.
             </p>
           )}
@@ -271,7 +271,7 @@ export function TileSettings({
           <Field label="Überschrift" hint="optional, z. B. „Gäste-WLAN“">
             <input value={String(tile.config.title ?? '')} onChange={(e) => set('title', e.target.value.slice(0, 60))} maxLength={60} />
           </Field>
-          <p className="field-hint">Zeigt Netzname, Passwort und QR-Code des Gastnetzes, solange ein Einsatz läuft. Einrichten unter Einstellungen → WLAN-Accesspoints.</p>
+          <p className="field-hint">Zeigt Netzname, Passwort und QR-Code des Gastnetzes, solange eine Lage läuft. Einrichten unter Einstellungen → WLAN-Accesspoints.</p>
         </>
       )}
       {tile.type === 'forecast' && (
@@ -295,7 +295,7 @@ export function TileSettings({
         <>
           <Toggle label="Persönliche Aufgaben anzeigen" checked={tile.config.personal === true} onChange={(on) => set('personal', on)} />
           <p className="field-hint">
-            Zeigt alle offenen Aufgaben des laufenden Einsatzes nach Fälligkeit. Persönliche Aufgaben hat sich ein Benutzer selbst zugewiesen – sie erscheinen nur, wenn
+            Zeigt alle offenen Aufgaben der laufenden Lage nach Fälligkeit. Persönliche Aufgaben hat sich ein Benutzer selbst zugewiesen – sie erscheinen nur, wenn
             hier eingeschaltet.
           </p>
         </>
@@ -305,7 +305,7 @@ export function TileSettings({
           <Toggle label="Untereinheiten anzeigen" checked={tile.config.subunits !== false} onChange={(on) => set('subunits', on)} />
           <Toggle label="Geplante Einheiten anzeigen" checked={tile.config.planned === true} onChange={(on) => set('planned', on)} />
           <p className="field-hint">
-            Zeigt die Kräfte des laufenden Einsatzes nach Einsatzabschnitten mit Status und Stärke; Einheiten mit Untereinheiten mit der Summe. Entlassene erscheinen
+            Zeigt die Kräfte der laufenden Lage nach Einsatzabschnitten mit Status und Stärke; Einheiten mit Untereinheiten mit der Summe. Entlassene erscheinen
             nicht.
           </p>
         </>

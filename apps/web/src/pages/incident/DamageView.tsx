@@ -339,7 +339,7 @@ function AccountCard({
               <li key={u.id} className="damage-entry">
                 <TacticalSignImage sign={u.sign} height={24} />
                 <span className="grow">
-                  <Link to={`/einsatz/kraefte/${u.id}`} className="unit-link">
+                  <Link to={`/lage/kraefte/${u.id}`} className="unit-link">
                     {u.name}
                   </Link>
                 </span>

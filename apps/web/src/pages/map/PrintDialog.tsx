@@ -24,6 +24,7 @@ import {
   type Orientation,
   type PaperFormat,
   type Unit,
+  gaussWind,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { PrinterSettings, downloadBlob, mediaFor, usePrintForm, usePrintStatus } from '../../components/print/PrinterSettings';
@@ -48,9 +49,9 @@ export interface PrintDialogProps {
   /** null, solange kein Fahrzeugstandort (GPS) bekannt ist. */
   vehicle: (LatLon & { name: string }) | null;
   incident: Incident | null;
-  /** Kartenobjekte des Einsatzes; vorgewählt sind die sichtbaren mit ihrer Beschriftung, im Dialog einzeln änderbar */
+  /** Kartenobjekte der Lage; vorgewählt sind die sichtbaren mit ihrer Beschriftung, im Dialog einzeln änderbar */
   objects: MapObject[];
-  /** Kräfte des Einsatzes; gedruckt werden die gesetzten und eingeblendeten */
+  /** Kräfte der Lage; gedruckt werden die gesetzten und eingeblendeten */
   units: Unit[];
   /** Wind für Ausbreitung und Hinweis (nur wenn Geschwindigkeit und Richtung bekannt sind). */
   wind: Wind | undefined;
@@ -118,7 +119,7 @@ function objectsForPrint(objects: MapObject[], weather: Wind | undefined, now: D
       legend.push({ color, label: `${o.name}: Schemasektor 60° in Windrichtung (${fmtDistance(o.data.sectorM)})` });
     }
     if (o.kind === 'gauss') {
-      const plume = computePlume(o.data, o, weather, now);
+      const plume = computePlume(o.data, o, gaussWind(weather, o.data), now);
       if (!plume) continue;
       for (const { level, polygon } of plume.contours) {
         polygons.push({ points: polygon, stroke: level.path.color, fill: level.path.fillColor, fillOpacity: level.path.fillOpacity, dashed: 'dashArray' in level.path });

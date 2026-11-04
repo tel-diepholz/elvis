@@ -205,7 +205,7 @@ export function overpassResultText(r: OverpassResult): string[] {
 
 /**
  * Bereich „OpenStreetMap abfragen“ (aus dem Menü „Objekte“) unter der Werkzeugleiste: Vorlage laden (aus den
- * Einstellungen oder im Einsatz gespeichert), Abfrage bearbeiten, im Kartenausschnitt ausführen und im Einsatz
+ * Einstellungen oder in der Lage gespeichert), Abfrage bearbeiten, im Kartenausschnitt ausführen und im Einsatz
  * speichern. Bleibt beim Klick in die Karte offen; Esc oder X schließt. Die Abfrage bleibt beim Schließen erhalten.
  */
 export function OverpassPanel({
@@ -260,7 +260,7 @@ export function OverpassPanel({
       const same = saved.find((s) => s.name === draft.name.trim());
       return same ? api.saveIncidentOverpassQuery(same.id, draft) : api.addIncidentOverpassQuery(incidentId!, draft);
     },
-    onSuccess: (q) => (void invalidate(), setSelected(`inc:${q.id}`), toast('success', `„${q.name}“ im Einsatz gespeichert`)),
+    onSuccess: (q) => (void invalidate(), setSelected(`inc:${q.id}`), toast('success', `„${q.name}“ in der Lage gespeichert`)),
     onError: (e) => toast('error', e.message),
   });
   const remove = useMutation({
@@ -299,7 +299,7 @@ export function OverpassPanel({
             </optgroup>
           )}
           {saved.length > 0 && (
-            <optgroup label="Im Einsatz gespeichert">
+            <optgroup label="In der Lage gespeichert">
               {saved.map((q) => (
                 <option key={q.id} value={`inc:${q.id}`}>
                   {q.name}
@@ -315,7 +315,7 @@ export function OverpassPanel({
             aria-label="Gespeicherte Abfrage löschen"
             title="Gespeicherte Abfrage löschen"
             disabled={remove.isPending}
-            onClick={() => window.confirm(`Abfrage „${draft.name}“ aus dem Einsatz löschen?`) && remove.mutate(savedId)}
+            onClick={() => window.confirm(`Abfrage „${draft.name}“ aus der Lage löschen?`) && remove.mutate(savedId)}
           >
             <Trash2 size={17} />
           </button>
@@ -334,7 +334,7 @@ export function OverpassPanel({
         </button>
         {canEdit && (
           <button type="button" className="btn btn-sm" disabled={!!problem || save.isPending} onClick={() => save.mutate()}>
-            <Save size={14} /> Im Einsatz speichern
+            <Save size={14} /> In der Lage speichern
           </button>
         )}
         {hits && (

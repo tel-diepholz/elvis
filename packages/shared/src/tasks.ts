@@ -115,7 +115,7 @@ export type SnoozeInput = z.infer<typeof snoozeSchema>;
 /** Erledigt; bei wiederkehrenden beendet `final` die Serie, sonst wird der nächste Durchgang fällig */
 export const taskDoneSchema = z.object({ final: z.boolean().default(false) });
 
-// --- Aufgabenvorlagen (beim Eröffnen eines Einsatzes angelegt) ---
+// --- Aufgabenvorlagen (beim Eröffnen einer Lage angelegt) ---
 
 /** Zeiten relativ zum Einsatzbeginn in Minuten */
 export const taskTemplateScheduleSchema = z.discriminatedUnion('kind', [

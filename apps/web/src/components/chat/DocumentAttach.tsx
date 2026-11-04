@@ -31,8 +31,8 @@ export function DocumentAttachButton({
     onSuccess: (a) => (onAttached(a), setOpen(false)),
     onError: (e) => toast('error', e.message),
   });
-  const reason = !incident ? 'Anhänge kommen aus den Dokumenten – dafür muss ein Einsatz laufen' : (disabledReason ?? null);
-  const title = reason ?? 'Dokument aus dem Einsatz anhängen';
+  const reason = !incident ? 'Anhänge kommen aus den Dokumenten – dafür muss eine Lage laufen' : (disabledReason ?? null);
+  const title = reason ?? 'Dokument aus der Lage anhängen';
   return (
     <>
       <button
@@ -55,7 +55,7 @@ export function DocumentAttachButton({
   );
 }
 
-/** Dokumente des Einsatzes mit Ordner, Größe und Suche; Klick wählt */
+/** Dokumente der Lage mit Ordner, Größe und Suche; Klick wählt */
 function DocumentPicker({ incidentId, busy, onPick }: { incidentId: number; busy: boolean; onPick: (d: IncidentDocument) => void }) {
   const { data } = useQuery({ queryKey: ['documents', incidentId], queryFn: () => api.documents(incidentId) });
   const [q, setQ] = useState('');
@@ -70,8 +70,8 @@ function DocumentPicker({ incidentId, busy, onPick }: { incidentId: number; busy
   if (!data) return <Loading />;
   if (!data.documents.length)
     return (
-      <EmptyState icon={<FileText size={28} />} title="Keine Dokumente im Einsatz">
-        Dateien zuerst unter Einsatz → Dokumente hochladen oder anlegen.
+      <EmptyState icon={<FileText size={28} />} title="Keine Dokumente in der Lage">
+        Dateien zuerst unter Lage → Dokumente hochladen oder anlegen.
       </EmptyState>
     );
   return (

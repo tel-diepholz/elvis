@@ -385,7 +385,7 @@ export function UnitsView({ incident, readOnly }: { incident: Incident; readOnly
               <TacticalSignImage sign={u.sign} height={depth ? 28 : 34} />
               <div>
                 <div className="cell-title">
-                  <Link to={`/einsatz/kraefte/${u.id}`} className="unit-link">
+                  <Link to={`/lage/kraefte/${u.id}`} className="unit-link">
                     {u.name}
                   </Link>{' '}
                   {u.role && <Badge tone="info">{u.role}</Badge>} {u.section && u.section !== groupSection && <Badge>{u.section}</Badge>}

@@ -32,7 +32,7 @@ import {
 } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { compass, fmtDate, fmtOpt, fmtTime } from '../../lib/format';
-import { useInfo, useNow, useSettings } from '../../lib/hooks';
+import { useInfo, useNow, useSettings, useVehiclePosition } from '../../lib/hooks';
 import { autoSource } from '../../lib/mapSources';
 import { DISPLAY_MAP_VIEW_EVENT, useAlerts, useDevice } from '../../lib/live';
 import { loadMapView, sameMapView, saveMapView } from '../../lib/mapView';
@@ -434,7 +434,7 @@ function MapTile({ tile }: { tile: DisplayTile }) {
   // Einsatzort: Bildschirme und angemeldete Benutzer dürfen ihn lesen, sonst bleibt er weg
   const { data: incident } = useQuery({ queryKey: ['incident', 'active', 'display'], queryFn: () => api.activeIncident().catch(() => null) });
   const icon = useMemo(() => tacticalIcon(settings?.mapSign ?? DEFAULT_VEHICLE_SIGN), [settings?.mapSign]);
-  // Kartenobjekte des Einsatzes (Flächen, Punkte, Ausbreitungen) wie auf der Karte in ELVIS
+  // Kartenobjekte der Lage (Flächen, Punkte, Ausbreitungen) wie auf der Karte in ELVIS
   const { data: objects = [] } = useMapObjects(incident?.id);
   const { data: units = [] } = useMapUnits(incident?.id);
   const now = useNow();
@@ -450,7 +450,7 @@ function MapTile({ tile }: { tile: DisplayTile }) {
     setLocalSource(id ?? '');
     writeLocal(sourceKey, id ?? '');
   };
-  const gps = weather?.state.position;
+  const gps = useVehiclePosition().position;
   const vPos: [number, number] | null = gps ? [gps.lat, gps.lon] : null;
   const iPos: [number, number] | null = incident?.lat != null && incident.lon != null ? [incident.lat, incident.lon] : null;
   const follow = tile.config.follow !== false;
@@ -506,7 +506,7 @@ function MapTile({ tile }: { tile: DisplayTile }) {
       {showList && incident && (
         <ObjectList
           incident={incident}
-          vehicle={{ name: settings?.vehicle.name ?? 'ELW', pos: vPos }}
+          vehicle={{ name: settings?.vehicle.name ?? 'ELW', pos: vPos, source: gps?.source ?? null }}
           objects={objects}
           units={units}
           wind={wind}
@@ -575,7 +575,7 @@ function TextTile({ tile }: { tile: DisplayTile }) {
   );
 }
 
-/** Gastnetz des laufenden Einsatzes zum Abscannen */
+/** Gastnetz der laufenden Lage zum Abscannen */
 function GuestWifiTile({ tile }: { tile: DisplayTile }) {
   const { data } = useQuery({ queryKey: ['wifi', 'guest'], queryFn: api.wifiGuest });
   if (!data) return <TileEmpty text="Lade Gastnetz …" />;
@@ -595,12 +595,12 @@ function GuestWifiTile({ tile }: { tile: DisplayTile }) {
   );
 }
 
-/** Offene Aufgaben des Einsatzes nach Fälligkeit; persönliche (einem Benutzer zugewiesene) nur auf Wunsch */
+/** Offene Aufgaben der Lage nach Fälligkeit; persönliche (einem Benutzer zugewiesene) nur auf Wunsch */
 function TasksTile({ tile }: { tile: DisplayTile }) {
   const now = useNow();
   const { data: incident } = useQuery({ queryKey: ['incident', 'active', 'display'], queryFn: () => api.activeIncident().catch(() => null) });
   const { data: tasks } = useQuery({ queryKey: ['tasks', incident?.id ?? 0, 'display'], queryFn: () => api.tasks(incident!.id), enabled: !!incident });
-  if (!incident) return <TileEmpty text="Kein Einsatz aufgelegt" />;
+  if (!incident) return <TileEmpty text="Keine Lage aufgelegt" />;
   if (!tasks) return <TileEmpty text="Lade Aufgaben …" />;
   const personal = tile.config.personal === true;
   const open = tasks.filter((t) => !t.doneAt && (personal || t.assignee.kind !== 'user'));
@@ -640,11 +640,11 @@ function TasksTile({ tile }: { tile: DisplayTile }) {
 
 const NO_SECTION = 'Ohne Abschnitt';
 
-/** Kräfte des Einsatzes nach Abschnitten als Baum; entlassene nie, geplante und Untereinheiten nach Einstellung */
+/** Kräfte der Lage nach Abschnitten als Baum; entlassene nie, geplante und Untereinheiten nach Einstellung */
 function ForcesTile({ tile }: { tile: DisplayTile }) {
   const { data: incident } = useQuery({ queryKey: ['incident', 'active', 'display'], queryFn: () => api.activeIncident().catch(() => null) });
   const { data: units } = useMapUnits(incident?.id);
-  if (!incident) return <TileEmpty text="Kein Einsatz aufgelegt" />;
+  if (!incident) return <TileEmpty text="Keine Lage aufgelegt" />;
   if (!units) return <TileEmpty text="Lade Kräfte …" />;
   const subunits = tile.config.subunits !== false;
   const planned = tile.config.planned === true;
@@ -719,7 +719,7 @@ function DamageTile() {
   const { data: incident } = useQuery({ queryKey: ['incident', 'active', 'display'], queryFn: () => api.activeIncident().catch(() => null) });
   const { data: accounts } = useQuery({ queryKey: ['damage', incident?.id ?? 0], queryFn: () => api.damageAccounts(incident!.id), enabled: !!incident });
   const { data: units = [] } = useMapUnits(incident?.id);
-  if (!incident) return <TileEmpty text="Kein Einsatz aufgelegt" />;
+  if (!incident) return <TileEmpty text="Keine Lage aufgelegt" />;
   if (!accounts) return <TileEmpty text="Lade Schadenkonten …" />;
   const open = accounts.filter((a) => !a.closedAt);
   if (!open.length) return <TileEmpty text="Keine Schadenkonten" />;

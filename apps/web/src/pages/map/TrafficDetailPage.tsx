@@ -114,7 +114,7 @@ function TrackedNote({ tracked }: { tracked: MapObject | undefined }) {
   const d = tracked.data as TrackedData;
   return (
     <p className="muted">
-      In der Objektliste des Einsatzes seit {fmtDateTime(tracked.createdAt)} ({tracked.createdBy})
+      In der Objektliste der Lage seit {fmtDateTime(tracked.createdAt)} ({tracked.createdBy})
       {d.lostSince ? ` – kein Signal seit ${fmtDateTime(d.lostSince)}` : ''}.
     </p>
   );

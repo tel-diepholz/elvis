@@ -269,7 +269,7 @@ describe('Gastdrucker', () => {
     await settings({ mode: 'release' });
     const res = await submit();
     expect(res.statusCode).toBe(409);
-    expect(res.json().error).toContain('Einsatz');
+    expect(res.json().error).toContain('Lage');
   });
 
   it('druckt direkt auf dem eingestellten Drucker, ohne Fähigkeiten zu überschreiten', async () => {

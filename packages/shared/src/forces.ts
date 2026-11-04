@@ -99,9 +99,9 @@ export interface ForceUnit {
   callsign: string;
   organization: string;
   notes: string;
-  /** E-Mail-Adresse (z. B. Leitstelle, aus einer eingegangenen Mail gemerkt); geht bei der Übernahme in den Einsatz mit */
+  /** E-Mail-Adresse (z. B. Leitstelle, aus einer eingegangenen Mail gemerkt); geht bei der Übernahme in die Lage mit */
   email: string;
-  /** Rufnummer für SMS und Messenger (z. B. aus einer eingegangenen Nachricht gemerkt); geht bei der Übernahme in den Einsatz mit */
+  /** Rufnummer für SMS und Messenger (z. B. aus einer eingegangenen Nachricht gemerkt); geht bei der Übernahme in die Lage mit */
   mobile: string;
   sign: TacticalSign;
   /** Eigene Stärke (ohne Untereinheiten) */

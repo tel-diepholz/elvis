@@ -24,7 +24,8 @@ Treiber `actisense-airmar`: liest die Station über ein Actisense-Gateway (NGX-1
   - Mittelwind = 2-Minuten-Mittel, Böe = höchster 3-Sekunden-Mittelwert der letzten 10 Minuten (die Station sendet
     keine Böen).
   - Werte, die die Station nicht misst (z. B. Luftfeuchte ohne Feuchtemodul), bleiben leer.
-- **Fahrzeugstandort:** Das GPS der Station liefert die Fahrzeugposition für Karte und Druck.
+- **Fahrzeugstandort:** Das GPS der Station liefert die Fahrzeugposition für Karte und Druck. Ohne GPS-Fix lässt
+  sie sich in der Karte von Hand setzen (siehe [Karte](../funktionen/karte.md)).
 - **Verbindung:** Bei Abbruch verbindet sich der Treiber alle 5 s neu. Ohne Daten seit 15 s gilt die Station als nicht
   erreichbar (Meldung in ELVIS).
 - **Docker:** Gerät in `deploy/compose.override.yaml` durchreichen (`devices`, `group_add: dialout`, siehe Vorlage

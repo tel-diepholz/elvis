@@ -18,7 +18,7 @@ export function wifiRoutes(app: FastifyInstance, d: Deps): void {
     d.notify(['audit']);
   };
 
-  // Gastnetz des laufenden Einsatzes (auch für gekoppelte Bildschirme, Kachel „Gast-WLAN“)
+  // Gastnetz der laufenden Lage (auch für gekoppelte Bildschirme, Kachel „Gast-WLAN“)
   app.get('/api/wifi/guest', async () => d.wifi.guest());
 
   // Angemeldete WLAN-Geräte (Netzwerk-Seite, nur angemeldet)

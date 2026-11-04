@@ -25,11 +25,11 @@ const fromDisplay = (type: Exclude<DisplayTileType, 'scenes'>, w: number, h: num
 });
 
 export const DASHBOARD_TILE_TYPES: Record<DashboardTileType, DashboardTileTypeInfo> = {
-  incident: { label: 'Laufender Einsatz', description: 'Stichwort, Einsatzort, Einsatzdauer und Stärke der Kräfte', size: { w: 8, h: 3 }, requiresLogin: true },
+  incident: { label: 'Laufende Lage', description: 'Stichwort, Einsatzort, Einsatzdauer und Stärke der Kräfte', size: { w: 8, h: 3 }, requiresLogin: true },
   journal: { label: 'Einsatztagebuch', description: 'Letzte Einträge im Einsatztagebuch', size: { w: 8, h: 4 }, requiresLogin: true },
   chat: { label: 'Nachrichten', description: 'Eingang der Nachrichten (SMS und Messenger), neueste Gespräche zuerst', size: { w: 4, h: 5 }, requiresLogin: true },
   mail: { label: 'E-Mail', description: 'Posteingang des Fahrzeugpostfachs, ungelesene hervorgehoben', size: { w: 4, h: 5 }, requiresLogin: true },
-  messages: { label: 'Meldungen im Einsatz', description: 'Meldungen, bei denen Sie gerade etwas tun müssen', size: { w: 4, h: 4 }, requiresLogin: true },
+  messages: { label: 'Meldungen in der Lage', description: 'Meldungen, bei denen Sie gerade etwas tun müssen', size: { w: 4, h: 4 }, requiresLogin: true },
   tasks: fromDisplay('tasks', 4, 5, { requiresLogin: true }),
   forces: fromDisplay('forces', 6, 6, { requiresLogin: true }),
   damage: fromDisplay('damage', 6, 4, { requiresLogin: true }),

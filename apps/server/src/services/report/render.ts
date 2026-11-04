@@ -110,7 +110,7 @@ export async function renderReport(data: ReportData, attachments: PreparedAttach
   doc.outline.addItem('Deckblatt');
   doc.font('Helvetica-Bold').fontSize(26).fillColor('#b71c1c').text('Einsatzbericht', w.left, mm(40), { width: w.width });
   doc.moveDown(0.3);
-  doc.font('Helvetica-Bold').fontSize(16).fillColor('black').text(pdfText([incident.keyword, incident.title].filter(Boolean).join(' – ') || `Einsatz ${incident.id}`), { width: w.width });
+  doc.font('Helvetica-Bold').fontSize(16).fillColor('black').text(pdfText([incident.keyword, incident.title].filter(Boolean).join(' – ') || `Lage ${incident.id}`), { width: w.width });
   doc.moveDown(1);
   w.keyValues([
     ['Einsatzort', incident.location],
@@ -357,7 +357,7 @@ export async function renderReport(data: ReportData, attachments: PreparedAttach
 
   // --- Chat und E-Mail ---
   section('Chat und E-Mail im Einsatzzeitraum');
-  w.muted('Nachrichten und E-Mails sind keinem Einsatz fest zugeordnet; aufgeführt ist der gesamte Verkehr zwischen Beginn und Ende des Einsatzes.');
+  w.muted('Nachrichten und E-Mails sind keiner Lage fest zugeordnet; aufgeführt ist der gesamte Verkehr zwischen Beginn und Ende der Lage.');
   if (ctx.messageAttachments) w.muted(`${ctx.messageAttachments} Anhang/Anhänge aus Chat und E-Mail sind als Dateianhang in dieses PDF eingebettet (E-Mails zusätzlich im Original als .eml).`);
   w.heading('Chat / SMS');
   w.table(

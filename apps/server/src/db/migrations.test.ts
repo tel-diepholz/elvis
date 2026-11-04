@@ -126,7 +126,7 @@ describe('Migrationen', () => {
       legacy.exec(`INSERT INTO sms_messages VALUES (7, 'inbox', 1, '+491711234567', 'Hallo', 'received', NULL, 0, 't1', 'Gateway'),
         (9, 'sent', 2, '+491609999999', 'Rückruf', 'failed', 'Netz', 1, 't2', 'Max Müller')`);
       // Stand vor der SMS-Migration (danach: Signal-Kennungen neu prüfen)
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 8}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 9}`);
       legacy.close();
 
       const db = openDb(dir);
@@ -150,7 +150,7 @@ describe('Migrationen', () => {
       legacy.exec('ALTER TABLE cameras DROP COLUMN bells; DROP TABLE user_dashboards; DROP TABLE phone_key_overrides; DROP TABLE phones');
       legacy.exec(`INSERT INTO chat_reachability VALUES ('signal', '+491711234567', 1, '+491711234567', '2099-01-01'),
         ('signal', '+491609999999', 1, 'uuid-x', '2099-01-01'), ('threema', '+491711234567', 1, 'ABCD1234', '2099-01-01')`);
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 7}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 8}`);
       legacy.close();
 
       const db = openDb(dir);
@@ -182,7 +182,7 @@ describe('Migrationen', () => {
         [2, 'RW', 'EA Ost', 't12'],
         [2, 'DLK', 'EA Süd', 't13'],
       ] as const) unit.run(inc, name, section, at, at);
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 3}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 4}`);
       legacy.close();
 
       const db = openDb(dir);
@@ -199,6 +199,27 @@ describe('Migrationen', () => {
         { name: 'ELW', account: 'EA Süd' },
         { name: 'RW', account: 'EA Ost' },
         { name: 'DLK', account: 'EA Süd' },
+      ]);
+      db.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('macht aus Lagen mit Beschaffung über den Stab Stablagen', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'elvis-mig-'));
+    try {
+      openDb(dir).close();
+      const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec('ALTER TABLE incidents DROP COLUMN kind');
+      legacy.exec("INSERT INTO incidents (title, started_at, closed_at, procurement_mode) VALUES ('alt', 'a', 'b', 'staff'), ('neu', 'a', 'b', 'self')");
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 1}`);
+      legacy.close();
+
+      const db = openDb(dir);
+      expect(db.prepare('SELECT title, kind FROM incidents ORDER BY id').all()).toEqual([
+        { title: 'alt', kind: 'staff' },
+        { title: 'neu', kind: 'rescue' },
       ]);
       db.close();
     } finally {

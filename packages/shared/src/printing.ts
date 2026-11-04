@@ -3,7 +3,7 @@ import { archivePathSchema } from './documents';
 
 /**
  * Druckserver: Ein Addon (CUPS) betreibt die Drucker, ELVIS reicht PDFs per IPP weiter. Drucken dürfen auch
- * anonyme Arbeitsplätze; auf Wunsch landet jeder Druck in der Dokumentverwaltung des laufenden Einsatzes.
+ * anonyme Arbeitsplätze; auf Wunsch landet jeder Druck in der Dokumentverwaltung der laufenden Lage.
  */
 
 export type PrinterState = 'idle' | 'processing' | 'stopped';
@@ -134,7 +134,7 @@ export const guestPrintSettingsSchema = z
     color: z.enum(['color', 'monochrome']).default('monochrome'),
     /** Höchstzahl Kopien je Auftrag (Gäste wählen sie am Gerät) */
     maxCopies: z.coerce.number().int().min(1).max(99).default(5),
-    /** Nur annehmen, solange das Gast-WLAN läuft (Einsatz eröffnet) */
+    /** Nur annehmen, solange das Gast-WLAN läuft (Lage eröffnet) */
     onlyWithGuestWifi: z.boolean().default(true),
   })
   .refine((g) => g.mode !== 'direct' || g.printer !== null, { message: 'Für „Direkt drucken“ einen Drucker wählen', path: ['printer'] });
@@ -158,7 +158,7 @@ export const guestReleaseSchema = z.object({ options: printOptionsSchema });
 export type GuestRelease = z.infer<typeof guestReleaseSchema>;
 
 export interface PrintSettings {
-  /** Drucke in der Dokumentverwaltung des laufenden Einsatzes ablegen */
+  /** Drucke in der Dokumentverwaltung der laufenden Lage ablegen */
   archive: boolean;
   /** Ordnerpfad im Einsatz, Platzhalter wie bei Vorlagen, z. B. „Drucke/{{datum.iso}}“ */
   folderPath: string;

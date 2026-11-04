@@ -13,7 +13,7 @@ let dataDir: string;
 
 let cookie = '';
 
-async function req<T = unknown>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: unknown) {
+async function req<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: unknown) {
   const res = await app.server.inject({ method, url, payload: payload as object, headers: { cookie } });
   return { status: res.statusCode, body: (res.body ? res.json() : undefined) as T };
 }
@@ -67,6 +67,36 @@ describe('Einsatzbezogene Bereiche', () => {
     const { body: incident } = await req<Incident>('POST', '/api/incidents', { title: 'Test' });
     const res = await req('POST', `/api/incidents/${incident.id}/journal`, { category: 'system', text: 'x' });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('Art der Lage', () => {
+  it('leitet die Beschaffung aus der Art ab und leert unpassende Felder', async () => {
+    expect((await req('POST', '/api/incidents', { title: 'X', kind: 'unbekannt' })).status).toBe(400);
+    const area = (await req<Incident>('POST', '/api/incidents', { title: 'Orkan Kyrill', kind: 'area', keyword: 'B3', location: 'Hauptstr. 1', procurementStaff: 'Stab HVB' })).body;
+    expect(area).toMatchObject({ kind: 'area', keyword: '', location: '', procurementMode: 'self', procurementStaff: '' });
+
+    const staff = (await req<Incident>('PATCH', `/api/incidents/${area.id}`, { kind: 'staff', procurementStaff: 'Stab HVB', location: 'egal' })).body;
+    expect(staff).toMatchObject({ kind: 'staff', procurementMode: 'staff', procurementStaff: 'Stab HVB', location: '' });
+
+    const rescue = (await req<Incident>('PATCH', `/api/incidents/${area.id}`, { kind: 'rescue', keyword: 'TH2', location: 'A1' })).body;
+    expect(rescue).toMatchObject({ kind: 'rescue', procurementMode: 'self', procurementStaff: '', keyword: 'TH2', location: 'A1' });
+
+    const texts = (await req<JournalEntry[]>('GET', `/api/incidents/${area.id}/journal`)).body.map((e) => e.text);
+    expect(texts[0]).toBe('Lage eröffnet (Flächenlage): Orkan Kyrill');
+    expect(texts.some((t) => t.startsWith('Einsatzdaten geändert: Art'))).toBe(true);
+  });
+
+  it('ohne Art: Brand/Technische Hilfe', async () => {
+    expect((await req<Incident>('POST', '/api/incidents', { title: 'VU', keyword: 'TH1' })).body).toMatchObject({ kind: 'rescue', keyword: 'TH1' });
+  });
+
+  it('speichert vordefinierte Einsatzstichworte (nur Admins ändern)', async () => {
+    expect((await req('GET', '/api/incidents/settings')).body).toMatchObject({ keywords: [] });
+    const saved = await req<{ keywords: string[] }>('PUT', '/api/system/incident', { keywords: ['B3', 'TH2', 'B3'] });
+    expect(saved.body.keywords).toEqual(['B3', 'TH2']);
+    expect((await req('PUT', '/api/system/incident', { keywords: ['x'.repeat(41)] })).status).toBe(400);
+    expect((await req<{ keywords: string[] }>('GET', '/api/incidents/settings')).body.keywords).toEqual(['B3', 'TH2']);
   });
 });
 

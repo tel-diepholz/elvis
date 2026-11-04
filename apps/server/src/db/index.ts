@@ -163,7 +163,7 @@ const MIGRATIONS: Migration[] = [
   `,
   // Ergebnis je Schritt, damit nach einem Fehler sichtbar bleibt, wo der Lauf abgebrochen ist
   `ALTER TABLE addon_job_runs ADD COLUMN steps TEXT NOT NULL DEFAULT '[]';`,
-  // Kameras (Einstellungen) und im Einsatz gespeicherte Kamerapositionen
+  // Kameras (Einstellungen) und in der Lage gespeicherte Kamerapositionen
   `
   CREATE TABLE cameras (
     id TEXT PRIMARY KEY,
@@ -236,7 +236,7 @@ const MIGRATIONS: Migration[] = [
   `,
   // Eigene Farbe je Kartenobjekt (NULL = Vorgabe der Objektart)
   `ALTER TABLE map_objects ADD COLUMN color TEXT;`,
-  // Eigenes Fahrzeug auf der Karte des Einsatzes ein-/ausblenden (Objektliste)
+  // Eigenes Fahrzeug auf der Karte der Lage ein-/ausblenden (Objektliste)
   `ALTER TABLE incidents ADD COLUMN vehicle_visible INTEGER NOT NULL DEFAULT 1;`,
   // Szenen schützen (nur Admins): geschützte lassen sich weder überschreiben noch löschen
   `ALTER TABLE display_scenes ADD COLUMN locked INTEGER NOT NULL DEFAULT 0;`,
@@ -276,7 +276,7 @@ const MIGRATIONS: Migration[] = [
     PRIMARY KEY (ap_id, mac, network)
   );
   `,
-  // Dokumente: virtuelle Ordner je Einsatz, Vorlagenbaum, Bearbeitung über WOPI (Collabora)
+  // Dokumente: virtuelle Ordner je Lage, Vorlagenbaum, Bearbeitung über WOPI (Collabora)
   `
   CREATE TABLE document_folders (
     id INTEGER PRIMARY KEY,
@@ -332,7 +332,7 @@ const MIGRATIONS: Migration[] = [
     expires_at INTEGER NOT NULL
   );
   `,
-  // Laufender Einsatz bekommt die Standard-Ordnerstruktur (neue Einsätze erhalten sie beim Eröffnen)
+  // Laufender Einsatz bekommt die Standard-Ordnerstruktur (neue Lagen erhalten sie beim Eröffnen)
   (db) => {
     const active = db.prepare('SELECT id FROM incidents WHERE closed_at IS NULL').get() as { id: number } | undefined;
     if (!active) return;
@@ -697,7 +697,7 @@ const MIGRATIONS: Migration[] = [
   ALTER TABLE messages ADD COLUMN snoozed_by TEXT;
   ALTER TABLE messages ADD COLUMN snooze_minutes INTEGER;
   `,
-  // Im Einsatz gespeicherte Overpass-Abfragen der Karte (query = OverpassQuery als JSON)
+  // In der Lage gespeicherte Overpass-Abfragen der Karte (query = OverpassQuery als JSON)
   `
   CREATE TABLE incident_overpass_queries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1071,6 +1071,13 @@ const MIGRATIONS: Migration[] = [
   (db) => {
     const cols = db.prepare("SELECT name FROM pragma_table_info('documents')").all() as { name: string }[];
     if (!cols.some((c) => c.name === 'generated')) db.exec('ALTER TABLE documents ADD COLUMN generated TEXT');
+  },
+  // Art der Lage (Flächenlage, Brand/Technische Hilfe, Stab); bisherige Lagen mit Beschaffung über den Stab werden Stablagen
+  (db) => {
+    const cols = db.prepare("SELECT name FROM pragma_table_info('incidents')").all() as { name: string }[];
+    if (cols.some((c) => c.name === 'kind')) return;
+    db.exec("ALTER TABLE incidents ADD COLUMN kind TEXT NOT NULL DEFAULT 'rescue' CHECK (kind IN ('area', 'rescue', 'staff'))");
+    db.exec("UPDATE incidents SET kind = 'staff' WHERE procurement_mode = 'staff'");
   },
 ];
 

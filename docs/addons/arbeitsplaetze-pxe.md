@@ -33,17 +33,17 @@ KDE Plasma). Man meldet sich dort mit den Benutzern und PINs aus ELVIS an.
 - **Anmeldung:** Die Anmeldemaske (SDDM-Theme) zeigt alle Benutzer aus ELVIS mit Suche, angemeldet wird mit der PIN.
   - Die PIN prüft der Dienst `elvis-clientd` über `POST /api/clients/login` mit denselben Sperren wie in ELVIS. Dabei
     entsteht keine Web-Sitzung, der Eintrag steht im Bedienprotokoll.
-  - Danach meldet SDDM ein lokales Profilkonto **je Benutzer und Einsatz** an (`e<Einsatz-ID>u<Benutzer-ID>`,
-    UID 50000–59999, ohne Einsatz `e0u…`), und zwar mit einem Einmalpasswort (PAM: `pam_exec`).
-  - Abmelden und wieder Anmelden im selben Einsatz führt ins selbe Profil. In einem neuen Einsatz gibt es ein neues,
+  - Danach meldet SDDM ein lokales Profilkonto **je Benutzer und Lage** an (`e<Einsatz-ID>u<Benutzer-ID>`,
+    UID 50000–59999, ohne Lage `e0u…`), und zwar mit einem Einmalpasswort (PAM: `pam_exec`).
+  - Abmelden und wieder Anmelden in derselben Lage führt ins selbe Profil. In einer neuen Lage gibt es ein neues,
     leeres Profil; alte Profile bleiben auf dem Notebook, werden aber nicht mehr genutzt.
-  - Beim Start der Sitzung weist ein Dialog darauf hin, dass die Anpassungen nur für den aktuellen Einsatz gelten
+  - Beim Start der Sitzung weist ein Dialog darauf hin, dass die Anpassungen nur für die aktuelle Lage gelten
     (Name und ID).
 - **Offline:** Ist ELVIS nicht erreichbar, kommen nur Benutzer hinein, die sich an diesem Gerät schon einmal angemeldet
   haben.
   - Der Dienst merkt sich dafür einen scrypt-Verifier der PIN. Er wird verworfen, sobald sich die PIN in ELVIS ändert
     (`pinStamp`) oder der Benutzer gelöscht wird.
-  - Offline gilt der zuletzt bekannte Einsatz.
+  - Offline gilt die zuletzt bekannte Lage.
   - Grenze: Wer Root-Zugriff auf die Platte hat, kann eine vierstellige PIN aus dem Verifier leicht erraten. Die
     Profile sind ohnehin unverschlüsselt.
 - **Keine automatischen Updates:** Folgendes ist entfernt bzw. maskiert, damit das System nicht von sich aus nach

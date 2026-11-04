@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import {
+  DEFAULT_MANUAL_WIND,
   KLUG_MANIER,
   MIN_WIND_MS,
   TERRAIN_LABELS,
@@ -12,6 +13,7 @@ import {
   type KlugManierClass,
   type PlumeContour,
   type Terrain,
+  type WindValues,
 } from '@elvis/shared';
 import { fmtNum } from '../../lib/format';
 import { Field } from '../ui';
@@ -101,6 +103,25 @@ export function NoWindWarning() {
   );
 }
 
+/** Wind von Hand, solange die Wetterstation keine Winddaten liefert */
+function ManualWind({ value, onChange }: { value: WindValues; onChange: (w: WindValues) => void }) {
+  return (
+    <div className="dispersion-wind">
+      <p className="dispersion-note">Keine Winddaten von der Wetterstation – Wind von Hand einstellen.</p>
+      <Field label={`Windrichtung ${value.windDirectionDeg}° (${compass(value.windDirectionDeg)})`}>
+        <input type="range" min={0} max={359} step={5} value={value.windDirectionDeg} aria-label="Windrichtung in Grad" onChange={(e) => onChange({ ...value, windDirectionDeg: Number(e.target.value) })} />
+      </Field>
+      <Field label={`Windgeschwindigkeit ${value.windSpeedMs.toLocaleString('de-DE')} m/s`}>
+        <input type="range" min={0} max={20} step={0.5} value={value.windSpeedMs} aria-label="Windgeschwindigkeit in m/s" onChange={(e) => onChange({ ...value, windSpeedMs: Number(e.target.value) })} />
+      </Field>
+    </div>
+  );
+}
+
+const COMPASS = ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'];
+/** Himmelsrichtung, aus der der Wind kommt */
+const compass = (deg: number) => COMPASS[Math.round(deg / 45) % 8]!;
+
 /** Einstellungen einer Gauß-Fahne mit Legende und Hinweisen (in der Objektliste) */
 export function GaussControls({
   settings,
@@ -112,7 +133,7 @@ export function GaussControls({
   settings: GaussSettings;
   onChange: (s: Partial<GaussSettings>) => void;
   result: PlumeResult | null;
-  /** Wetterstation liefert (noch) keine Windgeschwindigkeit/-richtung. */
+  /** Wetterstation liefert (noch) keine Windgeschwindigkeit/-richtung: Wind von Hand einstellen. */
   noWind?: boolean;
   disabled?: boolean;
 }) {
@@ -121,9 +142,9 @@ export function GaussControls({
 
   return (
     <div className="dispersion-panel">
-      {noWind && <NoWindWarning />}
       <fieldset disabled={disabled} className="dispersion-fields">
         <>
+          {noWind && <ManualWind value={settings.manualWind ?? DEFAULT_MANUAL_WIND} onChange={(w) => set('manualWind', w)} />}
           <div className="dispersion-grid">
             <Field label="Ausbreitungsklasse">
               <select value={settings.stability} onChange={(e) => set('stability', e.target.value as GaussSettings['stability'])}>

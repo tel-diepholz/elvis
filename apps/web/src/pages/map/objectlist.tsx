@@ -20,6 +20,9 @@ import {
   type MapObjectPatch,
   type TacticalSign,
   type Unit,
+  type VehiclePositionSource,
+  VEHICLE_POSITION_SOURCE_LABELS,
+  gaussWind,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { fmtAgo, fmtArea, fmtTime } from '../../lib/format';
@@ -86,7 +89,7 @@ function GaussEditor({ object, wind, now, canEdit }: { object: Extract<MapObject
     if (!Object.keys(pending.current).length) setDraft(object.data);
   }, [object.data]);
   useEffect(() => () => clearTimeout(timer.current), []);
-  const plume = usePlume(draft, object, wind, now);
+  const plume = usePlume(draft, object, gaussWind(wind, draft), now);
   const change = (p: Partial<GaussSettings>) => {
     setDraft((d) => ({ ...d, ...p }));
     pending.current = { ...pending.current, ...p };
@@ -192,7 +195,7 @@ function NameEditor({ name, onSave, onCancel }: { name: string; onSave: (name: s
 }
 
 /**
- * Objektliste des Einsatzes (Seitenleiste rechts): Einsatzort und Kartenobjekte, ein Klick fliegt hin.
+ * Objektliste der Lage (Seitenleiste rechts): Einsatzort und Kartenobjekte, ein Klick fliegt hin.
  * Ausbreitungen klappen ihre Einstellungen auf; ändern dürfen angemeldete Benutzer, solange der Einsatz läuft.
  */
 export function ObjectList({
@@ -206,15 +209,20 @@ export function ObjectList({
   shiftPx = 0,
   onFly,
   onMoveIncident,
+  onMoveVehicle,
+  onClearVehicle,
   onPlaceUnit,
   onEditShape,
   onRouteStop,
 }: {
   incident: Incident;
   /** Eigenes Fahrzeug (immer erster Eintrag, nur ausblendbar); pos = null ohne GPS */
-  vehicle: { name: string; pos: [number, number] | null };
+  /** Eigenes Fahrzeug; ohne GPS-Fix lässt sich die Position von Hand setzen (onMoveVehicle) und wieder entfernen (onClearVehicle) */
+  vehicle: { name: string; pos: [number, number] | null; source: VehiclePositionSource | null };
+  onMoveVehicle?: () => void;
+  onClearVehicle?: () => void;
   objects: MapObject[];
-  /** Kräfte des Einsatzes; ohne Position stehen sie in der Liste, bis sie gesetzt werden */
+  /** Kräfte der Lage; ohne Position stehen sie in der Liste, bis sie gesetzt werden */
   units: Unit[];
   wind: Wind | undefined;
   now: Date;
@@ -306,11 +314,26 @@ export function ObjectList({
             </span>
             <span className="map-object-text">
               <strong>{vehicle.name}</strong>
-              <span className="muted">{vehicle.pos ? `Eigenes Fahrzeug · ${vehicle.pos[0].toFixed(5)}, ${vehicle.pos[1].toFixed(5)}` : 'Eigenes Fahrzeug · kein GPS'}</span>
+              <span className="muted">
+                {/* Ohne GPS-Fix die Quelle statt der Koordinaten (stehen im Popup), sonst passt die Zeile nicht */}
+                {vehicle.pos
+                  ? `Eigenes Fahrzeug · ${vehicle.source && vehicle.source !== 'gps' ? VEHICLE_POSITION_SOURCE_LABELS[vehicle.source] : `${vehicle.pos[0].toFixed(5)}, ${vehicle.pos[1].toFixed(5)}`}`
+                  : `Eigenes Fahrzeug · kein GPS${onMoveVehicle ? ' – Position von Hand setzen' : ''}`}
+              </span>
             </span>
           </button>
           {canEdit && (
             <span className="map-object-actions">
+              {onMoveVehicle && (
+                <button type="button" className="icon-btn" onClick={onMoveVehicle} title={vehicle.source === 'manual' ? 'Position verschieben' : 'Position von Hand setzen'} aria-label="Fahrzeugposition setzen">
+                  <PenTool size={16} />
+                </button>
+              )}
+              {onClearVehicle && (
+                <button type="button" className="icon-btn" onClick={() => window.confirm('Von Hand gesetzte Fahrzeugposition entfernen?') && onClearVehicle()} title="Gesetzte Position entfernen" aria-label="Fahrzeugposition entfernen">
+                  <Trash2 size={16} />
+                </button>
+              )}
               <button
                 type="button"
                 className="icon-btn"

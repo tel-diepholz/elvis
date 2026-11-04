@@ -116,7 +116,7 @@ function OfficeEditor({ title: fallbackTitle, fixedTitle, subtitle, start, downl
   const navigate = useNavigate();
   // Sitzung nur einmal je Aufruf holen – kein erneutes Laden bei Live-Aktualisierungen
   const { data: session, error, isLoading } = useQuery({ queryKey: ['office-session', ...queryKey], queryFn: start, gcTime: 0, staleTime: Infinity, retry: false });
-  const back = () => (window.history.length > 1 ? navigate(-1) : navigate('/einsatz/dokumente'));
+  const back = () => (window.history.length > 1 ? navigate(-1) : navigate('/lage/dokumente'));
 
   return (
     <div className="office-page">

@@ -314,14 +314,14 @@ export class ScanService {
   /** Nachträglich einem (offenen) Einsatz zuordnen */
   async assign(id: number, input: ScanAssign, actor: string): Promise<ScanItem> {
     const r = this.row(id);
-    if (r.incident_id === input.incidentId && r.document_id !== null) throw new HttpError(409, `Scan ist in diesem Einsatz schon abgelegt (${r.archived_path})`);
+    if (r.incident_id === input.incidentId && r.document_id !== null) throw new HttpError(409, `Scan ist in dieser Lage schon abgelegt (${r.archived_path})`);
     const { content } = await this.file(id);
     await this.archive(id, input.incidentId, input.folderPath ?? this.stored().folderPath, content, actor, true);
     this.deps.notify(['scans']);
     return this.item(id);
   }
 
-  /** Aus dem Eingang löschen; eine Ablage im Einsatz bleibt erhalten */
+  /** Aus dem Eingang löschen; eine Ablage in der Lage bleibt erhalten */
   async remove(id: number, actor: string): Promise<void> {
     const r = this.row(id);
     this.store.db.prepare('DELETE FROM scans WHERE id = ?').run(id);

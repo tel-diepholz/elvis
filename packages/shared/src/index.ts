@@ -46,3 +46,4 @@ export * from './georef';
 export * from './phones';
 export * from './dashboard';
 export * from './damage';
+export * from './vehiclePosition';

@@ -371,7 +371,7 @@ export function PhonesCard() {
       <Card title="Tastenvorlage" className="span-3">
         <p className="muted">
           Gilt für alle Telefone, soweit deren Grundbelegung eine Taste nicht selbst belegt. Die Grundbelegung je Telefon steht unter <em>Fahrzeug → Telefone</em>; dort
-          dürfen im laufenden Einsatz alle Angemeldeten Tasten ändern – mit dem Einsatzende gilt wieder die Grundbelegung.
+          dürfen in der laufenden Lage alle Angemeldeten Tasten ändern – mit dem Einsatzende gilt wieder die Grundbelegung.
         </p>
         <TemplateEditor phones={phones} />
       </Card>

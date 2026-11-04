@@ -366,7 +366,7 @@ function AttachToRequest({ incident, message: m, onBack, onClose }: { incident: 
     >
       <Field label="Anforderung *" hint="Die Meldung erscheint im Verlauf der Anforderung und im Einsatztagebuch">
         <select value={requestId ?? ''} onChange={(e) => setRequestId(e.target.value ? Number(e.target.value) : null)} autoFocus>
-          <option value="">{sorted.length ? 'Anforderung wählen …' : 'Keine Anforderungen im Einsatz'}</option>
+          <option value="">{sorted.length ? 'Anforderung wählen …' : 'Keine Anforderungen in der Lage'}</option>
           {sorted.map((r) => (
             <option key={r.id} value={r.id}>
               {requestLabel(r)} · {r.unit} · {r.material.split('\n')[0]!.slice(0, 60)} ({REQUEST_STATUS_LABELS[r.status]})

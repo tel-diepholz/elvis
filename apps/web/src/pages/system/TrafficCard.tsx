@@ -65,7 +65,7 @@ export function TrafficCard() {
         <a href="https://aisstream.io" target="_blank" rel="noreferrer">
           aisstream.io
         </a>
-        . Empfangen werden Schiffe im Umkreis von rund 100 km um den Einsatzort, ohne Einsatz um das Fahrzeug.
+        . Empfangen werden Schiffe im Umkreis von rund 100 km um den Einsatzort, ohne Lage um das Fahrzeug.
       </p>
       <div className="form-grid">
         <Field label="aisstream.io-Schlüssel" hint="Bleibt auf dem Fahrzeugserver und wird nicht wieder angezeigt">

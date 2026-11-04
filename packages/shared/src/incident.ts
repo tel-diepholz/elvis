@@ -1,7 +1,23 @@
-/** Einsatzführung: Einsatz und Einsatztagebuch. Kräfte: forces.ts */
+import { z } from 'zod';
+
+/** Einsatzführung: Lage und Einsatztagebuch. Kräfte: forces.ts */
+
+/** Art der Lage: bestimmt die Felder beim Anlegen und den Beschaffungsweg */
+export type IncidentKind = 'area' | 'rescue' | 'staff';
+export const INCIDENT_KINDS = ['rescue', 'area', 'staff'] as const satisfies readonly IncidentKind[];
+export const INCIDENT_KIND_LABELS: Record<IncidentKind, string> = {
+  area: 'Flächenlage',
+  rescue: 'Brand/Technische Hilfe',
+  staff: 'Stab',
+};
+/** Stichwort und Einsatzort gibt es nur bei Brand/Technische Hilfe */
+export const kindHasSite = (kind: IncidentKind): boolean => kind === 'rescue';
+/** Bei einer Stablage läuft die Beschaffung über den Stab, sonst beschafft die Beschaffungsrolle selbst */
+export const procurementModeFor = (kind: IncidentKind): 'self' | 'staff' => (kind === 'staff' ? 'staff' : 'self');
 
 export interface Incident {
   id: number;
+  kind: IncidentKind;
   keyword: string;
   title: string;
   location: string;
@@ -11,7 +27,7 @@ export interface Incident {
   lon: number | null;
   /** Eigenes Fahrzeug auf der Karte zeigen (in der Objektliste ausblendbar) */
   vehicleVisible: boolean;
-  /** Anforderungen: selbst beschaffen oder über den Stab (Ausgangsmeldung) */
+  /** Anforderungen: selbst beschaffen oder über den Stab (Ausgangsmeldung); folgt aus der Art */
   procurementMode: 'self' | 'staff';
   /** Empfänger „Stab“ für Anforderungen im Modus „Stab“ */
   procurementStaff: string;
@@ -20,13 +36,14 @@ export interface Incident {
 }
 
 export interface NewIncident {
+  /** Ohne Angabe: Brand/Technische Hilfe */
+  kind?: IncidentKind;
   keyword?: string;
   title: string;
   location?: string;
   leader?: string;
   lat?: number | null;
   lon?: number | null;
-  procurementMode?: 'self' | 'staff';
   procurementStaff?: string;
 }
 
@@ -108,4 +125,18 @@ export interface AuditEntry {
   params: string;
   success: boolean;
   message: string;
+}
+
+// --- Einstellungen: vordefinierte Einsatzstichworte (nur Admins) ---
+
+export const incidentSettingsSchema = z.object({
+  /** Auswahl für das Einsatzstichwort bei Brand/Technische Hilfe; leer = Freitext */
+  keywords: z.array(z.string().trim().min(1).max(40)).max(200),
+});
+export type IncidentSettingsInput = z.input<typeof incidentSettingsSchema>;
+
+export interface IncidentSettings {
+  keywords: string[];
+  updatedAt: string | null;
+  updatedBy: string | null;
 }

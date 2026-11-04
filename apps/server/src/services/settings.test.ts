@@ -65,3 +65,19 @@ describe('Einstellungen', () => {
     expect((await call('PUT', '/api/settings', admin, { ...input, mapSign: { ...input.mapSign, org: 'marine' } })).status).toBe(400);
   });
 });
+
+describe('Fahrzeugstandort von Hand (API)', () => {
+  it('lesen ohne Anmeldung, setzen nur angemeldet; mit GPS-Fix (Simulator) gesperrt', async () => {
+    const pub = await call<{ manual: unknown; current: { source: string } | null }>('GET', '/api/map/vehicle-position');
+    expect(pub.status).toBe(200);
+    expect(pub.body.manual).toBeNull();
+    expect((await call('PUT', '/api/map/vehicle-position', undefined, { lat: 52.6, lon: 8.37 })).status).toBe(401);
+    const admin = await adminCookie(app);
+    // Simulierte Wetterstation meldet einen GPS-Fix
+    await new Promise((r) => setTimeout(r, 50));
+    const gps = (await call<{ current: { source: string } | null }>('GET', '/api/map/vehicle-position')).body.current;
+    if (gps?.source === 'gps') expect((await call('PUT', '/api/map/vehicle-position', admin, { lat: 52.6, lon: 8.37 })).status).toBe(409);
+    else expect((await call('PUT', '/api/map/vehicle-position', admin, { lat: 52.6, lon: 8.37 })).status).toBe(200);
+    expect((await call('PUT', '/api/map/vehicle-position', admin, { lat: 95, lon: 8.37 })).status).toBe(400);
+  });
+});

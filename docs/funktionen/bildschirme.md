@@ -17,12 +17,12 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
   „Kameras“. Ein Klick auf die Szene stellt den Bildschirm sofort um. Die gerade angezeigte Szene erkennt ELVIS am
   Inhalt. Nach Änderungen im Editor steht „Anordnung geändert“, bis man neu speichert oder eine Szene überschreibt.
   Szenen lassen sich umbenennen, überschreiben, sortieren und löschen. Admins können eine Szene im Verwalten-Dialog
-  per Schloss schützen; sie lässt sich dann weder überschreiben noch löschen (umbenennen und aufrufen geht weiter). Sie bleiben unabhängig vom Einsatz erhalten,
+  per Schloss schützen; sie lässt sich dann weder überschreiben noch löschen (umbenennen und aufrufen geht weiter). Sie bleiben unabhängig von der Lage erhalten,
   und jede Aktion landet im Bedienprotokoll. Beim Entkoppeln eines Bildschirms werden seine Szenen gelöscht.
 - **Kacheln:** Lagekarte (Fahrzeug und Einsatzort, Kartenstil, Mittelpunkt, Mitführen, Zoom), [Kamera](../fahrzeugmodule/kameras-axis.md) (Livebild),
   Video ([Bildschirmübertragung](../addons/screencast.md) per AirPlay oder Browser, [NDI](../addons/ndi-gateway.md); ohne Sender mit Anleitung und QR-Code),
   Wetter (mit amtlichen Warnungen), Wettervorhersage (24 Stunden und/oder 7 Tage), Uhr (DTG), Meldungen, Netzwerk (Router/Failover), Gast-WLAN (QR-Code, Netzname und Passwort des Gastnetzes
-  im laufenden Einsatz, siehe [WLAN](../fahrzeugmodule/wlan-openwrt.md)), [Schadenkonten](schadenkonten.md) (offene Konten mit Kräften und Personenschäden, Summe), Bild (hochgeladenes PNG, JPEG, GIF oder WebP bis 20 MB, ohne Kachelrahmen) und
+  in der laufenden Lage, siehe [WLAN](../fahrzeugmodule/wlan-openwrt.md)), [Schadenkonten](schadenkonten.md) (offene Konten mit Kräften und Personenschäden, Summe), Bild (hochgeladenes PNG, JPEG, GIF oder WebP bis 20 MB, ohne Kachelrahmen) und
   Szenenwahl (Szenen und Hell/Dunkel per Touch am Bildschirm). Eine mitgeführte Karte folgt Fahrzeug bzw. Einsatzort und
   lässt sich nicht verschieben. Ohne Mitführen lässt sie sich am Bildschirm per Touch und unter „Bildschirme“ direkt in
   der Vorschau verschieben und zoomen – der Bildschirm folgt und behält den Ausschnitt, auch nach „Neu laden“.
@@ -30,7 +30,7 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
   Bildschirmen ein Dialog mit Livebild und leisem Ton (abschaltbar, schließt nach 90 s von selbst).
 - **Design:** Jeder Bildschirm ist hell oder dunkel (Standard), umschaltbar unter „Bildschirme“ oder am Bildschirm über
   die Kachel „Szenenwahl“. Im dunklen Design ist der Hintergrund hinter den Kacheln schwarz.
-- **Rechte:** Gekoppelte Bildschirme dürfen ohne Benutzeranmeldung zusätzlich den laufenden Einsatz lesen (für den
+- **Rechte:** Gekoppelte Bildschirme dürfen ohne Benutzeranmeldung zusätzlich die laufende Lage lesen (für den
   Einsatzort auf der Karte), das Gastnetz (Kachel „Gast-WLAN“) und die Bilder der Kachel „Bild“, sonst nur, was auch
   anonyme Arbeitsplätze sehen. Szenen aufrufen und das Design wechseln darf ein Bildschirm selbst nur, solange er eine
   Kachel „Szenenwahl“ zeigt.

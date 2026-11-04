@@ -30,7 +30,7 @@ function RoleForm({ initial, pending, onSubmit }: { initial?: RoleInfo; pending:
   );
 }
 
-/** Rollen im Einsatz, die Benutzer nach der Anmeldung übernehmen. Nur Admins. */
+/** Rollen in der Lage, die Benutzer nach der Anmeldung übernehmen. Nur Admins. */
 export function RolesCard() {
   const toast = useToast();
   const { data: roles } = useQuery({ queryKey: ['roles'], queryFn: api.roles });
@@ -52,7 +52,7 @@ export function RolesCard() {
 
   return (
     <Card
-      title="Rollen im Einsatz"
+      title="Rollen in der Lage"
       icon={<UserRoundCog size={18} />}
       actions={
         <button className="btn btn-sm" onClick={() => setCreating(true)}>

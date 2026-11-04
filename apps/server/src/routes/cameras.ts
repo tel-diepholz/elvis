@@ -97,7 +97,7 @@ export function cameraRoutes(app: FastifyInstance, d: Deps): void {
     stream.on('error', () => reply.raw.destroy());
   });
 
-  // --- Gespeicherte Positionen: gehören zum laufenden Einsatz ---
+  // --- Gespeicherte Positionen: gehören zur laufenden Lage ---
 
   app.get('/api/cameras/presets', async (): Promise<CameraPreset[]> => {
     const incident = d.incidents.active();
@@ -106,7 +106,7 @@ export function cameraRoutes(app: FastifyInstance, d: Deps): void {
 
   app.post('/api/cameras/presets', async (req, reply) => {
     const incident = d.incidents.active();
-    if (!incident) throw new HttpError(409, 'Positionen gehören zum Einsatz – bitte zuerst einen Einsatz eröffnen');
+    if (!incident) throw new HttpError(409, 'Positionen gehören zur Lage – bitte zuerst eine Lage eröffnen');
     const { cameraId, name } = parse(presetBody, req.body);
     // aktuelle Position frisch von der Kamera lesen
     await d.devices.execute('cameras', 'refresh', { cameraId });
@@ -121,7 +121,7 @@ export function cameraRoutes(app: FastifyInstance, d: Deps): void {
   app.post('/api/cameras/presets/:id/goto', async (req) => {
     const { id } = parse(idParam, req.params);
     const p = d.presets.get(id);
-    if (p.incidentId !== d.incidents.active()?.id) throw new HttpError(409, 'Position gehört nicht zum laufenden Einsatz');
+    if (p.incidentId !== d.incidents.active()?.id) throw new HttpError(409, 'Position gehört nicht zur laufenden Lage');
     const params = { cameraId: p.cameraId, position: p.position, label: p.name };
     const auditBase = { operator: operatorOf(req), target: 'cameras', action: 'goto', params: JSON.stringify(params) };
     try {
@@ -139,7 +139,7 @@ export function cameraRoutes(app: FastifyInstance, d: Deps): void {
   app.delete('/api/cameras/presets/:id', async (req, reply) => {
     const { id } = parse(idParam, req.params);
     const p = d.presets.get(id);
-    if (p.incidentId !== d.incidents.active()?.id) throw new HttpError(409, 'Position gehört nicht zum laufenden Einsatz');
+    if (p.incidentId !== d.incidents.active()?.id) throw new HttpError(409, 'Position gehört nicht zur laufenden Lage');
     d.presets.remove(id);
     audit(req, `kamera:${p.cameraId}`, 'preset.delete', `Position „${p.name}“ gelöscht`);
     d.notify(['cameraPresets']);

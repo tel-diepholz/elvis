@@ -37,7 +37,7 @@ function FormLinkCard() {
   return (
     <Card title="Cloud-Personalabfrage" icon={<Link2 size={18} />} className="span-2">
       {!incident ? (
-        <p className="muted">Ein Link lässt sich anfordern, sobald ein Einsatz aufgelegt ist.</p>
+        <p className="muted">Ein Link lässt sich anfordern, sobald eine Lage aufgelegt ist.</p>
       ) : form ? (
         <div className="form-link">
           <QrCode data={form.url} label="QR-Code zur Cloud-Personalabfrage" className="qr" />
@@ -254,7 +254,7 @@ export function PersonnelSheets() {
               </tbody>
             </table>
           </div>
-          {!incident && <p className="muted">Zuordnen lässt sich ein Bogen, solange ein Einsatz aufgelegt ist.</p>}
+          {!incident && <p className="muted">Zuordnen lässt sich ein Bogen, solange eine Lage aufgelegt ist.</p>}
         </Card>
       )}
       <Modal open={!!assigning} title="Personalbogen zuordnen" onClose={() => setAssigning(null)}>

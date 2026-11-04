@@ -32,6 +32,7 @@ import {
   Wifi,
   MessagesSquare,
   Workflow,
+  Siren,
 } from 'lucide-react';
 import type { DeviceId } from '@elvis/shared';
 import { api } from '../lib/api';
@@ -49,6 +50,7 @@ import { DocumentFoldersCard } from './system/DocumentFoldersCard';
 import { ForcesCard } from './system/ForcesCard';
 import { MapSourcesCard } from './system/MapSourcesCard';
 import { MessageSettingsCard } from './system/MessageSettingsCard';
+import { IncidentSettingsCard } from './system/IncidentSettingsCard';
 import { RequestSettingsCard } from './system/RequestSettingsCard';
 import { OverpassQueriesCard } from './system/OverpassQueriesCard';
 import { ModuleSection } from './system/ModuleSection';
@@ -154,7 +156,7 @@ export function SettingsPage() {
               <EnergyFlowCard />
             </SettingsSection>
           )}
-          <SettingsSection id="drucken" title="Druckserver" icon={<Printer {...ICON} />} summary="Ablage im Einsatz, vorausgewählter Drucker">
+          <SettingsSection id="drucken" title="Druckserver" icon={<Printer {...ICON} />} summary="Ablage in der Lage, vorausgewählter Drucker">
             <PrintSettingsCard />
           </SettingsSection>
           {full && (
@@ -162,7 +164,7 @@ export function SettingsPage() {
               <ScanSettingsCard />
             </SettingsSection>
           )}
-          <SettingsSection id="dokumente" title="Ordnervorgabe für Dokumente" icon={<FolderTree {...ICON} />} summary="Ordner je Einsatz">
+          <SettingsSection id="dokumente" title="Ordnervorgabe für Dokumente" icon={<FolderTree {...ICON} />} summary="Ordner je Lage">
             <DocumentFoldersCard />
           </SettingsSection>
           <SettingsSection id="app" title="App-Anbindung" icon={<Smartphone {...ICON} />} summary="Positionen von Einsatzkräften per App">
@@ -194,8 +196,11 @@ export function SettingsPage() {
           )}
         </SettingsGroup>
 
-        <SettingsGroup title="Einsatz">
-          <SettingsSection id="rollen" title="Rollen im Einsatz" icon={<UserRoundCog {...ICON} />}>
+        <SettingsGroup title="Lage">
+          <SettingsSection id="stichworte" title="Einsatzstichworte" icon={<Siren {...ICON} />} summary="Auswahl bei Brand/Technische Hilfe">
+            <IncidentSettingsCard />
+          </SettingsSection>
+          <SettingsSection id="rollen" title="Rollen in der Lage" icon={<UserRoundCog {...ICON} />}>
             <RolesCard />
           </SettingsSection>
           <SettingsSection id="kraefte" title="Kräfteverwaltung" icon={<Users {...ICON} />} summary="Einheiten und Fahrzeuge zur Auswahl">

@@ -42,7 +42,7 @@ export function AppRelayCard() {
               </>
             )}
           </dl>
-          <p className="muted">Apps werden in der Kräfteübersicht eines Einsatzes mit einer Einheit gekoppelt (Smartphone-Symbol, App-ID und Code aus der App).</p>
+          <p className="muted">Apps werden in der Kräfteübersicht einer Lage mit einer Einheit gekoppelt (Smartphone-Symbol, App-ID und Code aus der App).</p>
         </>
       )}
     </Card>

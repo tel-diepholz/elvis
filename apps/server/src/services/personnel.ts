@@ -191,7 +191,7 @@ export class PersonnelService {
   private openUnit(unitId: number): Unit {
     const unit = this.store.unit(unitId);
     if (!unit) throw new HttpError(404, `Einheit ${unitId} nicht gefunden`);
-    if (this.store.incident(unit.incidentId)?.closedAt) throw new HttpError(409, 'Einsatz ist abgeschlossen und kann nicht mehr geändert werden');
+    if (this.store.incident(unit.incidentId)?.closedAt) throw new HttpError(409, 'Lage ist abgeschlossen und kann nicht mehr geändert werden');
     return unit;
   }
 
@@ -247,7 +247,7 @@ export class PersonnelService {
     const from = this.openUnit(unitId);
     const to = this.openUnit(targetId);
     if (to.id === from.id) throw new HttpError(400, 'Personal ist bereits bei dieser Einheit');
-    if (to.incidentId !== from.incidentId) throw new HttpError(409, 'Einheit gehört zu einem anderen Einsatz');
+    if (to.incidentId !== from.incidentId) throw new HttpError(409, 'Einheit gehört zu einer anderen Lage');
     const own = new Set(this.list(unitId).map((p) => p.id));
     const ids = [...new Set(personIds)];
     if (ids.length === 0) throw new HttpError(400, 'Keine Person ausgewählt');
@@ -297,17 +297,17 @@ export class PersonnelService {
     if (r.changes) this.notify(['personnelSheets']);
   }
 
-  /** Einer Einheit im laufenden Einsatz zuordnen (oder dafür eine neue anlegen); nochmals zuordnen verschiebt das Personal */
+  /** Einer Einheit in der laufenden Lage zuordnen (oder dafür eine neue anlegen); nochmals zuordnen verschiebt das Personal */
   assign(sheetId: number, input: z.output<typeof sheetAssignSchema>, operator: string): PersonnelSheet {
     const sheet = this.sheet(sheetId);
     const incident = this.store.activeIncident();
-    if (!incident) throw new HttpError(409, 'Kein Einsatz aufgelegt');
+    if (!incident) throw new HttpError(409, 'Keine Lage aufgelegt');
     const ts = new Date().toISOString();
     this.store.transaction(() => {
       let unit: Unit;
       if ('unitId' in input) {
         unit = this.openUnit(input.unitId);
-        if (unit.incidentId !== incident.id) throw new HttpError(409, 'Einheit gehört nicht zum laufenden Einsatz');
+        if (unit.incidentId !== incident.id) throw new HttpError(409, 'Einheit gehört nicht zur laufenden Lage');
       } else {
         unit = this.incidents.addUnit(
           incident.id,
@@ -345,10 +345,10 @@ export class PersonnelService {
     return (this.db.prepare('SELECT * FROM personnel_forms WHERE incident_id = ? AND closed_at IS NULL AND expires_at > ? ORDER BY created_at DESC').get(incidentId, new Date().toISOString()) as FormRow | undefined) ?? null;
   }
 
-  /** Neuen Link für den laufenden Einsatz anfordern; ein bestehender endet damit */
+  /** Neuen Link für die laufende Lage anfordern; ein bestehender endet damit */
   async createForm(validHours: number, operator: string): Promise<PersonnelForm> {
     const incident = this.store.activeIncident();
-    if (!incident) throw new HttpError(409, 'Kein Einsatz aufgelegt');
+    if (!incident) throw new HttpError(409, 'Keine Lage aufgelegt');
     if (!this.relay.enabled) throw new HttpError(503, 'Cloud-Anbindung ist nicht eingerichtet (app.relayUrl in config/elvis.json)');
     const { publicKey, privateKey } = await promisify(generateKeyPair)('rsa', { modulusLength: 3072 });
     const jwk = publicKey.export({ format: 'jwk' }) as { n: string; e: string };

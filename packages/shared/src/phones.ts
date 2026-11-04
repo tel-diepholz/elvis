@@ -7,7 +7,7 @@ import { MAC_PATTERN } from './workstations';
  * Telefonbuch aus den Kontakten, Durchsage-Zonen, Funktionstasten) und überträgt geänderte Tasten sofort an das Telefon.
  *
  * Tastenbelegung in Ebenen: Vorlage (alle Telefone) → Grundbelegung des Telefons → Überschreibung im laufenden
- * Einsatz. Vorlage und Grundbelegung pflegen Admins, überschreiben darf jeder Angemeldete, solange ein Einsatz läuft.
+ * Einsatz. Vorlage und Grundbelegung pflegen Admins, überschreiben darf jeder Angemeldete, solange eine Lage läuft.
  * Mit dem Einsatzende fallen die Überschreibungen weg.
  */
 
@@ -73,7 +73,7 @@ export type PhoneKeys = Record<number, PhoneKey>;
 
 /** Woher die wirksame Belegung einer Taste kommt */
 export type PhoneKeySource = 'incident' | 'phone' | 'template';
-export const PHONE_KEY_SOURCE: Record<PhoneKeySource, string> = { incident: 'Einsatz', phone: 'Telefon', template: 'Vorlage' };
+export const PHONE_KEY_SOURCE: Record<PhoneKeySource, string> = { incident: 'Lage', phone: 'Telefon', template: 'Vorlage' };
 
 /** Eine Taste mit allen Ebenen und der aufgelösten Anzeige */
 export interface PhoneKeySlot {

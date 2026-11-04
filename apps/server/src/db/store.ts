@@ -16,13 +16,14 @@ import type {
   Unit,
   UnitStatus,
 } from '@elvis/shared';
-import { MAP_LABELS, tacticalSignSchema } from '@elvis/shared';
+import { MAP_LABELS, procurementModeFor, tacticalSignSchema } from '@elvis/shared';
 import type { Db } from './index.js';
 
 type Row = Record<string, unknown>;
 
 const toIncident = (r: Row): Incident => ({
   id: r.id as number,
+  kind: r.kind === 'area' || r.kind === 'staff' ? r.kind : 'rescue',
   keyword: r.keyword as string,
   title: r.title as string,
   location: r.location as string,
@@ -289,17 +290,18 @@ export class Store {
   createIncident(input: NewIncident): Incident {
     const info = this.db
       .prepare(
-        `INSERT INTO incidents (keyword, title, location, leader, lat, lon, procurement_mode, procurement_staff, started_at)
-         VALUES (@keyword, @title, @location, @leader, @lat, @lon, @procurementMode, @procurementStaff, @startedAt)`,
+        `INSERT INTO incidents (kind, keyword, title, location, leader, lat, lon, procurement_mode, procurement_staff, started_at)
+         VALUES (@kind, @keyword, @title, @location, @leader, @lat, @lon, @procurementMode, @procurementStaff, @startedAt)`,
       )
       .run({
+        kind: input.kind ?? 'rescue',
         keyword: input.keyword ?? '',
         title: input.title,
         location: input.location ?? '',
         leader: input.leader ?? '',
         lat: input.lat ?? null,
         lon: input.lon ?? null,
-        procurementMode: input.procurementMode ?? 'self',
+        procurementMode: procurementModeFor(input.kind ?? 'rescue'),
         procurementStaff: input.procurementStaff ?? '',
         startedAt: now(),
       });
@@ -313,10 +315,11 @@ export class Store {
     const next = { ...current, ...patch };
     this.db
       .prepare(
-        'UPDATE incidents SET keyword=@keyword, title=@title, location=@location, leader=@leader, lat=@lat, lon=@lon, vehicle_visible=@vehicleVisible, procurement_mode=@procurementMode, procurement_staff=@procurementStaff WHERE id=@id',
+        'UPDATE incidents SET kind=@kind, keyword=@keyword, title=@title, location=@location, leader=@leader, lat=@lat, lon=@lon, vehicle_visible=@vehicleVisible, procurement_mode=@procurementMode, procurement_staff=@procurementStaff WHERE id=@id',
       )
       .run({
         id,
+        kind: next.kind,
         keyword: next.keyword,
         title: next.title,
         location: next.location,
@@ -324,7 +327,7 @@ export class Store {
         lat: next.lat ?? null,
         lon: next.lon ?? null,
         vehicleVisible: next.vehicleVisible ? 1 : 0,
-        procurementMode: next.procurementMode,
+        procurementMode: procurementModeFor(next.kind),
         procurementStaff: next.procurementStaff,
       });
     const updated = this.incident(id)!;
@@ -514,7 +517,7 @@ export class Store {
 
   // --- Dokumente ---
 
-  /** Dokumente des Einsatzes; Entwürfe nur die des angegebenen Benutzers */
+  /** Dokumente der Lage; Entwürfe nur die des angegebenen Benutzers */
   documents(incidentId: number, viewerId: number | null = null): IncidentDocument[] {
     return (
       this.db

@@ -29,7 +29,7 @@ export function DocumentFoldersCard() {
 
   const save = useMutation({
     mutationFn: () => api.saveDocumentFolderSpec(tree!),
-    onSuccess: () => (setDirty(false), toast('success', 'Ordnervorgabe gespeichert – gilt für neue Einsätze')),
+    onSuccess: () => (setDirty(false), toast('success', 'Ordnervorgabe gespeichert – gilt für neue Lagen')),
     onError: (e) => toast('error', e.message),
   });
 
@@ -66,8 +66,8 @@ export function DocumentFoldersCard() {
   return (
     <Card title="Ordnervorgabe für Dokumente" icon={<FolderTreeIcon size={18} />} className="span-2">
       <p className="muted">
-        Diese Ordner erhält jeder neu eröffnete Einsatz. Im Einsatz können Benutzer weitere Ordner anlegen, die vorgegebenen aber nicht löschen. Änderungen gelten
-        nur für künftige Einsätze.
+        Diese Ordner erhält jede neu eröffnete Lage. In der Lage können Benutzer weitere Ordner anlegen, die vorgegebenen aber nicht löschen. Änderungen gelten
+        nur für künftige Lagen.
       </p>
       <ul className="spec-tree">{tree.map((f, i) => node(f, [i], tree.length))}</ul>
       {!valid.success && <p className="tone-alarm">{valid.error.issues[0]?.message}</p>}

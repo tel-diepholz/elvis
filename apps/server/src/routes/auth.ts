@@ -35,7 +35,7 @@ export function authRoutes(
     store.addAudit({ operator, target, action, params: '', success, message });
     deps.notify(['audit']);
   };
-  /** Rollenwechsel im laufenden Einsatz ins Einsatztagebuch – nur was sich geändert hat */
+  /** Rollenwechsel in der laufenden Lage ins Einsatztagebuch – nur was sich geändert hat */
   const journalRoles = (user: User, before: number[], after: number[], suffix = '') => {
     const incident = store.activeIncident();
     if (!incident) return;

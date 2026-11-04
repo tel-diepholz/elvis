@@ -260,7 +260,7 @@ function CameraControls({ cam }: { cam: CameraStatus }) {
   );
 }
 
-/** Gespeicherte Positionen der gewählten Kamera – gehören zum laufenden Einsatz. */
+/** Gespeicherte Positionen der gewählten Kamera – gehören zur laufenden Lage. */
 function CameraPresets({ cam }: { cam: CameraStatus }) {
   const { user } = useAuth();
   const toast = useToast();
@@ -282,12 +282,12 @@ function CameraPresets({ cam }: { cam: CameraStatus }) {
     <Card title="Positionen" icon={<Bookmark size={18} />}>
       {!incident ? (
         <p className="muted">
-          Positionen gehören zum Einsatz. <Link to="/einsatz">Einsatz eröffnen</Link>, um Positionen zu speichern.
+          Positionen gehören zur Lage. <Link to="/lage">Lage anlegen</Link>, um Positionen zu speichern.
         </p>
       ) : (
         <>
           {mine.length === 0 ? (
-            <p className="muted">Für diese Kamera ist im Einsatz noch keine Position gespeichert.</p>
+            <p className="muted">Für diese Kamera ist in der Lage noch keine Position gespeichert.</p>
           ) : (
             <ul className="preset-list">
               {mine.map((p) => (
@@ -319,7 +319,7 @@ function CameraPresets({ cam }: { cam: CameraStatus }) {
               </button>
             </form>
           )}
-          <p className="field-hint">Wird der Einsatz beendet oder ein neuer eröffnet, beginnt die Liste leer.</p>
+          <p className="field-hint">Wird die Lage beendet oder eine neue eröffnet, beginnt die Liste leer.</p>
         </>
       )}
     </Card>

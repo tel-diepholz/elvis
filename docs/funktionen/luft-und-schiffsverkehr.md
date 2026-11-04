@@ -3,7 +3,7 @@
 Oben rechts auf der Karte (Ebenen) lassen sich **Flugzeuge** und **Schiffe** einblenden, ähnlich wie bei Flightradar24. Die
 Auswahl merkt sich jeder Browser. Ein Klick auf ein Ziel zeigt Rufzeichen, Kennzeichen, Typ, Höhe, Geschwindigkeit
 und die Ortungsart. **MLAT** heißt: Das Ziel sendet kein ADS-B und wurde per Laufzeitmessung mehrerer Empfänger geortet.
-„Zur Objektliste“ übernimmt genau dieses Ziel in den Einsatz. Dasselbe geht über **Objekte → Flugzeug oder Schiff suchen …**
+„Zur Objektliste“ übernimmt genau dieses Ziel in die Lage. Dasselbe geht über **Objekte → Flugzeug oder Schiff suchen …**
 mit Rufzeichen, Kennzeichen, ICAO-Adresse, Schiffsname oder MMSI.
 
 Übernommene Ziele folgen live ihrer Position, mit Spur der letzten rund 20 Minuten. Sie erscheinen auf allen
@@ -18,7 +18,7 @@ Minuten ohne Position) und „Signal wieder da“, nicht jede Bewegung. Von Hand
   - `readsb` passt zu adsb.lol und ähnlichen Diensten. adsb.lol erlaubt aber nur 500 Anfragen am Tag und ist für den Dauerbetrieb ungeeignet.
 - **Schiffe:** [aisstream.io](https://aisstream.io) (kostenlos, ohne Verfügbarkeitsgarantie)
   - Den Schlüssel gibt es nach Anmeldung mit einem GitHub-Konto. Er wird unter **Einstellungen → Luft- und Schiffsverkehr** eingetragen und bleibt auf dem Server.
-  - ELVIS abonniert das Gebiet von rund ±100 km um den Einsatzort, ohne Einsatz um das Fahrzeug.
+  - ELVIS abonniert das Gebiet von rund ±100 km um den Einsatzort, ohne Lage um das Fahrzeug.
   - Auf Binnengewässern hängt die Abdeckung von den Empfangsstationen der Community ab.
   - Konfiguration: `"traffic": { "aisUrl": "…" }`, `null` = aus.
 

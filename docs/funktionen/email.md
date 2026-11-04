@@ -22,12 +22,13 @@ Absender ──SMTP──▶ Relay (verschlüsselt sofort) ◀──signierter A
   Autocrypt-Kopf, der eigene Schlüssel steht per WKD unter `openpgpkey.einsatzleitwagen.app`. Gesendete Mails stehen im
   Bedienprotokoll. Die Adresszeilen (An, Cc, Bcc) schlagen beim Tippen Adressen aus den **Kontakten** und aus bisherigen
   Mails vor.
-- **Meldungen per E-Mail:** Im laufenden Einsatz erfassen Fernmelder eine eingegangene Mail mit **Meldung erstellen**
-  als Eingangsmeldung (Betreff und Text als Meldungstext). Wählen sie als Absender eine Kraft im Einsatz, merkt sich
+- **Meldungen per E-Mail:** In der laufenden Lage erfassen Fernmelder (ohne eingestellte Fernmelder-Rolle jeder
+  angemeldete Benutzer) eine eingegangene Mail mit **Meldung erstellen**
+  als Eingangsmeldung (Betreff und Text als Meldungstext). Wählen sie als Absender eine Kraft der Lage, merkt sich
   die Kraft die Absenderadresse (Tagebucheintrag, änderbar unter *Kräfte → Einheit bearbeiten*). Gegenstellen, die
   nicht am Einsatzort eintreffen, z. B. die Leitstelle, lassen sich als Systemeinheit aus dem Katalog wählen, ohne sie
-  in den Einsatz zu übernehmen. Die Adresse steht dann in der Kräfteverwaltung, auch für spätere Einsätze, und geht bei
-  einer Übernahme in den Einsatz mit. Kennt eine Kraft die Adresse schon, ist sie beim nächsten Mal vorausgewählt.
+  in die Lage zu übernehmen. Die Adresse steht dann in der Kräfteverwaltung, auch für spätere Lagen, und geht bei
+  einer Übernahme in die Lage mit. Kennt eine Kraft die Adresse schon, ist sie beim nächsten Mal vorausgewählt.
   Geht eine Ausgangsmeldung an eine Kraft oder Systemeinheit mit Adresse, bietet
   der Meldungsdialog dem Fernmelder **Per E-Mail senden** an: Der Mail-Editor öffnet sich mit Adresse, Betreff und
   Meldungstext, und nach dem Senden gilt die Meldung als erledigt.

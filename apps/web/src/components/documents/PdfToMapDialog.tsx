@@ -721,7 +721,7 @@ export function PdfToMapDialog({
         ))}
       </ul>
     ) : (
-      <EmptyState title="Keine PDFs im Einsatz">Zuerst einen Plan als PDF hochladen.</EmptyState>
+      <EmptyState title="Keine PDFs in der Lage">Zuerst einen Plan als PDF hochladen.</EmptyState>
     );
   } else if (!pages.data?.length) {
     body =
