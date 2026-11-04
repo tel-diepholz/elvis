@@ -1,0 +1,29 @@
+name: CI
+
+# Läuft bei jedem PR (ohne Pfadfilter), damit „Typecheck und Tests“ als Pflicht-Check für main taugt.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck und Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Addon-Tests lesen die Manifeste aus dem Submodul
+          submodules: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
