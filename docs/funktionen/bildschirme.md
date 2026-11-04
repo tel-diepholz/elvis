@@ -20,6 +20,7 @@ oder später in einer App (WebView). Was dort zu sehen ist, steuert man in ELVIS
   per Schloss schützen; sie lässt sich dann weder überschreiben noch löschen (umbenennen und aufrufen geht weiter). Sie bleiben unabhängig vom Einsatz erhalten,
   und jede Aktion landet im Bedienprotokoll. Beim Entkoppeln eines Bildschirms werden seine Szenen gelöscht.
 - **Kacheln:** Lagekarte (Fahrzeug und Einsatzort, Kartenstil, Mittelpunkt, Mitführen, Zoom), [Kamera](../fahrzeugmodule/kameras-axis.md) (Livebild),
+  Video ([Bildschirmübertragung](../addons/screencast.md) per AirPlay oder Browser, [NDI](../addons/ndi-gateway.md); ohne Sender mit Anleitung und QR-Code),
   Wetter (mit amtlichen Warnungen), Wettervorhersage (24 Stunden und/oder 7 Tage), Uhr (DTG), Meldungen, Netzwerk (Router/Failover), Gast-WLAN (QR-Code, Netzname und Passwort des Gastnetzes
   im laufenden Einsatz, siehe [WLAN](../fahrzeugmodule/wlan-openwrt.md)), [Schadenkonten](schadenkonten.md) (offene Konten mit Kräften und Personenschäden, Summe), Bild (hochgeladenes PNG, JPEG, GIF oder WebP bis 20 MB, ohne Kachelrahmen) und
   Szenenwahl (Szenen und Hell/Dunkel per Touch am Bildschirm). Eine mitgeführte Karte folgt Fahrzeug bzw. Einsatzort und

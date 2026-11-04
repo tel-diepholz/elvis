@@ -42,6 +42,7 @@
 - [Addons und Docker-Hosts](addons/README.md) – Docker-Hosts anbinden, Addon-Repositories
 - [Manifest-Referenz](addons/manifest.md) – Aufbau der `addon.yaml`
 - [NDI-Gateway](addons/ndi-gateway.md)
+- [Bildschirmübertragung (AirPlay, Browser)](addons/screencast.md)
 - [Arbeitsplätze (PXE)](addons/arbeitsplaetze-pxe.md)
 
 ## Entwicklung

@@ -128,6 +128,16 @@ export class HostService {
     return this.rows().map((r) => this.toDto(r));
   }
 
+  /** CA von ELVIS (PEM) – zum Herunterladen für Clients, die Addon-Webseiten ohne Warnung öffnen sollen */
+  get caPem(): string {
+    return this.pki.caPem;
+  }
+
+  /** Server-Zertifikat für die Webseite eines Addons auf einem Host */
+  issueWebCert(name: string, addresses: string[]) {
+    return this.pki.issueWebCert(name, addresses);
+  }
+
   get(id: number): DockerHost {
     return this.toDto(this.row(id));
   }

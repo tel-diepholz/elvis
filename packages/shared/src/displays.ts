@@ -17,7 +17,7 @@ export interface DisplayTileTypeInfo {
 export const DISPLAY_TILE_TYPES: Record<DisplayTileType, DisplayTileTypeInfo> = {
   map: { label: 'Lagekarte', description: 'Karte mit Fahrzeug und Einsatzort, per Touch verschieb- und zoombar', size: { w: 6, h: 6 } },
   camera: { label: 'Kamera', description: 'Livebild einer Kamera', size: { w: 4, h: 3 } },
-  video: { label: 'Video (NDI)', description: 'Videostrom eines Gateways, z. B. NDI-Quelle über das Addon „NDI-Gateway“', size: { w: 4, h: 3 } },
+  video: { label: 'Video', description: 'Videostrom eines Gateways: Bildschirmübertragung (AirPlay, Browser) oder NDI-Quelle', size: { w: 4, h: 3 } },
   weather: { label: 'Wetter', description: 'Wind, Böen, Ausbreitungsrichtung, Temperatur', size: { w: 3, h: 3 } },
   forecast: { label: 'Wettervorhersage', description: 'Prognose am Fahrzeugstandort für die nächsten 24 Stunden und 7 Tage', size: { w: 6, h: 4 } },
   clock: { label: 'Uhr', description: 'Datum-Zeit-Gruppe, Uhrzeit und Datum', size: { w: 3, h: 2 } },

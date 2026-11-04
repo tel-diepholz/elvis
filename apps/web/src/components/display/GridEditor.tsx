@@ -1,7 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Trash2, Upload } from 'lucide-react';
-import { DISPLAY_IMAGE_MAX_BYTES, DISPLAY_TEXT_MAX, DISPLAY_TILE_TYPES, tilesOverlap, type DisplayLayout, type DisplayScreen, type DisplayTile } from '@elvis/shared';
+import { DISPLAY_IMAGE_MAX_BYTES, DISPLAY_TEXT_MAX, DISPLAY_TILE_TYPES, tilesOverlap, type DisplayLayout, type DisplayScreen, type DisplayTile, type VideoStreamState } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { fmtBytes } from '../../lib/format';
 import { useDevice } from '../../lib/live';
@@ -402,6 +402,8 @@ function ImageTileSettings({ tile, set }: { tile: DisplayTile; set: (k: string, 
   );
 }
 
+const STREAM_STATE: Partial<Record<VideoStreamState, string>> = { idle: 'wartet auf Sender', starting: 'startet', error: 'Störung' };
+
 function VideoTileSettings({ tile, set }: { tile: DisplayTile; set: (k: string, v: string | number | boolean) => void }) {
   const { data } = useQuery({ queryKey: ['videoSources'], queryFn: api.videoSources });
   const streams = data?.streams ?? [];
@@ -410,17 +412,22 @@ function VideoTileSettings({ tile, set }: { tile: DisplayTile; set: (k: string, 
     <>
       <Field label="Quelle">
         <select value={current} onChange={(e) => set('streamId', e.target.value)}>
-          <option value="">Erste verfügbare Quelle</option>
+          <option value="">Erste verfügbare Quelle (bevorzugt eine, die gerade sendet)</option>
           {current && !streams.some((s) => s.id === current) && <option value={current}>{current.split(':').pop()} (derzeit nicht verfügbar)</option>}
           {streams.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
+              {STREAM_STATE[s.state] ? ` (${STREAM_STATE[s.state]})` : ''}
             </option>
           ))}
         </select>
       </Field>
       <Toggle label="Ton" checked={tile.config.audio === true} onChange={(on) => set('audio', on)} />
-      {data && !data.providers.length && <p className="field-hint">Für NDI-Quellen unter Verwaltung → Addons das „NDI-Gateway“ installieren.</p>}
+      {data && !data.providers.length && (
+        <p className="field-hint">
+          Unter Verwaltung → Addons „Bildschirmübertragung“ (AirPlay, Bildschirmfreigabe im Browser) oder „NDI-Gateway“ installieren.
+        </p>
+      )}
       {data?.providers.map((p) =>
         p.problem ? (
           <p key={p.id} className="field-error">

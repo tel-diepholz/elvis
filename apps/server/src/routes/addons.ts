@@ -102,6 +102,15 @@ export function addonRoutes(
     return { ok: true };
   });
 
+  // CA von ELVIS: Wer sie installiert, öffnet die HTTPS-Seiten der Addons (z. B. Bildschirm teilen) ohne Warnung.
+  app.get('/api/tls/ca.crt', async (_req, reply) =>
+    reply
+      .header('content-type', 'application/x-x509-ca-cert')
+      .header('content-disposition', 'attachment; filename="ELVIS-CA.crt"')
+      .header('cache-control', 'no-cache')
+      .send(hosts.caPem),
+  );
+
   // --- Store ---
 
   app.get('/api/addons/store', async (): Promise<AddonStoreEntry[]> => {

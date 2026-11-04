@@ -30,6 +30,8 @@ export function accessLevel(method: string, rawUrl: string): AccessLevel {
   // Arbeitsplätze (Addon „ELVIS Arbeitsplatz“): Installer und Client-Dienst weisen sich per Bearer-Token aus
   if (url.startsWith('/api/clients/')) return 'public';
   if (read && (url === '/api/displays' || url === '/api/video/sources')) return 'public';
+  // CA-Zertifikat zum Installieren auf Laptops und Handys (öffentlicher Teil der Docker-PKI)
+  if (read && url === '/api/tls/ca.crt') return 'public';
 
   // Druckserver: PDFs drucken dürfen auch anonyme Arbeitsplätze (Einstellungen unter /api/system/)
   if (url === '/api/printing' || url === '/api/printing/jobs' || url.startsWith('/api/printing/jobs/')) return 'public';

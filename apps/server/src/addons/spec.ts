@@ -34,7 +34,7 @@ export function addonBuilds(m: AddonManifest): string[] {
 export function addonImages(m: AddonManifest): string[] {
   const steps = Object.values(m.jobs).flatMap(jobSteps);
   const images = [...m.containers.map((c) => c.image), ...steps.map((s) => s.image)].filter((i) => !i.startsWith(BUILD_PREFIX));
-  return [...new Set([...images, ...(m.files ? [HELPER_IMAGE] : [])])];
+  return [...new Set([...images, ...(m.files || m.tls ? [HELPER_IMAGE] : [])])];
 }
 
 /** Benannte Volumes eines Addons, ohne Duplikate. */
@@ -42,6 +42,7 @@ export function addonVolumes(m: AddonManifest): string[] {
   const steps = Object.values(m.jobs).flatMap(jobSteps);
   const names = [...m.containers.flatMap((c) => c.volumes), ...steps.flatMap((s) => s.volumes)].map((v) => v.name);
   if (m.files) names.push(m.files.volume);
+  if (m.tls) names.push(m.tls.volume);
   return [...new Set(names)].map((n) => volumeName(m.id, n));
 }
 

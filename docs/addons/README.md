@@ -71,6 +71,7 @@ Das Format der `addon.yaml` beschreibt die [Manifest-Referenz](manifest.md). Zum
 | Addon | Doku |
 | --- | --- |
 | NDI-Gateway | [ndi-gateway.md](ndi-gateway.md) |
+| Bildschirmübertragung (AirPlay, Browser) | [screencast.md](screencast.md) |
 | ELVIS Arbeitsplatz (PXE) | [arbeitsplaetze-pxe.md](arbeitsplaetze-pxe.md) |
 | Druckserver (CUPS) | [Drucken](../funktionen/drucken.md) |
 | Office (Collabora) | [Dokumente](../funktionen/dokumente.md) |
