@@ -288,6 +288,40 @@ input[type='checkbox'] {
   font-size: 10px;
   letter-spacing: 0.04em;
 }
+.nav-item-button {
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.nav-footer {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.ca-cert {
+  display: grid;
+  gap: 12px;
+}
+.ca-cert .btn {
+  justify-self: start;
+}
+.ca-cert dl {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+.ca-cert dt {
+  font-weight: 600;
+  margin-top: 6px;
+}
+.ca-cert dd {
+  margin: 0;
+}
+.ca-cert p {
+  margin: 0;
+}
 .nav-item {
   display: flex;
   align-items: center;

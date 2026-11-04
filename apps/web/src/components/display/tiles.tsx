@@ -21,6 +21,7 @@ import {
   type DisplayDevice,
   type DisplayMapView,
   type DisplayTile,
+  type VideoStream,
   type DisplayTheme,
   type DisplayTileType,
   type Unit,
@@ -39,7 +40,7 @@ import { WeatherIcon, WindArrow, gustTone } from '../WeatherIcon';
 import { WebRtcPlayer } from './WebRtcPlayer';
 import { MapObjectsLayer, useMapObjects } from '../map/objects';
 import { UnitsLayer, useMapUnits } from '../map/units';
-import { WifiQr } from '../WifiQr';
+import { QrCode, WifiQr } from '../WifiQr';
 import { fmtRelative } from '../tasks/taskActions';
 
 export const TILE_ICONS: Record<DisplayTileType, typeof MapIcon> = { map: MapIcon, camera: Cctv, video: Video, weather: CloudSun, forecast: CalendarDays, clock: Clock, alerts: Bell, network: Network, text: Type, guestWifi: Wifi, tasks: ListChecks, forces: Users, scenes: Layers, image: ImageIcon };
@@ -219,21 +220,49 @@ function CameraTile({ tile }: { tile: DisplayTile }) {
 }
 
 // wie auf der Lagekarte
-/** Videostrom eines Gateways (z. B. NDI) über den WebRTC-Player von MediaMTX */
+/** Videostrom eines Gateways (NDI, Bildschirmübertragung) über den WebRTC-Player von MediaMTX */
 function VideoTile({ tile }: { tile: DisplayTile }) {
   const { data } = useQuery({ queryKey: ['videoSources'], queryFn: api.videoSources });
   if (!data) return <TileEmpty text="Lade Videoquellen …" />;
-  const stream = tile.config.streamId ? data.streams.find((s) => s.id === tile.config.streamId) : data.streams[0];
+  // „Erste verfügbare Quelle“: bevorzugt eine, die gerade sendet
+  const stream = tile.config.streamId ? data.streams.find((s) => s.id === tile.config.streamId) : (data.streams.find((s) => s.state === 'running') ?? data.streams[0]);
   if (!stream) {
     const problem = data.providers.find((p) => p.problem)?.problem;
-    if (!data.providers.length) return <TileEmpty text="Kein Video-Gateway installiert (Addon „NDI-Gateway“)" />;
-    return <TileEmpty text={problem ?? (tile.config.streamId ? 'Quelle derzeit nicht verfügbar' : 'Keine NDI-Quelle gefunden')} />;
+    if (!data.providers.length) return <TileEmpty text="Keine Videoquelle installiert (Addon „Bildschirmübertragung“ oder „NDI-Gateway“)" />;
+    return <TileEmpty text={problem ?? (tile.config.streamId ? 'Quelle derzeit nicht verfügbar' : 'Keine Videoquelle gefunden')} />;
   }
   if (stream.state === 'error') return <TileEmpty text={`${stream.name}: ${stream.error ?? 'Störung'}`} />;
+  if (stream.state === 'idle') return stream.connect ? <VideoConnectView stream={stream} /> : <TileEmpty text={`${stream.name}: kein Signal`} />;
   return (
     <div className="tile-camera">
-      <WebRtcPlayer key={stream.url} url={stream.url} audio={tile.config.audio === true} />
-      <span className="tile-camera-label">{stream.name}</span>
+      {/* neuer Sender → neu verbinden, statt auf das Ende der alten Sitzung zu warten */}
+      <WebRtcPlayer key={`${stream.url}|${stream.via ?? ''}|${stream.sender ?? ''}`} url={stream.url} audio={tile.config.audio === true} />
+      <span className="tile-camera-label">{stream.sender ? `${stream.name} · ${stream.sender}` : stream.name}</span>
+    </div>
+  );
+}
+
+/** Empfänger ohne Sender: zeigt, wie man per AirPlay oder Browser auf ihn teilt */
+function VideoConnectView({ stream }: { stream: VideoStream }) {
+  const c = stream.connect ?? {};
+  return (
+    <div className="tile-wifi tile-cast">
+      {c.shareUrl && <QrCode data={c.shareUrl} label={`QR-Code für ${c.shareUrl}`} className="tile-wifi-qr" />}
+      <dl>
+        <div className="tile-wifi-title">{stream.name}: Bildschirm teilen</div>
+        {c.airplay && (
+          <>
+            <dt>iPhone, iPad, Mac – AirPlay</dt>
+            <dd>{c.airplay}</dd>
+          </>
+        )}
+        {c.shareUrl && (
+          <>
+            <dt>Windows, Mac, Linux – im Browser öffnen</dt>
+            <dd>{c.shareUrl.replace(/^https?:\/\//, '')}</dd>
+          </>
+        )}
+      </dl>
     </div>
   );
 }

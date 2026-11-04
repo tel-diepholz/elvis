@@ -34,7 +34,7 @@ export class FakeDocker {
   /** Build schlägt mit dieser Meldung fehl */
   buildError: string | null = null;
   /** Per putArchive hochgeladene Dateien: Volume → Archiv-Einträge. */
-  archives: { volume: string; entries: string[] }[] = [];
+  archives: { volume: string; entries: string[]; contents: Record<string, Buffer> }[] = [];
   /** Namen angehaltener Container in Reihenfolge */
   stops: string[] = [];
   /** Antwort auf getArchive (Werkzeug-Container wie GDAL): Tar-Archiv zum Pfad, null = gibt es nicht */
@@ -130,7 +130,7 @@ export class FakeDocker {
         const c = self.find(idOrName);
         if (!c) throw self.notFound();
         const bind = (c.spec.HostConfig?.Binds as string[] | undefined)?.find((b) => b.split(':')[1] === opts.path);
-        self.archives.push({ volume: bind?.split(':')[0] ?? '?', entries: tarNames(data) });
+        self.archives.push({ volume: bind?.split(':')[0] ?? '?', entries: tarNames(data), contents: tarContents(data) });
         self.uploads.set(c.name, tarNames(data));
       },
       async getArchive(opts: { path: string }) {
@@ -273,6 +273,19 @@ export class FakeDocker {
 }
 
 /** Dateinamen aus einem (unkomprimierten) Tar-Archiv. */
+/** Inhalte der Dateien eines (unkomprimierten) Tar-Archivs: Name → Daten */
+function tarContents(buf: Buffer): Record<string, Buffer> {
+  const out: Record<string, Buffer> = {};
+  for (let i = 0; i + 512 <= buf.length; ) {
+    const name = buf.subarray(i, i + 100).toString('utf8').replace(/\0.*$/s, '');
+    if (!name) break;
+    const size = parseInt(buf.subarray(i + 124, i + 136).toString('utf8').replace(/\0.*$/s, '').trim() || '0', 8);
+    if (!name.endsWith('/')) out[name] = Buffer.from(buf.subarray(i + 512, i + 512 + size));
+    i += 512 + Math.ceil(size / 512) * 512;
+  }
+  return out;
+}
+
 function tarNames(buf: Buffer): string[] {
   const names: string[] = [];
   for (let i = 0; i + 512 <= buf.length; ) {

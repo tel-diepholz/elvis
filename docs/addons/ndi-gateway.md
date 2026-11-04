@@ -1,6 +1,6 @@
 # NDI-Gateway (Addon)
 
-Macht NDI-Quellen im Browser sichtbar, z. B. als Kachel „Video (NDI)“ auf den Bildschirmen.
+Macht NDI-Quellen im Browser sichtbar, z. B. als Kachel „Video“ auf den Bildschirmen.
 
 ```
 NDI-Quellen ─▶ Gateway (GStreamer, ndisrc → H.264) ─RTSP─▶ MediaMTX ─WebRTC─▶ Browser/Bildschirm
@@ -34,7 +34,7 @@ NDI-Quellen ─▶ Gateway (GStreamer, ndisrc → H.264) ─RTSP─▶ MediaMTX 
   Safari/iPad), läuft das Bild stumm weiter, und der Knopf „Ton einschalten“ erscheint. Kiosk-Browser mit
   `--autoplay-policy=no-user-gesture-required` spielen Ton immer sofort.
 - **Einbindung in ELVIS:** ELVIS fragt den Status des Gateways ab (`provides.videoSources`, nur lesend, Port
-  „Status“). Die Ströme erscheinen unter `/api/video/sources` und in der Kachel „Video (NDI)“. Bildschirme müssen den
+  „Status“). Die Ströme erscheinen unter `/api/video/sources` und in der Kachel „Video“. Bildschirme müssen den
   Docker-Host direkt erreichen (WebRTC, Ports „WebRTC“ und „WebRTC-Medien“).
 - **Erprobt:** im Labor mit einer NDI-Testquelle bis zur Wiedergabe im Browser (720p, x264). VA-API und NVENC sind
   eingebaut, mangels Hardware hier aber nicht getestet.

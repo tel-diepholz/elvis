@@ -330,20 +330,35 @@ export interface WifiState {
   aps: WifiApLive[];
 }
 
-// --- Videoquellen aus Addons (z. B. NDI-Gateway) ---
+// --- Videoquellen aus Addons (z. B. NDI-Gateway, Bildschirmübertragung) ---
 
-export type VideoStreamState = 'starting' | 'running' | 'error';
+/** idle: Empfänger bereit, aber niemand sendet (z. B. Bildschirmübertragung ohne Sender) */
+export type VideoStreamState = 'idle' | 'starting' | 'running' | 'error';
+
+/** Wie Geräte auf einen Empfänger senden können – erscheint auf der Kachel, solange niemand sendet */
+export interface VideoConnect {
+  /** Name des AirPlay-Empfängers (iPhone, iPad, Mac) */
+  airplay?: string;
+  /** Freigabeseite für Browser (Windows, macOS, Linux) */
+  shareUrl?: string;
+}
 
 export interface VideoStream {
   /** eindeutig über alle Gateways: <anbieter>:<pfad> */
   id: string;
   providerId: string;
-  /** Name der Quelle, z. B. NDI-Name „STUDIO (Kamera 1)“ */
+  /** Name der Quelle, z. B. NDI-Name „STUDIO (Kamera 1)“ oder Empfänger „Leinwand“ */
   name: string;
   state: VideoStreamState;
   error: string | null;
   /** WebRTC-Player (MediaMTX) für den Browser */
   url: string;
+  /** Wer gerade sendet, z. B. „Henriks iPhone“ (nur Empfänger der Bildschirmübertragung) */
+  sender?: string | null;
+  /** Über welchen Weg gerade gesendet wird */
+  via?: 'airplay' | 'browser' | null;
+  /** Anleitung zum Senden (nur Empfänger) */
+  connect?: VideoConnect;
 }
 
 export interface VideoProvider {
