@@ -1,6 +1,6 @@
 import { Socket } from 'node:net';
 import { z } from 'zod';
-import { formatPhone, phoneKey, type ActiveCall, type GsmTrunk, type TelephonyState } from '@elvis/shared';
+import { formatPhone, phoneKey, smsSenderKey, type ActiveCall, type GsmTrunk, type TelephonyState } from '@elvis/shared';
 import { BaseAdapter, CommandError, command, type AdapterContext, type Command } from '../../adapter.js';
 import type { TelephonyBus } from '../../telephony/bus.js';
 import {
@@ -363,7 +363,7 @@ export class YeastarTgAdapter extends BaseAdapter<'telephony'> {
 
   private receivedSms(sms: ReceivedSms, now: Date): void {
     if (sms.total <= 1) {
-      this.bus.sms({ port: spanToPort(sms.span), number: phoneKey(sms.sender), text: sms.text, receivedAt: now.toISOString() });
+      this.bus.sms({ port: spanToPort(sms.span), number: smsSenderKey(sms.sender), text: sms.text, receivedAt: now.toISOString() });
       return;
     }
     // Mehrteilige SMS: Teile sammeln, nach einer Minute auch unvollständig weitergeben
@@ -383,7 +383,7 @@ export class YeastarTgAdapter extends BaseAdapter<'telephony'> {
     clearTimeout(e.timer);
     this.parts.delete(key);
     const text = [...e.parts].sort(([a], [b]) => a - b).map(([, t]) => t).join('');
-    this.bus.sms({ port: spanToPort(e.span), number: phoneKey(e.sender), text, receivedAt: new Date().toISOString() });
+    this.bus.sms({ port: spanToPort(e.span), number: smsSenderKey(e.sender), text, receivedAt: new Date().toISOString() });
   }
 
   private smsPort(port: number | undefined): number {
