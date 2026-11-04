@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import type { DeviceId, VehicleInfo } from '@elvis/shared';
+import type { DeviceId, Edition, VehicleInfo } from '@elvis/shared';
 import { api } from './api';
 import { useAuth } from './auth';
 import { useLive } from './live';
 import { useToast } from './toast';
 
 export interface ServerInfo {
+  edition: Edition;
   vehicle: VehicleInfo;
   drivers: Record<DeviceId, string>;
   limits: { stormWarnMs: number };

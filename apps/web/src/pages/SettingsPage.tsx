@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import type { DeviceId } from '@elvis/shared';
 import { api } from '../lib/api';
-import { useSettings } from '../lib/hooks';
+import { useInfo, useSettings } from '../lib/hooks';
 import { SettingsGroup, SettingsSection } from '../components/SettingsSection';
 import { Loading, PageHeader } from '../components/ui';
 import { AppRelayCard } from './system/AppRelayCard';
@@ -100,6 +100,8 @@ const MODULE_PARTS: Partial<Record<DeviceId, { icon: ReactNode; devices?: ReactN
  */
 export function SettingsPage() {
   const vehicle = useSettings().data?.vehicle;
+  // ELVIS lite: keine Dienste, die Fahrzeugtechnik voraussetzen (Bildschirme, PXE, Energie, Scan, DECT, Snom)
+  const full = useInfo().data?.edition !== 'lite';
   const { data: modules } = useQuery({ queryKey: ['devices'], queryFn: api.deviceModules });
 
   return (
@@ -125,12 +127,16 @@ export function SettingsPage() {
         </SettingsGroup>
 
         <SettingsGroup title="Dienste">
-          <SettingsSection id="bildschirme" title="Bildschirme" icon={<MonitorSmartphone {...ICON} />} summary="Kiosk-Bildschirme koppeln und belegen">
-            <DisplaysCard />
-          </SettingsSection>
-          <SettingsSection id="arbeitsplaetze" title="Arbeitsplätze" icon={<Laptop {...ICON} />} summary="Notebooks per PXE, Updates">
-            <WorkstationsCard />
-          </SettingsSection>
+          {full && (
+            <SettingsSection id="bildschirme" title="Bildschirme" icon={<MonitorSmartphone {...ICON} />} summary="Kiosk-Bildschirme koppeln und belegen">
+              <DisplaysCard />
+            </SettingsSection>
+          )}
+          {full && (
+            <SettingsSection id="arbeitsplaetze" title="Arbeitsplätze" icon={<Laptop {...ICON} />} summary="Notebooks per PXE, Updates">
+              <WorkstationsCard />
+            </SettingsSection>
+          )}
           <SettingsSection id="karten" title="Kartenquellen" icon={<MapIcon {...ICON} />} summary="Kartenstile, Luftbilder (WMS)">
             <MapSourcesCard />
           </SettingsSection>
@@ -140,15 +146,19 @@ export function SettingsPage() {
           <SettingsSection id="verkehr" title="Luft- und Schiffsverkehr" icon={<Plane {...ICON} />} summary="Flugzeuge (ADS-B/MLAT) und Schiffe (AIS) auf der Karte">
             <TrafficCard />
           </SettingsSection>
-          <SettingsSection id="energiefluss" title="Energiefluss" icon={<Workflow {...ICON} />} summary="Darstellung auf der Seite „Energie“: Quellen, Verbraucher, Batterie">
-            <EnergyFlowCard />
-          </SettingsSection>
+          {full && (
+            <SettingsSection id="energiefluss" title="Energiefluss" icon={<Workflow {...ICON} />} summary="Darstellung auf der Seite „Energie“: Quellen, Verbraucher, Batterie">
+              <EnergyFlowCard />
+            </SettingsSection>
+          )}
           <SettingsSection id="drucken" title="Druckserver" icon={<Printer {...ICON} />} summary="Ablage im Einsatz, vorausgewählter Drucker">
             <PrintSettingsCard />
           </SettingsSection>
-          <SettingsSection id="scannen" title="Scannen" icon={<ScanLine {...ICON} />} summary="Scan an E-Mail">
-            <ScanSettingsCard />
-          </SettingsSection>
+          {full && (
+            <SettingsSection id="scannen" title="Scannen" icon={<ScanLine {...ICON} />} summary="Scan an E-Mail">
+              <ScanSettingsCard />
+            </SettingsSection>
+          )}
           <SettingsSection id="dokumente" title="Ordnervorgabe für Dokumente" icon={<FolderTree {...ICON} />} summary="Ordner je Einsatz">
             <DocumentFoldersCard />
           </SettingsSection>
@@ -158,12 +168,16 @@ export function SettingsPage() {
           <SettingsSection id="mail" title="E-Mail" icon={<AtSign {...ICON} />} summary="Verschlüsseltes Postfach des ELW (…@einsatzleitwagen.app)">
             <MailCard />
           </SettingsSection>
-          <SettingsSection id="telefonbuch" title="Telefonbuch (DECT)" icon={<Phone {...ICON} />} summary="Kontakte als Remote-Telefonbuch für die DECT-Basis">
-            <PhonebookCard />
-          </SettingsSection>
-          <SettingsSection id="telefone" title="Telefone (Snom)" icon={<PhoneCall {...ICON} />} summary="Tischtelefone provisionieren, Tastenvorlage">
-            <PhonesCard />
-          </SettingsSection>
+          {full && (
+            <SettingsSection id="telefonbuch" title="Telefonbuch (DECT)" icon={<Phone {...ICON} />} summary="Kontakte als Remote-Telefonbuch für die DECT-Basis">
+              <PhonebookCard />
+            </SettingsSection>
+          )}
+          {full && (
+            <SettingsSection id="telefone" title="Telefone (Snom)" icon={<PhoneCall {...ICON} />} summary="Tischtelefone provisionieren, Tastenvorlage">
+              <PhonesCard />
+            </SettingsSection>
+          )}
           <SettingsSection id="nachrichten" title="Nachrichten" icon={<MessagesSquare {...ICON} />} summary="Reihenfolge der Kanäle (Signal, Threema, WhatsApp, Telegram, SMS)">
             <ChatSettingsCard />
           </SettingsSection>

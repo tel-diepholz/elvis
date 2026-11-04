@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpToLine, Check, LayoutGrid, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import {
-  DASHBOARD_TILE_IDS,
   DASHBOARD_TILE_TYPES,
-  DEFAULT_DASHBOARD,
   compactDashboard,
+  dashboardTileIds,
+  defaultDashboard,
+  type Edition,
   findDashboardSpot,
   type DashboardTile,
   type DashboardTileType,
@@ -13,7 +14,7 @@ import {
 } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { useMediaQuery } from '../lib/hooks';
+import { useInfo, useMediaQuery } from '../lib/hooks';
 import { useToast } from '../lib/toast';
 import { DashboardGrid } from '../components/dashboard/DashboardGrid';
 import { DASHBOARD_ICONS, HEADLESS } from '../components/dashboard/tiles';
@@ -22,12 +23,15 @@ import { TileConfigContext } from '../components/display/tiles';
 import { Field, Loading, Modal } from '../components/ui';
 
 /** Anonyme Arbeitsplätze: Grundeinstellung ohne Einsatzdaten (bis auf den Hinweis zur Anmeldung) */
-const ANONYMOUS_TILES = compactDashboard(DEFAULT_DASHBOARD.tiles.filter((t) => t.type === 'incident' || !DASHBOARD_TILE_TYPES[t.type].requiresLogin));
+const anonymousTiles = (edition: Edition) =>
+  compactDashboard(defaultDashboard(edition).tiles.filter((t) => t.type === 'incident' || !DASHBOARD_TILE_TYPES[t.type].requiresLogin));
 
 const newId = (type: DashboardTileType) => `${type}-${Math.random().toString(36).slice(2, 8)}`;
 
 export function DashboardPage() {
   const { user } = useAuth();
+  const edition = useInfo().data?.edition ?? 'full';
+  const anonymous = useMemo(() => anonymousTiles(edition), [edition]);
   const stacked = useMediaQuery('(max-width: 900px)');
   const toast = useToast();
   const qc = useQueryClient();
@@ -83,7 +87,7 @@ export function DashboardPage() {
   }, [user, data, draft]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (user && !data) return <Loading />;
-  const saved = user ? data!.layout.tiles : ANONYMOUS_TILES;
+  const saved = user ? data!.layout.tiles : anonymous;
   const tiles = draft ?? saved;
   const settingsTile = draft?.find((t) => t.id === settingsId) ?? null;
 
@@ -156,7 +160,7 @@ export function DashboardPage() {
 
       <Modal open={adding} title="Kachel hinzufügen" onClose={() => setAdding(false)} wide>
         <div className="dash-catalog">
-          {DASHBOARD_TILE_IDS.map((type) => {
+          {dashboardTileIds(edition).map((type) => {
             const info = DASHBOARD_TILE_TYPES[type];
             const Icon = DASHBOARD_ICONS[type];
             const count = tiles.filter((t) => t.type === type).length;
