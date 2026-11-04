@@ -24,6 +24,7 @@ export function messagingRoutes(app: FastifyInstance, messaging: MessagingServic
   });
   app.get('/api/messaging/conversations', async () => messaging.conversations());
   app.post('/api/messaging/conversations', async (req, reply) => reply.code(201).send(await messaging.request(req.body, operatorOf(req))));
+  app.post('/api/messaging/meldungen', async (req) => messaging.sendMeldung(req.body, operatorOf(req)));
   app.post('/api/messaging/conversations/:id/:action', async (req) => {
     const { id, action } = parse(conversationParams, req.params);
     return messaging.decide(id, action, operatorOf(req));

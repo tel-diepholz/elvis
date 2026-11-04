@@ -180,6 +180,8 @@ export interface Unit {
   email: string;
   /** Rufnummer für SMS und Messenger (z. B. aus einer eingegangenen Nachricht übernommen); leer = keine */
   mobile: string;
+  /** Andere ELVIS-Installation (ELW-ID im Cloud Messaging) – Meldungen an die Kraft gehen per Fahrzeug-Chat; leer = keine */
+  messagingPeer: string;
   sign: TacticalSign;
   /** Eigene Stärke (ohne Untereinheiten) */
   strength: Strength;
@@ -231,6 +233,7 @@ export const unitPatchSchema = z
     notes: text(1000).optional(),
     email: email.optional(),
     mobile: mobileSchema.optional(),
+    messagingPeer: z.union([z.literal(''), z.string().uuid()]).optional(),
     sign: tacticalSignSchema.optional(),
     strength: strengthSchema.optional(),
     accountId: id.nullable().optional(),

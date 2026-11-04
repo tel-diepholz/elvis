@@ -1104,6 +1104,11 @@ const MIGRATIONS: Migration[] = [
   );
   CREATE INDEX IF NOT EXISTS messaging_conversations_peer ON messaging_conversations(peer_elw, updated_at);
   `,
+  // Kraft per Fahrzeug-Chat erreichbar: ELW-ID der anderen ELVIS-Installation (nur in dieser Lage, wie die Rufnummer)
+  (db) => {
+    const cols = db.prepare("SELECT name FROM pragma_table_info('units')").all() as { name: string }[];
+    if (!cols.some((c) => c.name === 'messaging_peer')) db.exec("ALTER TABLE units ADD COLUMN messaging_peer TEXT NOT NULL DEFAULT ''");
+  },
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

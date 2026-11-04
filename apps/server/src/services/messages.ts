@@ -1,5 +1,7 @@
 import {
   DEFAULT_MESSAGE_SETTINGS,
+  MESSAGE_BODY_MAX,
+  MESSAGE_PARTY_MAX,
   messageInputSchema,
   messageSettingsSchema,
   type Incident,
@@ -393,6 +395,32 @@ export class MessageService {
     });
     this.deps.notify(rememberedIssi ? ['messages', 'radioIds'] : ['messages']);
     return this.get(Number(info.lastInsertRowid), viewer);
+  }
+
+  /**
+   * Eingangsmeldung von außen (Fahrzeug-Chat einer anderen ELVIS-Installation): ohne Zielrolle, sie wartet beim
+   * Dispatcher bzw. Fernmelder auf Verteilung. Absender ist die zugeordnete Kraft der Lage bzw. Freitext.
+   */
+  receive(incidentId: number, sender: { unitId: number | null; text: string }, body: string, createdBy: string): Message {
+    this.requireOpen(incidentId);
+    const c = this.ctx();
+    const ts = iso(this.now());
+    const text = sender.text.slice(0, MESSAGE_PARTY_MAX);
+    const id = this.deps.store.transaction(() => {
+      const res = this.db
+        .prepare(
+          `INSERT INTO messages (incident_id, direction, body, sender_role_id, sender_unit_id, sender_force_id, sender_text, recipient_role_id, recipient_unit_id, recipient_force_id, recipient_text,
+             reply_to_id, request_id, created_at, created_by, created_by_user_id, updated_at)
+           VALUES (?, 'in', ?, NULL, ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?, NULL, ?)`,
+        )
+        .run(incidentId, body.slice(0, MESSAGE_BODY_MAX), sender.unitId, text, ts, createdBy, ts);
+      const messageId = Number(res.lastInsertRowid);
+      const insertCopy = this.db.prepare('INSERT INTO message_copies (message_id, role_id, role_name) VALUES (?, ?, ?)');
+      for (const roleId of c.settings.copyInRoleIds) insertCopy.run(messageId, roleId, this.roleName(roleId));
+      return messageId;
+    });
+    this.deps.notify(['messages']);
+    return this.get(id, null);
   }
 
   /** Nur Fernmelder bzw. Dispatcher, solange die Meldung bei ihnen liegt */
