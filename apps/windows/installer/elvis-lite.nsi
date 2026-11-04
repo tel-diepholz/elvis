@@ -22,7 +22,6 @@ Unicode true
 Name "${APP}"
 OutFile "${OUTFILE}"
 InstallDir "$PROGRAMFILES64\${APP}"
-InstallDirRegKey HKLM "${UNINST_KEY}" "InstallLocation"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 VIProductVersion "${VERSION}.0"
@@ -46,6 +45,11 @@ VIAddVersionKey "LegalCopyright" "MIT-Lizenz"
 
 Var DataDir
 Var Port
+Var Prev
+Var OldVersion
+Var Installed
+Var Ok
+Var RolledBack
 
 Function .onInit
   ${IfNot} ${RunningX64}
@@ -53,22 +57,65 @@ Function .onInit
     Abort
   ${EndIf}
   SetRegView 64
+  ; Bestehende Installation (auch in einem eigenen Ordner) – erst nach SetRegView 64 lesbar, daher kein InstallDirRegKey
+  ReadRegStr $0 HKLM "${UNINST_KEY}" "InstallLocation"
+  ${If} $0 != ""
+    StrCpy $INSTDIR $0
+  ${EndIf}
 FunctionEnd
 
 Function OpenElvis
   Exec '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\elvis-oeffnen.ps1"'
 FunctionEnd
 
+; Port aus elvis.json (Vorgabe ${DEFAULT_PORT}); als PowerShell-Ausschnitt für die Prüfungen unten
+!define PS `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command`
+!define PS_PORT `$$p = ${DEFAULT_PORT}; $$c = Join-Path $$env:ProgramData '${APP}\elvis.json'; if (Test-Path $$c) { $$v = (Get-Content $$c -Raw | ConvertFrom-Json).port; if ($$v) { $$p = [int]$$v } };`
+
+; Wartet bis zu 2 Minuten, bis der Dienst mit der neuen Version antwortet. Ergebnis auf dem Stack: 0 = läuft
+Function WaitHealthy
+  DetailPrint "Warte, bis ELVIS ${VERSION} antwortet …"
+  nsExec::ExecToLog `${PS} "${PS_PORT} $$until = (Get-Date).AddSeconds(120); while ((Get-Date) -lt $$until) { try { $$r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 ('http://127.0.0.1:' + $$p + '/api/info'); if ($$r.Content -match '\"version\":\"${VERSION}\"') { exit 0 } } catch {}; Start-Sleep -Seconds 2 }; exit 1"`
+FunctionEnd
+
 Section "ELVIS lite"
   SetShellVarContext all
   ReadEnvStr $DataDir PROGRAMDATA
   StrCpy $DataDir "$DataDir\${APP}"
+  StrCpy $Prev "$DataDir\updates\prev"
+  StrCpy $OldVersion ""
+  StrCpy $Installed "${VERSION}"
+  StrCpy $Ok "false"
+  StrCpy $RolledBack "false"
 
-  ; Update: laufenden Dienst anhalten und abmelden, bevor Dateien ersetzt werden
+  ; Update (auch aus Einstellungen → Update, dann still mit /S): alten Stand für ein Zurückrollen sichern
   ${If} ${FileExists} "$INSTDIR\elvis-lite-dienst.exe"
-    DetailPrint "Beende den laufenden Dienst …"
+    ${If} ${FileExists} "$INSTDIR\VERSION"
+      FileOpen $0 "$INSTDIR\VERSION" r
+      FileRead $0 $OldVersion
+      FileClose $0
+      StrCpy $1 $OldVersion 1 -1
+      ${If} $1 == "$\n"
+        StrCpy $OldVersion $OldVersion -1
+      ${EndIf}
+      StrCpy $1 $OldVersion 1 -1
+      ${If} $1 == "$\r"
+        StrCpy $OldVersion $OldVersion -1
+      ${EndIf}
+    ${EndIf}
+    ${If} $OldVersion == ""
+      StrCpy $OldVersion "unbekannt"
+    ${EndIf}
+    DetailPrint "Beende den laufenden Dienst (Version $OldVersion) …"
     nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" stop'
     nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" uninstall'
+    ; Programmordner und Datenbank sichern (Datenbank-Änderungen einer neuen Version lassen sich nicht zurücknehmen)
+    DetailPrint "Sichere Version $OldVersion und Datenbank …"
+    RMDir /r "$Prev"
+    CreateDirectory "$Prev\program"
+    CopyFiles /SILENT "$INSTDIR\*.*" "$Prev\program"
+    CreateDirectory "$Prev\data"
+    CopyFiles /SILENT "$DataDir\data\elvis.sqlite*" "$Prev\data"
   ${EndIf}
 
   ; Alte Programmdateien entfernen (keine Reste alter Versionen), Daten liegen woanders
@@ -95,20 +142,52 @@ Section "ELVIS lite"
   nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" install'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "Der Dienst „${APP}“ konnte nicht eingerichtet werden (Code $0)."
+    MessageBox MB_ICONSTOP "Der Dienst „${APP}“ konnte nicht eingerichtet werden (Code $0)." /SD IDOK
   ${EndIf}
 
   ; Port prüfen (der eigene Dienst ist gestoppt, also belegt ihn ein fremdes Programm); gibt den Port aus
-  ; (Backtick als NSIS-Begrenzer, damit PowerShell einfache Anführungszeichen bekommt; $$ = $ für PowerShell)
-  nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "$$p = ${DEFAULT_PORT}; $$c = Join-Path $$env:ProgramData '${APP}\elvis.json'; if (Test-Path $$c) { $$v = (Get-Content $$c -Raw | ConvertFrom-Json).port; if ($$v) { $$p = [int]$$v } }; [Console]::Write($$p); if (Get-NetTCPConnection -LocalPort $$p -State Listen -ErrorAction SilentlyContinue) { exit 1 }"`
+  nsExec::ExecToStack `${PS} "${PS_PORT} [Console]::Write($$p); if (Get-NetTCPConnection -LocalPort $$p -State Listen -ErrorAction SilentlyContinue) { exit 1 }"`
   Pop $0
   Pop $Port
   ${If} $0 == 1
-    MessageBox MB_ICONEXCLAMATION "Achtung: Port $Port ist belegt. Der Server kann nicht starten.$\r$\n$\r$\nDas andere Programm beenden und danach den Dienst „${APP}“ starten – oder in $DataDir\elvis.json einen anderen Port eintragen."
+    MessageBox MB_ICONEXCLAMATION "Achtung: Port $Port ist belegt. Der Server kann nicht starten.$\r$\n$\r$\nDas andere Programm beenden und danach den Dienst „${APP}“ starten – oder in $DataDir\elvis.json einen anderen Port eintragen." /SD IDOK
   ${Else}
     DetailPrint "Starte den Dienst …"
     nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" start'
+    Call WaitHealthy
+    Pop $0
+    ${If} $0 == 0
+      StrCpy $Ok "true"
+    ${ElseIf} $OldVersion != ""
+    ${AndIf} ${FileExists} "$Prev\program\elvis-lite-dienst.exe"
+      ; Neue Version kommt nicht hoch: alte Version samt Datenbank zurück
+      DetailPrint "ELVIS ${VERSION} startet nicht – stelle Version $OldVersion wieder her …"
+      nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" stop'
+      nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" uninstall'
+      RMDir /r "$INSTDIR\server"
+      RMDir /r "$INSTDIR\web"
+      RMDir /r "$INSTDIR\node_modules"
+      CopyFiles /SILENT "$Prev\program\*.*" "$INSTDIR"
+      Delete "$DataDir\data\elvis.sqlite*"
+      CopyFiles /SILENT "$Prev\data\*.*" "$DataDir\data"
+      nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" install'
+      nsExec::ExecToLog '"$INSTDIR\elvis-lite-dienst.exe" start'
+      StrCpy $RolledBack "true"
+      StrCpy $Installed $OldVersion
+      MessageBox MB_ICONSTOP "ELVIS ${VERSION} ist nicht gestartet. Version $OldVersion und die Datenbank wurden wiederhergestellt.$\r$\n$\r$\nProtokolle: $DataDir\logs" /SD IDOK
+    ${Else}
+      MessageBox MB_ICONEXCLAMATION "ELVIS antwortet noch nicht. Protokolle: $DataDir\logs" /SD IDOK
+    ${EndIf}
   ${EndIf}
+
+  ; Ergebnis für Einstellungen → Update; die einmalige Aufgabe des Updates aufräumen
+  ${If} $OldVersion != ""
+    CreateDirectory "$DataDir\updates"
+    FileOpen $0 "$DataDir\updates\result.json" w
+    FileWrite $0 '{"from":"$OldVersion","to":"${VERSION}","ok":$Ok,"rolledBack":$RolledBack}$\r$\n'
+    FileClose $0
+  ${EndIf}
+  nsExec::Exec 'schtasks /Delete /TN "${APP} Update" /F'
 
   ; Verknüpfungen: ELVIS im Browser öffnen, Adresse für Tablets
   StrCpy $1 '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\elvis-oeffnen.ps1"'
@@ -122,7 +201,7 @@ Section "ELVIS lite"
   ; Programme und Features
   WriteUninstaller "$INSTDIR\uninstall.exe"
   WriteRegStr HKLM "${UNINST_KEY}" "DisplayName" "${APP}"
-  WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion" "${VERSION}"
+  WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion" "$Installed"
   WriteRegStr HKLM "${UNINST_KEY}" "Publisher" "ELVIS"
   WriteRegStr HKLM "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\elvis.ico"
   WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"

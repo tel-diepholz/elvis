@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
+import { elvisVersion } from './version.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const STAGE = join(ROOT, 'stage');
@@ -81,6 +82,8 @@ const prebuilds = join(STAGE, 'node_modules/better-sqlite3/prebuilds');
 for (const f of readdirSync(prebuilds)) if (f !== 'win32-x64.node') rmSync(join(prebuilds, f));
 if (!existsSync(join(prebuilds, 'win32-x64.node'))) throw new Error('better-sqlite3: keine Binärdatei für win32-x64');
 
-const version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+const version = elvisVersion();
+const built = readFileSync(join(ROOT, 'dist/server/index.mjs'), 'utf8');
+if (!built.includes(JSON.stringify(version))) throw new Error(`dist/server ist nicht für Version ${version} gebaut – vorher „npm run build -w @elvis/windows“`);
 writeFileSync(join(STAGE, 'VERSION'), `${version}\n`);
 console.log(`stage/ fertig (ELVIS lite ${version}, Node.js ${NODE.version}, WinSW ${WINSW.version})`);

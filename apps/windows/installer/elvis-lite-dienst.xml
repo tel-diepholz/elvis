@@ -12,6 +12,8 @@
   <workingdirectory>%ProgramData%\ELVIS lite</workingdirectory>
   <env name="NODE_ENV" value="production" />
   <env name="ELVIS_EDITION" value="lite" />
+  <!-- Läuft als Dienst aus dem Installer: Einstellungen → Update darf installieren -->
+  <env name="ELVIS_SERVICE" value="1" />
   <env name="ELVIS_CONFIG" value="%ProgramData%\ELVIS lite\elvis.json" />
   <env name="ELVIS_DATA_DIR" value="%ProgramData%\ELVIS lite\data" />
   <env name="ELVIS_WEB_DIST" value="%BASE%\web" />

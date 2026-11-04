@@ -136,6 +136,13 @@ const configSchema = z.object({
       relayUrl: z.string().url().nullable().default('https://relay.einsatzleitwagen.app'),
     })
     .default({}),
+  updates: z
+    .object({
+      /** GitHub-Repo mit den Releases von ELVIS lite (Einstellungen → Update); null = aus */
+      repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/).nullable().default('tel-diepholz/elvis'),
+      apiUrl: z.string().url().default('https://api.github.com'),
+    })
+    .default({}),
   mail: z
     .object({
       /** Postfach des ELW über das Cloud-Relay (app.relayUrl); false = Bereich „E-Mail“ aus */

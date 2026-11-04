@@ -1,4 +1,5 @@
 import { defineConfig } from 'tsup';
+import { elvisVersion } from './scripts/version.mjs';
 
 /**
  * Der unveränderte ELVIS-Server (apps/server) als ein ESM-Bündel für den Windows-Dienst. Extern bleiben nur Pakete
@@ -18,6 +19,8 @@ export default defineConfig({
   // noExternal hat bei tsup Vorrang vor external, daher als Ausschluss formuliert
   noExternal: [new RegExp(`^(?!(${EXTERNAL.join('|')})(/|$))`)],
   external: EXTERNAL,
+  // Version fest einbauen (Einstellungen → Update, /api/info)
+  define: { 'process.env.ELVIS_VERSION': JSON.stringify(elvisVersion()) },
   // CommonJS-Pakete im ESM-Bündel brauchen require/__dirname
   banner: {
     js: [

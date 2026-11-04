@@ -1,0 +1,51 @@
+name: ELVIS lite – Release
+
+# Neues GitHub-Release (Tag vX.Y.Z) → Windows-Installer bauen, signieren und an das Release hängen.
+# ELVIS lite findet ihn dann unter Einstellungen → Update.
+# Voraussetzung: Secret ELVIS_UPDATE_SIGNING_KEY (privater Ed25519-Schlüssel, Base64) passend zu UPDATE_PUBLIC_KEY in
+# apps/server/src/services/updates.ts.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release-Tag (vX.Y.Z), an das der Installer gehängt wird'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    name: Installer bauen und anhängen
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: NSIS bereitstellen
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and -not (Test-Path 'C:\Program Files (x86)\NSIS\makensis.exe')) { choco install nsis -y --no-progress }
+      - name: Installer bauen
+        run: npm run dist -w @elvis/windows
+        env:
+          ELVIS_VERSION: ${{ env.TAG }}
+      - name: Signieren
+        run: npm run sign -w @elvis/windows
+        env:
+          ELVIS_UPDATE_SIGNING_KEY: ${{ secrets.ELVIS_UPDATE_SIGNING_KEY }}
+      - name: An das Release hängen
+        shell: pwsh
+        run: gh release upload $env:TAG (Get-ChildItem apps/windows/release -Filter 'ELVIS-lite-*-setup.exe*').FullName --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

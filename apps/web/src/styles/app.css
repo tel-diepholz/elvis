@@ -9134,3 +9134,20 @@ a.dash-tile-title:hover {
     grid-column: 1 / -1;
   }
 }
+
+/* Einstellungen → Update */
+.update-release {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.update-release h4 {
+  margin: 0 0 8px;
+}
+.update-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+}

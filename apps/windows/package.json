@@ -9,12 +9,14 @@
     "build": "npm run build -w @elvis/web && tsup",
     "stage": "node scripts/stage.mjs",
     "dist": "npm run build && node scripts/stage.mjs && node scripts/installer.mjs",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "sign": "node scripts/sign.mjs"
   },
   "devDependencies": {
     "@elvis/server": "*",
     "@elvis/shared": "*",
     "fflate": "^0.8.3",
-    "tsup": "^8.3.5"
+    "tsup": "^8.3.5",
+    "tweetnacl": "^1.0.3"
   }
 }

@@ -77,6 +77,9 @@ import { dashboardRoutes } from './routes/dashboard.js';
 import { DashboardService } from './services/dashboards.js';
 import { PhoneService, type PhoneFetch } from './services/phones.js';
 import { backupRoutes } from './routes/backup.js';
+import { updateRoutes } from './routes/updates.js';
+import { UpdateService, type UpdateFetch } from './services/updates.js';
+import { ELVIS_VERSION } from './version.js';
 import { BackupService, type DriverFactory } from './services/backup/service.js';
 import { ElwCloudDriver, type BackupFetch } from './services/backup/elwCloud.js';
 import { RestoreService } from './services/backup/restore.js';
@@ -134,7 +137,7 @@ export interface App {
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; officeConvert?: OfficeConverter | null; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; phoneFetch?: PhoneFetch; phonePushDelayMs?: number; restart?: () => void } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; officeConvert?: OfficeConverter | null; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; updateFetch?: UpdateFetch; phoneFetch?: PhoneFetch; phonePushDelayMs?: number; restart?: () => void } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -298,6 +301,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   });
   const backupDrivers: DriverFactory = (_driver, keys) =>
     new ElwCloudDriver(config.app.relayUrl, keys.vaultId, keys.vaultToken, async () => (await relay.ensureCredentials()).token, opts.backupFetch);
+  const updates = new UpdateService({ edition: config.edition, dataDir: config.dataDir, repo: config.updates.repo, apiUrl: config.updates.apiUrl, fetch: opts.updateFetch, log: server.log });
   const backup = new BackupService(db, {
     dataDir: config.dataDir,
     configFile: config.configFile,
@@ -403,6 +407,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     api.get('/api/health', async () => ({ ok: true, time: new Date().toISOString() }));
     api.get('/api/info', async () => ({
       edition: config.edition,
+      version: ELVIS_VERSION,
       vehicle: settings.get().vehicle,
       drivers: Object.fromEntries(devices.snapshots().map((d) => [d.id, d.driver])),
       limits: config.alerts,
@@ -452,6 +457,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     phoneRoutes(api, { phones, store, notify: (t) => hub.invalidate(t) });
     dashboardRoutes(api, { dashboards: new DashboardService(db, config.edition) });
     backupRoutes(api, { backup, restore });
+    updateRoutes(api, { updates, store });
     api.get('/api/settings', async () => settings.get());
     api.put('/api/settings', async (req) => {
       const parsed = settingsInputSchema.safeParse(req.body);
