@@ -42,6 +42,11 @@ function useChat(): { available: boolean; unread: number } {
   return { available, unread: available ? (data?.count ?? 0) : 0 };
 }
 
+/** Läuft mindestens ein Druckserver? Teilt sich die Abfrage mit der Druckseite (Live-Thema „printing“). */
+function usePrintingAvailable(): boolean {
+  return !!useQuery({ queryKey: ['printing'], queryFn: api.printing }).data?.available;
+}
+
 const COLLAPSE_KEY = 'elvis.navCollapsed';
 
 /** Seitenleiste auf dem Desktop auf die Icons einklappen – Zustand bleibt im Browser gespeichert. */
@@ -110,6 +115,7 @@ export function Layout() {
   const messageCount = useMessageAttention(now).attention.length;
   const mail = useMail();
   const chat = useChat();
+  const printing = usePrintingAvailable();
   const badges: Badges = { personnelSheets: unreadSheets, messages: messageCount, mail: mail.unread, chat: chat.unread };
 
   useEffect(() => setDrawerOpen(false), [location.pathname]);
@@ -130,7 +136,7 @@ export function Layout() {
             {group.label === 'Einsatz' && incident && <span className="nav-live">aktiv</span>}
           </div>
           {group.items
-            .filter((item) => inEdition(item, info?.edition) && (!item.requiresDocker || dockerEnabled) && (!item.requiresAdmin || user?.isAdmin) && (!item.requiresMail || mail.available) && (!item.requiresChat || chat.available))
+            .filter((item) => inEdition(item, info?.edition) && (!item.requiresDocker || dockerEnabled) && (!item.requiresAdmin || user?.isAdmin) && (!item.requiresMail || mail.available) && (!item.requiresChat || chat.available) && (!item.requiresPrinting || printing))
             .map((item) => {
               const needsLogin = !!item.requiresLogin && !user;
               const noIncident = !!item.requiresIncident && !incident;

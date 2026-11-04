@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { LITE_DASHBOARD, LITE_DEVICE_IDS, type DashboardResponse, type DeviceModule } from '@elvis/shared';
+import { DASHBOARD_TILE_TYPES, dashboardTileIds, LITE_DASHBOARD, LITE_DEVICE_IDS, type DashboardResponse, type DeviceModule } from '@elvis/shared';
 import { buildApp, type App } from './app.js';
 import { loadConfig, parseConfig } from './config.js';
 import { openDb } from './db/index.js';
@@ -70,5 +70,7 @@ describe('Ausbaustufe lite – API', () => {
     const cookie = await adminCookie(app);
     const res = (await app.server.inject({ method: 'GET', url: '/api/me/dashboard', headers: { cookie } })).json() as DashboardResponse;
     expect(res.layout).toEqual(LITE_DASHBOARD);
+    expect(LITE_DASHBOARD.tiles.filter((t) => DASHBOARD_TILE_TYPES[t.type].requiresVehicle)).toEqual([]);
+    expect(dashboardTileIds('lite')).not.toContain('weather');
   });
 });
