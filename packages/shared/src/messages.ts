@@ -160,6 +160,8 @@ export const DEFAULT_MESSAGE_SETTINGS = { radioRoleIds: [] as number[], dispatch
 /** Für das Meldungsformular: welche Rollen ich habe und ob ein Dispatcher angemeldet ist */
 export interface MessageContext {
   radio: boolean;
+  /** Darf Eingangsmeldungen erfassen: Fernmelder – ist keine Fernmelder-Rolle eingestellt, jeder Angemeldete */
+  captureIn: boolean;
   dispatcher: boolean;
   dispatcherPresent: boolean;
   radioConfigured: boolean;

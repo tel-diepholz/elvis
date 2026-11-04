@@ -1,6 +1,6 @@
 # Wetter
 
-Die Seite „Wetter“ zeigt für den Fahrzeugstandort (GPS der Wetterstation, ohne GPS der Einsatzort) die
+Die Seite „Wetter“ zeigt für den Fahrzeugstandort (GPS der Wetterstation bzw. in der Karte von Hand gesetzt, sonst der Einsatzort) die
 **amtlichen Warnungen des DWD** (Gemeinde-Warngebiet, über [Bright Sky](https://brightsky.dev)) und eine
 **Prognose** von [Open-Meteo](https://open-meteo.com): aktuelle Lage, die nächsten 24 Stunden und 7 Tage.
 Böen ab 70 % bzw. 100 % von `alerts.stormWarnMs` werden hervorgehoben. Darunter stehen die Live-Werte der

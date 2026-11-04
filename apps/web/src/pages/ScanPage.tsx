@@ -17,7 +17,7 @@ import {
 } from "../components/ui";
 import { PersonnelSheets } from "./inbox/PersonnelSheets";
 
-/** Posteingang: Personalbögen aus dem Online-Formular und per „Scan an E-Mail“ empfangene PDFs (während eines Einsatzes automatisch in dessen Dokumenten) */
+/** Posteingang: Personalbögen aus dem Online-Formular und per „Scan an E-Mail“ empfangene PDFs (während einer Lage automatisch in deren Dokumenten) */
 export function ScanPage() {
   const toast = useToast();
   const admin = !!useAuth().user?.isAdmin;
@@ -65,7 +65,7 @@ export function ScanPage() {
         <Card title="Scans" icon={<ScanLine size={18} />} className="span-2">
           <p className="muted">
             {incident && status.archive.enabled
-              ? `Per „Scan an E-Mail“ empfangen; neue Scans werden zusätzlich im Einsatz „${incident.title}“ unter „${status.archive.path || "/"}“ abgelegt.`
+              ? `Per „Scan an E-Mail“ empfangen; neue Scans werden zusätzlich in der Lage „${incident.title}“ unter „${status.archive.path || "/"}“ abgelegt.`
               : "Per „Scan an E-Mail“ empfangen: am Multifunktionsgerät Scannen → E-Mail wählen und als Empfänger die ELVIS-Adresse angeben."}
           </p>
           {!status.listening || !status.enabled ? (
@@ -125,14 +125,14 @@ export function ScanPage() {
                         {s.archivedPath ? (
                           <>
                             {s.incidentId === incident?.id ? (
-                              <Link to="/einsatz/dokumente">
+                              <Link to="/lage/dokumente">
                                 {s.archivedPath}
                               </Link>
                             ) : (
                               s.archivedPath
                             )}
                             <span className="cell-sub">
-                              {s.incidentTitle ?? "Einsatz gelöscht"}
+                              {s.incidentTitle ?? "Lage gelöscht"}
                               {s.assignedBy &&
                                 s.assignedBy !== "Eingang" &&
                                 s.assignedBy !== "Scan-Eingang" &&
@@ -175,8 +175,8 @@ export function ScanPage() {
                                 setFolderPath(status.archive.path),
                                 setAssigning(s)
                               )}
-                              aria-label="Im Einsatz ablegen"
-                              title={`Im Einsatz „${incident.title}“ ablegen`}
+                              aria-label="In der Lage ablegen"
+                              title={`In der Lage „${incident.title}“ ablegen`}
                             >
                               <FolderInput size={16} />
                             </button>
@@ -185,7 +185,7 @@ export function ScanPage() {
                             className="btn btn-ghost btn-icon"
                             onClick={() =>
                               window.confirm(
-                                `Scan „${s.filename}“ aus dem Posteingang löschen?${s.archivedPath ? "\n\nDas abgelegte Dokument im Einsatz bleibt erhalten." : ""}`,
+                                `Scan „${s.filename}“ aus dem Posteingang löschen?${s.archivedPath ? "\n\nDas abgelegte Dokument in der Lage bleibt erhalten." : ""}`,
                               ) && remove.mutate(s.id)
                             }
                             aria-label="Löschen"
@@ -206,7 +206,7 @@ export function ScanPage() {
 
       <Modal
         open={!!assigning && !!incident}
-        title="Im Einsatz ablegen"
+        title="In der Lage ablegen"
         onClose={() => setAssigning(null)}
       >
         {assigning && incident && (
@@ -221,7 +221,7 @@ export function ScanPage() {
             }}
           >
             <p>
-              „{assigning.filename}“ in der Dokumentverwaltung des Einsatzes „
+              „{assigning.filename}“ in der Dokumentverwaltung der Lage „
               {incident.title}“ ablegen.
             </p>
             <Field

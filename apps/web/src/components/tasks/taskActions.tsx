@@ -12,7 +12,7 @@ export function useTasks(incident: Incident | null | undefined) {
   return useQuery({ queryKey: ['tasks', incident?.id ?? 0], queryFn: () => api.tasks(incident!.id), enabled: !!incident && !incident.closedAt });
 }
 
-/** Fällige Aufgaben des angemeldeten Benutzers im laufenden Einsatz */
+/** Fällige Aufgaben des angemeldeten Benutzers in der laufenden Lage */
 export function useDueTasks(now: Date): { incident: Incident | null; due: Task[] } {
   const { data: incident } = useActiveIncident();
   const { data: tasks = [] } = useTasks(incident);

@@ -78,7 +78,7 @@ export function ChatPage() {
   const available = !!avail?.available;
   const { data: threads } = useQuery({ queryKey: ['chat', 'threads'], queryFn: api.chatThreads, enabled: available });
   const { data: contacts = [] } = useQuery({ queryKey: ['contacts'], queryFn: api.contacts, enabled: available });
-  // Kräfte im laufenden Einsatz mit Rufnummer: ihr Name steht am Gespräch (Zuordnung gilt nur für diesen Einsatz)
+  // Kräfte in der laufenden Lage mit Rufnummer: ihr Name steht am Gespräch (Zuordnung gilt nur für diese Lage)
   const { data: units = [] } = useQuery({ queryKey: ['units', incident?.id], queryFn: () => api.units(incident!.id), enabled: available && !!incident });
   const unitsOf = useMemo(() => {
     const byNumber = new Map<string, Unit[]>();
@@ -253,12 +253,12 @@ function ThreadView({
   onSent: (m: ChatMessage[]) => void;
   /** Nur mit laufendem Einsatz */
   onMessage?: (m: ChatMessage) => void;
-  /** Bild in die Dokumente des Einsatzes übernehmen; nur mit laufendem Einsatz */
+  /** Bild in die Dokumente der Lage übernehmen; nur mit laufendem Einsatz */
   onDocument?: (m: ChatMessage) => void;
   onContact: (number: string) => void;
-  /** Kräfte im laufenden Einsatz mit einer Rufnummer dieses Gesprächs */
+  /** Kräfte in der laufenden Lage mit einer Rufnummer dieses Gesprächs */
   units: Unit[];
-  /** Rufnummer einer Kraft im Einsatz zuordnen; nur mit laufendem Einsatz und Rufnummer */
+  /** Rufnummer einer Kraft der Lage zuordnen; nur mit laufendem Einsatz und Rufnummer */
   onAssign?: () => void;
 }) {
   const toast = useToast();
@@ -319,7 +319,7 @@ function ThreadView({
           </button>
         )}
         {onAssign && (
-          <button className="btn btn-sm thread-head-btn" title="Rufnummer einer Kraft im Einsatz zuordnen (nur für diesen Einsatz)" onClick={onAssign}>
+          <button className="btn btn-sm thread-head-btn" title="Rufnummer einer Kraft der Lage zuordnen (nur für diese Lage)" onClick={onAssign}>
             <Truck size={16} /> <span>Kraft zuordnen</span>
           </button>
         )}
@@ -374,7 +374,7 @@ function ThreadView({
                   )}
                   <span className="thread-actions">
                     {onMessage && m.folder === 'inbox' && (
-                      <button className="btn btn-ghost btn-icon btn-sm" disabled={!ctx?.radio} title={ctx?.radio ? 'Als Eingangsmeldung erfassen' : 'Eingangsmeldungen erfassen nur Fernmelder'} aria-label="Meldung erstellen" onClick={() => onMessage(m)}>
+                      <button className="btn btn-ghost btn-icon btn-sm" disabled={!ctx?.captureIn} title={ctx?.captureIn ? 'Als Eingangsmeldung erfassen' : 'Eingangsmeldungen erfassen nur Fernmelder'} aria-label="Meldung erstellen" onClick={() => onMessage(m)}>
                         <MessageSquarePlus size={14} />
                       </button>
                     )}
@@ -432,7 +432,7 @@ function ChatToMessage({ incident, msg, onDone }: { incident: Incident; msg: Cha
   );
 }
 
-/** Anhang einer Nachricht in die Dokumente des Einsatzes übernehmen: Ordner wählen (Vorgabe für Bilder „Fotos“), Beschreibung vorbelegt */
+/** Anhang einer Nachricht in die Dokumente der Lage übernehmen: Ordner wählen (Vorgabe für Bilder „Fotos“), Beschreibung vorbelegt */
 function ChatToDocumentForm({ incident, msg, onDone }: { incident: Incident; msg: ChatMessage; onDone: () => void }) {
   const toast = useToast();
   const { data: listing } = useQuery({ queryKey: ['documents', incident.id], queryFn: () => api.documents(incident.id) });
@@ -461,8 +461,8 @@ function ChatToDocumentForm({ incident, msg, onDone }: { incident: Incident; msg
       {msg.attachment && isChatImage(msg.attachment.mimeType) && (
         <img className="chat-document-preview" src={api.chatFileUrl(msg.attachment.id)} alt={msg.attachment.name} />
       )}
-      <Field label="Ordner" hint={`Dokumente des Einsatzes „${incident.title}“`}>
-        <FolderSelect folders={listing.folders} value={chosen} onChange={setFolderId} rootLabel="Einsatz (oberste Ebene)" />
+      <Field label="Ordner" hint={`Dokumente der Lage „${incident.title}“`}>
+        <FolderSelect folders={listing.folders} value={chosen} onChange={setFolderId} rootLabel="Lage (oberste Ebene)" />
       </Field>
       <Field label="Beschreibung">
         <input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} />
@@ -493,7 +493,7 @@ function UnitTags({ units }: { units: Unit[] }) {
 }
 
 /**
- * Rufnummer des Gesprächs einer Kraft im laufenden Einsatz zuordnen (Feld „Mobil“ der Kraft, nur in diesem Einsatz; der
+ * Rufnummer des Gesprächs einer Kraft in der laufenden Lage zuordnen (Feld „Mobil“ der Kraft, nur in diesem Einsatz; der
  * Kräftekatalog bleibt unberührt). Bestehende Zuordnungen lassen sich lösen.
  */
 function AssignUnitForm({ incident, thread, units, assigned, onDone }: { incident: Incident; thread: ChatThread; units: Unit[]; assigned: Unit[]; onDone: () => void }) {
@@ -550,11 +550,11 @@ function AssignUnitForm({ incident, thread, units, assigned, onDone }: { inciden
         </Field>
       )}
       <Field
-        label={`Kraft im Einsatz „${incident.title}“`}
+        label={`Kraft in der Lage „${incident.title}“`}
         hint={
           unit?.mobile && unit.mobile !== number
             ? `${unit.name} hat schon ${formatPhone(unit.mobile)} – die Nummer wird ersetzt.`
-            : `Die Kraft merkt sich ${formatPhone(number)} nur für diesen Einsatz – Meldungen an sie lassen sich dann per Nachricht senden.`
+            : `Die Kraft merkt sich ${formatPhone(number)} nur für diese Lage – Meldungen an sie lassen sich dann per Nachricht senden.`
         }
       >
         <select value={unitId ?? ''} onChange={(e) => setUnitId(e.target.value ? Number(e.target.value) : null)} autoFocus>
@@ -567,7 +567,7 @@ function AssignUnitForm({ incident, thread, units, assigned, onDone }: { inciden
           ))}
         </select>
       </Field>
-      {active.length === 0 && <p className="muted">Im Einsatz sind noch keine Kräfte erfasst.</p>}
+      {active.length === 0 && <p className="muted">In der Lage sind noch keine Kräfte erfasst.</p>}
       <div className="form-actions">
         <button type="submit" className="btn btn-primary" disabled={!unit || !number || patch.isPending}>
           <Truck size={14} /> Zuordnen

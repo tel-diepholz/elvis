@@ -112,7 +112,7 @@ describe('Kamerapositionen', () => {
     await until(async () => (await cameraState())[0]?.online === true);
 
     // ohne Einsatz kein Speichern
-    expect((await req<{ error: string }>('POST', '/api/cameras/presets', { cameraId: c.id, name: 'Einfahrt' })).body.error).toMatch(/Einsatz/);
+    expect((await req<{ error: string }>('POST', '/api/cameras/presets', { cameraId: c.id, name: 'Einfahrt' })).body.error).toMatch(/Lage/);
 
     const { body: first } = await req<Incident>('POST', '/api/incidents', { title: 'Brand Lagerhalle', keyword: 'B3' });
     await req('POST', '/api/devices/cameras/commands', { action: 'zoom', params: { cameraId: c.id, direction: 1, big: true } });

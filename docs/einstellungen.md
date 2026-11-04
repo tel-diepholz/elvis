@@ -13,7 +13,7 @@
   entstehen das SVG im Browser und auf der Karte sowie die Vektorgrafik im Druck-PDF. Weitere Fachaufgaben werden in
   `functionSymbol()` ergänzt.
 - **Einstellungen** (*Verwaltung → Einstellungen*, nur Admins): aufklappbare Abschnitte in den Gruppen Fahrzeug,
-  Fahrzeugmodule, Dienste und Einsatz. Links aus anderen Seiten öffnen den passenden Abschnitt direkt, z. B.
+  Fahrzeugmodule, Dienste und Lage. Links aus anderen Seiten öffnen den passenden Abschnitt direkt, z. B.
   `/einstellungen#modul-bluetooth` oder `/einstellungen#scannen`. Die alte Adresse `/system` leitet dorthin um.
   - *Fahrzeug & Einheit:* Fahrzeugname, Funkrufname, Einheit und das taktische Zeichen für den Fahrzeugstandort auf
     Karte und Druck. Ohne gespeicherte Werte gelten `vehicle` aus `config/elvis.json` und das Zeichen „ELW 2“ der

@@ -85,7 +85,7 @@ export class AppLinkService {
     };
   }
 
-  /** Aktive Kopplungen eines Einsatzes */
+  /** Aktive Kopplungen einer Lage */
   list(incidentId: number): AppLink[] {
     return (this.db.prepare('SELECT * FROM app_links WHERE incident_id = ? AND ended_at IS NULL ORDER BY id').all(incidentId) as LinkRow[]).map(toLink);
   }
@@ -94,7 +94,7 @@ export class AppLinkService {
     const unit = this.store.unit(unitId);
     if (!unit) throw new HttpError(404, `Einheit ${unitId} nicht gefunden`);
     const incident = this.store.incident(unit.incidentId)!;
-    if (incident.closedAt) throw new HttpError(409, 'Einsatz ist abgeschlossen und kann nicht mehr geändert werden');
+    if (incident.closedAt) throw new HttpError(409, 'Lage ist abgeschlossen und kann nicht mehr geändert werden');
     if (unit.status === 'entlassen') throw new HttpError(409, `${unit.name} ist bereits entlassen`);
     const other = this.activeRows().find((r) => r.device_id === input.deviceId && r.unit_id !== unitId);
     if (other) throw new HttpError(409, `Diese App ist bereits mit ${this.store.unit(other.unit_id)?.name ?? 'einer anderen Einheit'} gekoppelt`);

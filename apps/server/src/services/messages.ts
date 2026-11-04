@@ -147,10 +147,16 @@ export class MessageService {
     const c = this.ctx();
     return {
       radio: some(c.settings.radioRoleIds, viewer.roleIds),
+      captureIn: this.mayCaptureIn(c, viewer),
       dispatcher: some(c.settings.dispatcherRoleIds, viewer.roleIds),
       dispatcherPresent: c.dispatcherUsers.size > 0,
       radioConfigured: c.settings.radioRoleIds.length > 0,
     };
+  }
+
+  /** Eingangsmeldungen erfassen Fernmelder; ohne eingestellte Fernmelder-Rolle jeder (sonst ginge es gar nicht) */
+  private mayCaptureIn(c: Ctx, viewer: TaskViewer): boolean {
+    return !c.settings.radioRoleIds.length || some(c.settings.radioRoleIds, viewer.roleIds);
   }
 
   /** Wer eine offene Meldung bearbeitet: Fernmelder (Ausgang) bzw. Dispatcher – ohne angemeldeten Dispatcher die Fernmelder */
@@ -248,12 +254,12 @@ export class MessageService {
 
   private requireOpen(incidentId: number): Incident {
     const incident = this.deps.store.incident(incidentId);
-    if (!incident) throw new HttpError(404, `Einsatz ${incidentId} nicht gefunden`);
-    if (incident.closedAt) throw new HttpError(409, 'Einsatz ist abgeschlossen und kann nicht mehr geändert werden');
+    if (!incident) throw new HttpError(404, `Lage ${incidentId} nicht gefunden`);
+    if (incident.closedAt) throw new HttpError(409, 'Lage ist abgeschlossen und kann nicht mehr geändert werden');
     return incident;
   }
 
-  /** Kraft nur, wenn sie zu diesem Einsatz gehört; sonst eine vorhandene Systemeinheit – oder Freitext */
+  /** Kraft nur, wenn sie zu dieser Lage gehört; sonst eine vorhandene Systemeinheit – oder Freitext */
   private party(incidentId: number, p: MessagePartyInput): [number | null, number | null, string] {
     const unit = p.unitId ? this.deps.store.unit(p.unitId) : null;
     if (unit && unit.incidentId === incidentId) return [unit.id, null, p.text.trim()];
@@ -268,7 +274,7 @@ export class MessageService {
   }
 
   list(incidentId: number, viewer: TaskViewer | null): Message[] {
-    if (!this.deps.store.incident(incidentId)) throw new HttpError(404, `Einsatz ${incidentId} nicht gefunden`);
+    if (!this.deps.store.incident(incidentId)) throw new HttpError(404, `Lage ${incidentId} nicht gefunden`);
     const c = this.ctx();
     const rows = this.db.prepare(`${MESSAGE_SELECT} WHERE m.incident_id = ? ORDER BY m.id DESC`).all(incidentId) as MessageRow[];
     const copies = this.copies('m.incident_id', incidentId);
@@ -324,11 +330,12 @@ export class MessageService {
         requestId: input.requestId,
       };
     } else {
-      if (!some(c.settings.radioRoleIds, viewer.roleIds)) throw new HttpError(403, 'Eingangsmeldungen erfassen nur Fernmelder');
+      if (!this.mayCaptureIn(c, viewer)) throw new HttpError(403, 'Eingangsmeldungen erfassen nur Fernmelder');
       const [unitId, forceId, text] = this.party(incidentId, input.sender);
       // Mit angemeldetem Dispatcher verteilt er – eine Auswahl des Fernmelders zählt dann nicht
       const roleId = c.dispatcherUsers.size ? null : input.recipientRoleId;
-      if (!c.dispatcherUsers.size && roleId === null) throw new HttpError(400, 'Empfänger fehlt');
+      // Ohne Fernmelder-Rolle darf der Empfänger fehlen (z. B. ganz ohne Rollen) – die Meldung steht dann in der Liste
+      if (!c.dispatcherUsers.size && roleId === null && c.settings.radioRoleIds.length) throw new HttpError(400, 'Empfänger fehlt');
       cols = {
         senderRoleId: null,
         senderUnitId: unitId,

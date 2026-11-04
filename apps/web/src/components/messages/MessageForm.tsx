@@ -50,6 +50,8 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
 
   const incoming = direction === 'in';
   const dispatcherRoutes = incoming && !!ctx?.dispatcherPresent;
+  /** Ohne Fernmelder-Rolle ist der Empfänger freiwillig (ganz ohne Rollen gäbe es keinen) */
+  const recipientOptional = !ctx?.radioConfigured;
 
   const input = (): MessageInput =>
     incoming
@@ -59,7 +61,7 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!incoming && senderRoleId === null) return setError('Bitte zuerst eine Rolle übernehmen (Profilmenü)');
-    if (incoming && !dispatcherRoutes && recipientRoleId === null) return setError('Empfänger fehlt');
+    if (incoming && !dispatcherRoutes && !recipientOptional && recipientRoleId === null) return setError('Empfänger fehlt');
     const parsed = messageInputSchema.safeParse(input());
     if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'Eingabe prüfen');
     setError(null);
@@ -94,15 +96,18 @@ export function MessageForm({ incidentId, prefill, pending, onSubmit }: { incide
                 : prefill?.chat?.from
                   ? `Kraft im Einsatz oder aus dem Katalog (z. B. Leitstelle) wählen – sie merkt sich ${prefill.chat.from}, Ausgangsmeldungen lassen sich dann per Nachricht senden`
                   : prefill?.radio
-                  ? `Funkspruch von ISSI ${prefill.radio.issi} – die gewählte Kraft merkt sich die ISSI für diesen Einsatz`
+                  ? `Funkspruch von ISSI ${prefill.radio.issi} – die gewählte Kraft merkt sich die ISSI für diese Lage`
                   : 'Kraft aus der Kräfteverwaltung oder Freitext'
             }
           >
             <UnitSearchInput incidentId={incidentId} value={party} onChange={setParty} placeholder="z. B. ELW 1" autoFocus={party.unitId == null && party.forceUnitId == null} />
           </Field>
-          <Field label="Empfänger *" hint={dispatcherRoutes ? 'Ein Dispatcher ist angemeldet und verteilt die Meldung' : undefined}>
+          <Field
+            label={recipientOptional ? 'Empfänger' : 'Empfänger *'}
+            hint={dispatcherRoutes ? 'Ein Dispatcher ist angemeldet und verteilt die Meldung' : recipientOptional ? 'Keine Fernmelder-Rolle eingestellt – ohne Empfänger steht die Meldung nur in der Liste' : undefined}
+          >
             <select value={dispatcherRoutes ? '' : (recipientRoleId ?? '')} onChange={(e) => setRecipientRoleId(e.target.value ? Number(e.target.value) : null)} disabled={dispatcherRoutes}>
-              <option value="">{dispatcherRoutes ? 'wird vom Dispatcher verteilt' : 'Rolle wählen …'}</option>
+              <option value="">{dispatcherRoutes ? 'wird vom Dispatcher verteilt' : recipientOptional ? '– ohne Empfänger –' : 'Rolle wählen …'}</option>
               {allRoles.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}

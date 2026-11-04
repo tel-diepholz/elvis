@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Bell, Lock, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun, Wifi, WifiOff, X } from 'lucide-react';
+import { Bell, ChevronDown, Lock, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun, Wifi, WifiOff, X } from 'lucide-react';
 import { useActiveIncident, useInfo, useNow, useSettings } from '../lib/hooks';
 import { useAlerts, useLive } from '../lib/live';
 import { fmtDate, fmtDtg, fmtTimeSec, fmtWeekday } from '../lib/format';
@@ -14,7 +14,7 @@ import { AccountMenu } from './auth/AccountMenu';
 import { DueTasksButton, DueTasksPanel } from './tasks/DueTasks';
 import { MessagesButton, MessagesPanel } from './messages/MessageAlerts';
 import { useMessageAttention } from './messages/messageHooks';
-import { inEdition, MOBILE_PRIMARY, NAV, type NavItem } from './nav';
+import { inEdition, MOBILE_PRIMARY, NAV, navFor, type NavGroup, type NavItem } from './nav';
 import { MESSENGER_IDS, type MessengerState, type TelephonyState } from '@elvis/shared';
 
 /** Neue Personalbögen im Posteingang */
@@ -70,6 +70,32 @@ function useNavCollapsed(): [boolean, () => void] {
   return [collapsed, toggle];
 }
 
+const GROUPS_KEY = 'elvis.navGroupsOpen';
+
+/** Aufgeklappte Gruppen (ELVIS lite) – bleiben im Browser gespeichert. */
+function useOpenGroups(): [Set<string>, (label: string) => void] {
+  const [open, setOpen] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(GROUPS_KEY) ?? '[]') as string[]);
+    } catch {
+      return new Set();
+    }
+  });
+  const toggle = (label: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      try {
+        localStorage.setItem(GROUPS_KEY, JSON.stringify([...next]));
+      } catch {
+        /* storage unavailable */
+      }
+      return next;
+    });
+  return [open, toggle];
+}
+
 type Badges = Record<NonNullable<NavItem['badge']>, number>;
 const BADGE_TITLE: Record<keyof Badges, string> = { personnelSheets: 'neue Personalbögen', messages: 'Meldungen zu bearbeiten', mail: 'ungelesene Mails', chat: 'ungelesene Nachrichten' };
 
@@ -80,7 +106,7 @@ function NavEntry({ item, locked, lockReason, onNavigate, badges }: { item: NavI
   return (
     <NavLink
       to={item.to}
-      end={item.to === '/' || item.to === '/einsatz'}
+      end={item.to === '/' || item.to === '/lage'}
       className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${locked ? 'locked' : ''}`}
       onClick={onNavigate}
       title={title}
@@ -111,6 +137,7 @@ export function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [navCollapsed, toggleNav] = useNavCollapsed();
+  const [openGroups, toggleGroup] = useOpenGroups();
   const unreadSheets = useUnreadSheets();
   const messageCount = useMessageAttention(now).attention.length;
   const mail = useMail();
@@ -127,31 +154,55 @@ export function Layout() {
   const alertTone = alarmCount > 0 ? 'alarm' : alerts.some((a) => a.severity === 'warn') ? 'warn' : 'muted';
   const allItems = NAV.flatMap((g) => g.items);
 
-  const nav = (
-    <nav className="nav" aria-label="Hauptnavigation">
-      {NAV.map((group) => (
-        <div key={group.label} className="nav-group">
+  const visible = (item: NavItem) =>
+    (!item.requiresDocker || dockerEnabled) && (!item.requiresAdmin || user?.isAdmin) && (!item.requiresMail || mail.available) && (!item.requiresChat || chat.available) && (!item.requiresPrinting || printing);
+  const lockOf = (item: NavItem) => {
+    const needsLogin = !!item.requiresLogin && !user;
+    return { locked: needsLogin || (!!item.requiresIncident && !incident), lockReason: needsLogin ? 'Anmeldung erforderlich' : 'Erst verfügbar, wenn eine Lage aufgelegt ist' };
+  };
+  const isCurrent = (item: NavItem) => (item.to === '/' ? location.pathname === '/' : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`));
+
+  const renderGroup = (group: NavGroup) => {
+    const items = group.items.filter(visible);
+    if (!items.length) return null;
+    const entries = items.map((item) => <NavEntry key={item.to} item={item} {...lockOf(item)} badges={badges} />);
+    if (group.collapsible) {
+      const Icon = group.collapsible;
+      // Die Gruppe mit der aktuellen Seite bleibt offen, sonst wäre die Markierung versteckt
+      const expanded = openGroups.has(group.label) || items.some(isCurrent);
+      const count = items.reduce((n, item) => n + (item.badge && !lockOf(item).locked ? badges[item.badge] : 0), 0);
+      return (
+        <div key={group.label} className={`nav-group nav-group-collapsible ${expanded ? 'open' : ''}`}>
+          <button type="button" className="nav-item nav-item-button nav-group-toggle" onClick={() => toggleGroup(group.label)} aria-expanded={expanded} title={group.label}>
+            <Icon size={20} />
+            <span>{group.label}</span>
+            {!expanded && count > 0 && (
+              <span className="nav-badge" aria-label={`${count} neu`}>
+                {count}
+              </span>
+            )}
+            <ChevronDown size={16} className="nav-chevron" aria-hidden />
+          </button>
+          {expanded && <div className="nav-group-items">{entries}</div>}
+        </div>
+      );
+    }
+    return (
+      <div key={group.label || 'start'} className="nav-group">
+        {group.label && (
           <div className="nav-group-label">
             {group.label}
-            {group.label === 'Einsatz' && incident && <span className="nav-live">aktiv</span>}
+            {group.label === 'Lage' && incident && <span className="nav-live">aktiv</span>}
           </div>
-          {group.items
-            .filter((item) => inEdition(item, info?.edition) && (!item.requiresDocker || dockerEnabled) && (!item.requiresAdmin || user?.isAdmin) && (!item.requiresMail || mail.available) && (!item.requiresChat || chat.available) && (!item.requiresPrinting || printing))
-            .map((item) => {
-              const needsLogin = !!item.requiresLogin && !user;
-              const noIncident = !!item.requiresIncident && !incident;
-              return (
-                <NavEntry
-                  key={item.to}
-                  item={item}
-                  locked={needsLogin || noIncident}
-                  lockReason={needsLogin ? 'Anmeldung erforderlich' : 'Erst verfügbar, wenn ein Einsatz aufgelegt ist'}
-                  badges={badges}
-                />
-              );
-            })}
-        </div>
-      ))}
+        )}
+        {entries}
+      </div>
+    );
+  };
+
+  const nav = (
+    <nav className="nav" aria-label="Hauptnavigation">
+      {navFor(info?.edition).map(renderGroup)}
       {dockerEnabled && (
         <div className="nav-group nav-footer">
           <CaCertLink />

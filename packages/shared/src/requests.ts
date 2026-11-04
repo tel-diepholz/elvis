@@ -42,7 +42,7 @@ export function requestTransitions(status: RequestStatus, mode: ProcurementMode)
   return ['delivered', 'rejected', 'cancelled'];
 }
 
-/** Beschaffung im Einsatz: selbst (lokal geführt) oder über den Stab (Ausgangsmeldung) */
+/** Beschaffung in der Lage: selbst (lokal geführt) oder über den Stab (Ausgangsmeldung) */
 export type ProcurementMode = 'self' | 'staff';
 
 export const PROCUREMENT_MODE_LABELS: Record<ProcurementMode, string> = {

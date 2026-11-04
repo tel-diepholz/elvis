@@ -31,6 +31,7 @@ import {
   Siren,
   UserCog,
   Users,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 import type { Edition } from '@elvis/shared';
@@ -62,6 +63,8 @@ export interface NavItem {
 export interface NavGroup {
   label: string;
   items: NavItem[];
+  /** Einklappbare Gruppe (ELVIS lite): Kopfzeile mit diesem Icon, standardmäßig zu */
+  collapsible?: LucideIcon;
 }
 
 export const NAV: NavGroup[] = [
@@ -87,16 +90,16 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'Einsatz',
+    label: 'Lage',
     items: [
-      { to: '/einsatz', label: 'Einsatz', icon: Siren, requiresLogin: true },
-      { to: '/einsatz/tagebuch', label: 'Einsatztagebuch', icon: BookOpenText, requiresLogin: true, requiresIncident: true },
-      { to: '/einsatz/aufgaben', label: 'Aufgaben', icon: ListChecks, requiresLogin: true, requiresIncident: true },
-      { to: '/einsatz/meldungen', label: 'Meldungen', icon: Mail, requiresLogin: true, requiresIncident: true, badge: 'messages' },
-      { to: '/einsatz/anforderungen', label: 'Anforderungen', icon: PackagePlus, requiresLogin: true, requiresIncident: true },
-      { to: '/einsatz/schadenkonten', label: 'Schadenkonten', icon: ClipboardPlus, requiresLogin: true, requiresIncident: true },
-      { to: '/einsatz/kraefte', label: 'Kräfte', icon: Users, requiresLogin: true, requiresIncident: true },
-      { to: '/einsatz/dokumente', label: 'Dokumente', icon: FileText, requiresLogin: true, requiresIncident: true },
+      { to: '/lage', label: 'Lage', icon: Siren, requiresLogin: true },
+      { to: '/lage/tagebuch', label: 'Einsatztagebuch', icon: BookOpenText, requiresLogin: true, requiresIncident: true },
+      { to: '/lage/aufgaben', label: 'Aufgaben', icon: ListChecks, requiresLogin: true, requiresIncident: true },
+      { to: '/lage/meldungen', label: 'Meldungen', icon: Mail, requiresLogin: true, requiresIncident: true, badge: 'messages' },
+      { to: '/lage/anforderungen', label: 'Anforderungen', icon: PackagePlus, requiresLogin: true, requiresIncident: true },
+      { to: '/lage/schadenkonten', label: 'Schadenkonten', icon: ClipboardPlus, requiresLogin: true, requiresIncident: true },
+      { to: '/lage/kraefte', label: 'Kräfte', icon: Users, requiresLogin: true, requiresIncident: true },
+      { to: '/lage/dokumente', label: 'Dokumente', icon: FileText, requiresLogin: true, requiresIncident: true },
     ],
   },
   {
@@ -115,7 +118,25 @@ export const NAV: NavGroup[] = [
 ];
 
 /** Primary destinations in the mobile bottom bar; everything else lives in the menu drawer. */
-export const MOBILE_PRIMARY = ['/', '/karte', '/wetter', '/einsatz'];
+export const MOBILE_PRIMARY = ['/', '/karte', '/wetter', '/lage'];
 
 /** Nav-Einträge, die die Ausbaustufe überhaupt anbietet (ELVIS lite: ohne Fahrzeugtechnik) */
 export const inEdition = (item: NavItem, edition: Edition | undefined) => !item.requiresVehicle || edition !== 'lite';
+
+/**
+ * Navigation der Ausbaustufe. In ELVIS lite zählt vor allem die Lage: Oben stehen Übersicht und die Lage,
+ * alles andere liegt in den einklappbaren Gruppen „Werkzeuge“ und „Verwaltung“.
+ */
+export function navFor(edition: Edition | undefined): NavGroup[] {
+  const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => inEdition(i, edition)) }));
+  if (edition !== 'lite') return groups;
+  const items = (label: string) => groups.find((g) => g.label === label)?.items ?? [];
+  const isHome = (i: NavItem) => i.to === '/';
+  const isSigns = (i: NavItem) => i.to === '/zeichen';
+  return [
+    { label: '', items: items('Fahrzeug').filter(isHome) },
+    { label: 'Lage', items: items('Lage') },
+    { label: 'Werkzeuge', items: [...items('Fahrzeug').filter((i) => !isHome(i)), ...items('Verwaltung').filter(isSigns)], collapsible: Wrench },
+    { label: 'Verwaltung', items: items('Verwaltung').filter((i) => !isSigns(i)), collapsible: Settings },
+  ];
+}

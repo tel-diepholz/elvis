@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useActiveIncident } from '../../lib/hooks';
 
-export const MESSAGES_PATH = '/einsatz/meldungen';
+export const MESSAGES_PATH = '/lage/meldungen';
 
 export function useMessages(incident: Incident | null | undefined) {
   const { user } = useAuth();
@@ -17,7 +17,7 @@ export function useMessageContext() {
   return useQuery({ queryKey: ['messages', 'context'], queryFn: api.messageContext, enabled: !!user });
 }
 
-/** Meldungen im laufenden Einsatz, um die sich der angemeldete Benutzer jetzt kümmern soll */
+/** Meldungen in der laufenden Lage, um die sich der angemeldete Benutzer jetzt kümmern soll */
 export function useMessageAttention(now: Date): { incident: Incident | null; messages: Message[]; attention: Message[] } {
   const { data: incident } = useActiveIncident();
   const { data: messages = [] } = useMessages(incident);

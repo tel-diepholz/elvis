@@ -13,7 +13,7 @@ Die Timeline listet die Funksprüche, neueste oben. Jeder Eintrag zeigt:
 Ein Gespräch, das mehrere eigene Geräte auf derselben Rufgruppe hören, erscheint als ein Eintrag. Ein laufendes
 Gespräch ist mit „spricht …“ markiert.
 
-**Absender:** Ist die ISSI im laufenden Einsatz einer Kraft zugeordnet, steht dort deren Funkrufname und Name
+**Absender:** Ist die ISSI in der laufenden Lage einer Kraft zugeordnet, steht dort deren Funkrufname und Name
 (z. B. „Florian Diepholz 1/46-1 · HLF 1“). Sonst steht dort die ISSI mit dem Zusatz „unbekannt“. Eigene Funkgeräte
 erscheinen mit ihrem Namen. Konnte die Anlage den Sprecher nicht melden, steht dort „Sprecher unbekannt“. Auch dann lässt sich eine Meldung
 erstellen, der Absender bleibt leer.
@@ -24,13 +24,14 @@ erstellen, der Absender bleibt leer.
 - Bei bekannter ISSI ist die Kraft bereits als Absender ausgewählt.
 - Bei unbekannter ISSI bleibt das Absenderfeld leer.
 - SDS- und Statustext stehen schon im Meldungstext.
-- Wählt der Fernmelder eine Kraft aus dem Einsatz oder eine Systemeinheit (z. B. Leitstelle), merkt sich ELVIS die ISSI
-  für diesen Einsatz. Ab dann erscheint die Kraft bei allen Funksprüchen dieser ISSI, auch bei älteren.
+- Wählt der Fernmelder eine Kraft aus der Lage oder eine Systemeinheit (z. B. Leitstelle), merkt sich ELVIS die ISSI
+  für diese Lage. Ab dann erscheint die Kraft bei allen Funksprüchen dieser ISSI, auch bei älteren.
 - Ein Freitext-Absender ordnet nichts zu.
 - Eine Kraft kann mehrere ISSIs haben. Wählt der Fernmelder für eine ISSI eine andere Kraft, gilt ab dann die neue Zuordnung.
 
-Den Button gibt es nur mit offenem Einsatz und angemeldetem Benutzer. Eingangsmeldungen erfassen nur Benutzer mit
-Fernmelder-Rolle (Einstellungen → Meldungen), für alle anderen ist er ausgegraut.
+Den Button gibt es nur mit offener Lage und angemeldetem Benutzer. Eingangsmeldungen erfassen nur Benutzer mit
+Fernmelder-Rolle (Einstellungen → Meldungen), für alle anderen ist er ausgegraut. Ist keine Fernmelder-Rolle
+eingestellt, darf jeder angemeldete Benutzer erfassen.
 
 **Anzeige:**
 
@@ -42,7 +43,7 @@ Fernmelder-Rolle (Einstellungen → Meldungen), für alle anderen ist er ausgegr
 
 - Der Server hält den Funkverkehr der letzten 12 Stunden im Speicher, höchstens 5000 Einträge. Nach einem Neustart
   von ELVIS beginnt die Timeline leer.
-- Die Zuordnungen ISSI → Kraft stehen in der Datenbank und gelten je Einsatz.
+- Die Zuordnungen ISSI → Kraft stehen in der Datenbank und gelten je Lage.
 
 ## Treiber
 

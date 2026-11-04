@@ -16,8 +16,7 @@ import {
   type ChatLocation,
 } from '@elvis/shared';
 import { api } from '../../lib/api';
-import { useActiveIncident } from '../../lib/hooks';
-import { useDevice } from '../../lib/live';
+import { useActiveIncident, useVehiclePosition } from '../../lib/hooks';
 import { useToast } from '../../lib/toast';
 import { Field } from '../ui';
 import { ChannelIcon } from './ChannelIcon';
@@ -52,7 +51,7 @@ export function ChatComposer({ initial, onDone, onSent }: { initial: Partial<Cha
   const { data: reach = {} } = useQuery({ queryKey: ['chat', 'reachability'], queryFn: api.chatReachability });
   const { data: incident } = useActiveIncident();
   const { data: waWindow = {} } = useQuery({ queryKey: ['chat', 'whatsappWindow'], queryFn: api.whatsappWindow });
-  const vehicle = useDevice('weather')?.state.position ?? null;
+  const vehicle = useVehiclePosition().position;
   const [form, setForm] = useState<ChatDraftForm>({ to: '', text: '', location: null, ...initial });
   const [chosen, setChosen] = useState<Record<string, ChatChannel>>({});
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);

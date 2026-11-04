@@ -4,7 +4,7 @@ import { CalendarDays, CloudRain, CloudSun, Clock, Droplets, MapPin, Navigation,
 import { WARNING_LEVEL, weatherCodeText, type GeoPosition, type GnssInfo, type GnssMethod, type WeatherDay, type WeatherHour, type WeatherNow, type WeatherReport, type WeatherWarning } from '@elvis/shared';
 import { api } from '../lib/api';
 import { beaufort, compass, fmtDateTime, fmtNum, fmtOpt, fmtTime, fmtTimeSec } from '../lib/format';
-import { useActiveIncident, useInfo } from '../lib/hooks';
+import { useActiveIncident, useInfo, useVehiclePosition } from '../lib/hooks';
 import { useAuth } from '../lib/auth';
 import { useDevice } from '../lib/live';
 import { WindCompass } from '../components/WindCompass';
@@ -170,11 +170,11 @@ function DaysCard({ days, limit }: { days: WeatherDay[]; limit: number }) {
   );
 }
 
-/** Standort für die Prognose: GPS des Fahrzeugs, sonst Einsatzort */
+/** Standort für die Prognose: Fahrzeugstandort (GPS bzw. von Hand gesetzt), sonst Einsatzort */
 function useForecastPosition() {
-  const gps = useDevice('weather')?.state.position ?? null;
+  const { position: pos } = useVehiclePosition();
   const { data: incident } = useActiveIncident();
-  if (gps) return { lat: gps.lat, lon: gps.lon, source: gps.fix ? 'Fahrzeug-GPS' : 'letzte GPS-Position' };
+  if (pos) return { lat: pos.lat, lon: pos.lon, source: pos.source === 'gps' ? 'Fahrzeug-GPS' : pos.source === 'manual' ? 'Fahrzeugposition (von Hand gesetzt)' : 'letzte GPS-Position' };
   if (incident?.lat != null && incident.lon != null) return { lat: incident.lat, lon: incident.lon, source: 'Einsatzort' };
   return null;
 }
@@ -329,7 +329,7 @@ export function WeatherPage() {
         {!pos ? (
           <div className="span-3">
             <EmptyState icon={<MapPin size={32} />} title="Kein Standort bekannt">
-              Für Prognose und Warnungen braucht ELVIS einen Standort: das GPS der Wetterstation oder den Einsatzort des laufenden Einsatzes.
+              Für Prognose und Warnungen braucht ELVIS einen Standort: das GPS der Wetterstation oder den Einsatzort der laufenden Lage.
             </EmptyState>
           </div>
         ) : !report && isLoading ? (

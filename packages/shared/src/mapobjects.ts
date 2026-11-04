@@ -1,7 +1,7 @@
 /**
- * Kartenobjekte eines Einsatzes: übernommene Such- und Overpass-Treffer (Punkt, Fläche mit Umriss, Linie), Ausbreitungen
+ * Kartenobjekte einer Lage: übernommene Such- und Overpass-Treffer (Punkt, Fläche mit Umriss, Linie), Ausbreitungen
  * (Gauß-Fahne, Sektor 60°), verfolgte Flugzeuge bzw. Schiffe (Position kommt live vom Server) und Overlays (georeferenzierte PDF-Seiten). Sie gehören zum Einsatz, alle Arbeitsplätze und Bildschirme sehen sie, und sie
- * bleiben im Einsatzarchiv. Der Einsatzort selbst ist Teil des Einsatzes (lat/lon) und kein Kartenobjekt.
+ * bleiben im Einsatzarchiv. Der Einsatzort selbst ist Teil der Lage (lat/lon) und kein Kartenobjekt.
  */
 import { z } from 'zod';
 import type { KlugManierClass, Terrain } from './dispersion';
@@ -56,7 +56,16 @@ export interface TrackedData {
   lostSince: string | null;
 }
 
-/** Einstellungen einer Gauß-Fahne; Wind kommt immer aktuell von der Wetterstation */
+/** Wind für eine Ausbreitung: Geschwindigkeit in m/s, Richtung (woher) in Grad */
+export interface WindValues {
+  windSpeedMs: number;
+  windDirectionDeg: number;
+}
+
+/** Vorgabe für den Wind von Hand: Westwind, 3 m/s */
+export const DEFAULT_MANUAL_WIND: WindValues = { windSpeedMs: 3, windDirectionDeg: 270 };
+
+/** Einstellungen einer Gauß-Fahne; Wind kommt aktuell von der Wetterstation, ohne deren Winddaten von Hand (manualWind) */
 export interface GaussSettings {
   stability: 'auto' | KlugManierClass;
   cloudOktas: number;
@@ -64,6 +73,13 @@ export interface GaussSettings {
   sourceHeightM: number;
   /** Optionale Freisetzungsrate in kg/s, nur für die Umrechnung in mg/m³ */
   releaseRateKgS: number | null;
+  /** Wind von Hand, gilt nur, solange die Wetterstation keinen Wind liefert (fehlt = Vorgabe) */
+  manualWind?: WindValues | null;
+}
+
+/** Wind einer Gauß-Fahne: Wetterstation, sonst von Hand gesetzt, sonst die Vorgabe */
+export function gaussWind(station: WindValues | undefined | null, settings: GaussSettings): WindValues {
+  return station ?? settings.manualWind ?? DEFAULT_MANUAL_WIND;
 }
 
 export const DEFAULT_GAUSS: GaussSettings = { stability: 'auto', cloudOktas: 4, terrain: 'rural', sourceHeightM: 0, releaseRateKgS: null };
@@ -196,6 +212,7 @@ const gauss = z.object({
   terrain: z.enum(['rural', 'urban']),
   sourceHeightM: z.number().min(0).max(200),
   releaseRateKgS: z.number().min(0).max(1e6).nullable(),
+  manualWind: z.object({ windSpeedMs: z.number().min(0).max(40), windDirectionDeg: z.number().int().min(0).max(359) }).nullable().optional(),
 });
 const sector = z.object({ sectorM: z.number().int().min(50).max(20_000) });
 const detail = z.string().max(300).default('');
@@ -247,6 +264,7 @@ export const mapObjectPatchSchema = z.object({
   outline: outline.optional(),
   path: geoPath.optional(),
   detail: z.string().max(300).optional(),
-  data: z.union([overlaySettings, gauss.partial(), sector.partial()]).optional(),
+  // strict: sonst passt jede Teilmenge auf die erste Variante und unbekannte bzw. ungültige Felder fielen still weg
+  data: z.union([overlaySettings, gauss.partial().strict(), sector.partial().strict()]).optional(),
 });
 export type MapObjectPatch = z.input<typeof mapObjectPatchSchema>;

@@ -22,7 +22,7 @@ Jede Taste kann eine dieser Belegungen haben:
 
 Die Belegung kommt aus drei Ebenen. Für jede Taste gilt die oberste Ebene, die die Taste belegt:
 
-1. **Einsatz:** Im laufenden Einsatz darf jeder Angemeldete unter *Fahrzeug → Telefone* Tasten ändern. **Mit dem
+1. **Lage:** In der laufenden Lage darf jeder Angemeldete unter *Fahrzeug → Telefone* Tasten ändern. **Mit dem
    Einsatzende fallen diese Änderungen weg**, und die Telefone bekommen wieder ihre Grundbelegung.
 2. **Grundbelegung des Telefons:** pflegen Admins unter *Fahrzeug → Telefone* mit dem Umschalter *Grundbelegung*.
 3. **Vorlage:** gilt für alle Telefone. Admins pflegen sie unter *Einstellungen → Dienste → Telefone (Snom)*.

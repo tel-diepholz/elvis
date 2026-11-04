@@ -144,8 +144,8 @@ export class TaskService {
 
   private requireOpen(incidentId: number): Incident {
     const incident = this.deps.store.incident(incidentId);
-    if (!incident) throw new HttpError(404, `Einsatz ${incidentId} nicht gefunden`);
-    if (incident.closedAt) throw new HttpError(409, 'Einsatz ist abgeschlossen und kann nicht mehr geändert werden');
+    if (!incident) throw new HttpError(404, `Lage ${incidentId} nicht gefunden`);
+    if (incident.closedAt) throw new HttpError(409, 'Lage ist abgeschlossen und kann nicht mehr geändert werden');
     return incident;
   }
 
@@ -164,7 +164,7 @@ export class TaskService {
   // --- Aufgaben ---
 
   list(incidentId: number, viewer: TaskViewer | null): Task[] {
-    if (!this.deps.store.incident(incidentId)) throw new HttpError(404, `Einsatz ${incidentId} nicht gefunden`);
+    if (!this.deps.store.incident(incidentId)) throw new HttpError(404, `Lage ${incidentId} nicht gefunden`);
     const holders = this.deps.roles.holderIds();
     const rows = this.db.prepare(`${TASK_SELECT} WHERE t.incident_id = ? ORDER BY COALESCE(t.snoozed_until, t.due_at) IS NULL, COALESCE(t.snoozed_until, t.due_at), t.id`).all(incidentId) as TaskRow[];
     return rows.map((r) => this.toTask(r, viewer, holders));

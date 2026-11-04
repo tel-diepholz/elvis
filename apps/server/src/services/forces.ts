@@ -42,7 +42,7 @@ const now = () => new Date().toISOString();
 /**
  * Kräfteverwaltung: Systemeinheiten und ihre Zusammensetzung (force_unit_members). Eine Einheit darf
  * Mitglied mehrerer Einheiten sein; Zyklen werden beim Speichern abgelehnt. Lesen dürfen alle
- * Angemeldeten (Übernahme in den Einsatz), pflegen nur Admins.
+ * Angemeldeten (Übernahme in die Lage), pflegen nur Admins.
  */
 export class ForceService {
   constructor(

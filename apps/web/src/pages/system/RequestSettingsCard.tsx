@@ -30,11 +30,11 @@ export function RequestSettingsCard() {
   return (
     <Card title="Anforderungen" icon={<PackagePlus size={18} />} className="span-2">
       <p className="muted">
-        Die Beschaffungsrolle genehmigt und bestellt Materialanforderungen – je nach Einsatz selbst oder über den Stab – und bekommt zu jeder Wiedervorlage eine
+        Die Beschaffungsrolle genehmigt und bestellt Materialanforderungen – je nach Art der Lage selbst oder über den Stab – und bekommt zu jeder Wiedervorlage eine
         Aufgabe. Ohne Beschaffungsrolle, oder solange sie niemand übernommen hat, dürfen alle Anforderungen führen.
       </p>
       {roles.length === 0 ? (
-        <EmptyState title="Noch keine Rollen">Rollen zuerst unter „Rollen im Einsatz“ anlegen.</EmptyState>
+        <EmptyState title="Noch keine Rollen">Rollen zuerst unter „Rollen in der Lage“ anlegen.</EmptyState>
       ) : (
         <form
           className="form"

@@ -120,7 +120,7 @@ describe('WLAN über OpenWrt', () => {
     expect(iface('default_radio0')).toMatchObject({ ssid: 'OpenWrt' });
     // ohne Einsatz kein Gastnetz
     expect(iface('elvis_guest_radio0')).toBeUndefined();
-    expect(o.guest).toEqual({ active: false, reason: 'Gastnetz startet mit dem nächsten Einsatz' });
+    expect(o.guest).toEqual({ active: false, reason: 'Gastnetz startet mit der nächsten Lage' });
 
     // unveränderter Sollstand: nichts schreiben, kein Neuladen
     const commits = fake.commits;

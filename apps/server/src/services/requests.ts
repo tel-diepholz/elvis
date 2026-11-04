@@ -175,13 +175,13 @@ export class RequestService {
 
   private requireOpen(incidentId: number): Incident {
     const incident = this.deps.store.incident(incidentId);
-    if (!incident) throw new HttpError(404, `Einsatz ${incidentId} nicht gefunden`);
-    if (incident.closedAt) throw new HttpError(409, 'Einsatz ist abgeschlossen und kann nicht mehr geändert werden');
+    if (!incident) throw new HttpError(404, `Lage ${incidentId} nicht gefunden`);
+    if (incident.closedAt) throw new HttpError(409, 'Lage ist abgeschlossen und kann nicht mehr geändert werden');
     return incident;
   }
 
   list(incidentId: number, viewer: TaskViewer | null): MaterialRequest[] {
-    if (!this.deps.store.incident(incidentId)) throw new HttpError(404, `Einsatz ${incidentId} nicht gefunden`);
+    if (!this.deps.store.incident(incidentId)) throw new HttpError(404, `Lage ${incidentId} nicht gefunden`);
     const manage = this.canManage(viewer);
     const rows = this.db.prepare(`${REQUEST_SELECT} WHERE q.incident_id = ? ORDER BY q.number DESC`).all(incidentId) as RequestRow[];
     const messages = this.messageIds('q.incident_id', incidentId);
@@ -200,7 +200,7 @@ export class RequestService {
 
   // --- Schreiben ---
 
-  /** Kraft nur, wenn sie zu diesem Einsatz gehört – sonst bleibt es beim Freitext */
+  /** Kraft nur, wenn sie zu dieser Lage gehört – sonst bleibt es beim Freitext */
   private unit(incidentId: number, p: MessagePartyInput): [number | null, string] {
     const unit = p.unitId ? this.deps.store.unit(p.unitId) : null;
     return [unit && unit.incidentId === incidentId ? unit.id : null, p.text.trim()];
@@ -333,7 +333,7 @@ export class RequestService {
     const current = this.row(id);
     const incident = this.requireOpen(current.incident_id);
     this.requireManage(viewer);
-    if (incident.procurementMode !== 'staff') throw new HttpError(409, `Beschaffung im Einsatz: ${PROCUREMENT_MODE_LABELS[incident.procurementMode]} – keine Weiterleitung an den Stab`);
+    if (incident.procurementMode !== 'staff') throw new HttpError(409, `Beschaffung in der Lage: ${PROCUREMENT_MODE_LABELS[incident.procurementMode]} – keine Weiterleitung an den Stab`);
     if (!requestOpen(current.status)) throw new HttpError(409, 'Anforderung ist abgeschlossen');
     const input = requestForwardSchema.parse(raw);
     this.assertFuture(input.followUpAt);

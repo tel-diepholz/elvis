@@ -108,8 +108,8 @@ export class DamageService {
 
   private requireOpen(incidentId: number): Incident {
     const incident = this.deps.store.incident(incidentId);
-    if (!incident) throw new HttpError(404, `Einsatz ${incidentId} nicht gefunden`);
-    if (incident.closedAt) throw new HttpError(409, 'Einsatz ist abgeschlossen und kann nicht mehr geändert werden');
+    if (!incident) throw new HttpError(404, `Lage ${incidentId} nicht gefunden`);
+    if (incident.closedAt) throw new HttpError(409, 'Lage ist abgeschlossen und kann nicht mehr geändert werden');
     return incident;
   }
 
@@ -190,7 +190,7 @@ export class DamageService {
   }
 
   list(incidentId: number): DamageAccount[] {
-    if (!this.deps.store.incident(incidentId)) throw new HttpError(404, `Einsatz ${incidentId} nicht gefunden`);
+    if (!this.deps.store.incident(incidentId)) throw new HttpError(404, `Lage ${incidentId} nicht gefunden`);
     return this.toAccounts(this.db.prepare('SELECT * FROM damage_accounts WHERE incident_id = ? ORDER BY number').all(incidentId) as AccountRow[]);
   }
 

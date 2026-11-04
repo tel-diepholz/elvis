@@ -13,7 +13,7 @@ import { PersonForm, PersonnelSheetForm, PersonnelTable } from '../../components
 import { AppLinkInfo } from './AppLinkParts';
 import { UnitForm } from './UnitsView';
 
-/** Personal an eine andere Einheit des Einsatzes übergeben; vorausgewählt sind alle */
+/** Personal an eine andere Einheit der Lage übergeben; vorausgewählt sind alle */
 function TransferForm({ persons, units, pending, onSubmit }: { persons: Person[]; units: Unit[]; pending: boolean; onSubmit: (personIds: number[], unitId: number) => void }) {
   const [selected, setSelected] = useState<Set<number>>(() => new Set(persons.map((p) => p.id)));
   const [target, setTarget] = useState<number | null>(null);
@@ -120,7 +120,7 @@ export function UnitDetailPage() {
   if (!unit || error) return <EmptyState title="Einheit nicht gefunden">{error?.message}</EmptyState>;
 
   const readOnly = !!incident?.closedAt;
-  const back = readOnly ? `/archiv/${unit.incidentId}` : '/einsatz/kraefte';
+  const back = readOnly ? `/archiv/${unit.incidentId}` : '/lage/kraefte';
   const parent = units.find((u) => u.id === unit.parentId);
   const subs = unitDescendants(units, unit.id);
   const children = units.filter((u) => u.parentId === unit.id);
@@ -136,7 +136,7 @@ export function UnitDetailPage() {
         subtitle={[unit.callsign, unit.organization, incident && [incident.keyword, incident.title].filter(Boolean).join(' ')].filter(Boolean).join(' · ')}
         actions={
           <Link className="btn" to={back}>
-            <ArrowLeft size={16} /> {readOnly ? 'Einsatz' : 'Kräfteübersicht'}
+            <ArrowLeft size={16} /> {readOnly ? 'Lage' : 'Kräfteübersicht'}
           </Link>
         }
       />
@@ -165,14 +165,14 @@ export function UnitDetailPage() {
               {unit.section && (
                 <>
                   <dt>Abschnitt</dt>
-                  <dd>{readOnly ? unit.section : <Link to="/einsatz/schadenkonten">{unit.section}</Link>}</dd>
+                  <dd>{readOnly ? unit.section : <Link to="/lage/schadenkonten">{unit.section}</Link>}</dd>
                 </>
               )}
               {parent && (
                 <>
                   <dt>Unterstellt</dt>
                   <dd>
-                    <Link to={`/einsatz/kraefte/${parent.id}`}>{parent.name}</Link> {unit.role && <Badge tone="info">{unit.role}</Badge>}
+                    <Link to={`/lage/kraefte/${parent.id}`}>{parent.name}</Link> {unit.role && <Badge tone="info">{unit.role}</Badge>}
                   </dd>
                 </>
               )}
@@ -204,7 +204,7 @@ export function UnitDetailPage() {
             <ul className="simple-list">
               {children.map((c) => (
                 <li key={c.id}>
-                  <Link to={`/einsatz/kraefte/${c.id}`}>{c.name}</Link> {c.role && <Badge tone="info">{c.role}</Badge>} <span className="muted mono">{formatStrength(c.strength)}</span>
+                  <Link to={`/lage/kraefte/${c.id}`}>{c.name}</Link> {c.role && <Badge tone="info">{c.role}</Badge>} <span className="muted mono">{formatStrength(c.strength)}</span>
                 </li>
               ))}
             </ul>

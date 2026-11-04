@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import L from 'leaflet';
 import { useQuery } from '@tanstack/react-query';
 import { Tag } from 'lucide-react';
-import { DEFAULT_OBJECT_COLORS, MAP_LABELS, formatAltitude, objectColor, outlineArea, toMgrs, type MapLabel, type MapObject, type TacticalSign } from '@elvis/shared';
+import { DEFAULT_OBJECT_COLORS, gaussWind, MAP_LABELS, formatAltitude, objectColor, outlineArea, toMgrs, type MapLabel, type MapObject, type TacticalSign } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { fmtArea } from '../../lib/format';
 import { dispersionSector, fmtDistance, usePlume, type Wind } from './dispersion';
@@ -50,7 +50,7 @@ export function pointSymbol(icons: ReturnType<typeof useMapIcons>, name: string 
 }
 const sourceIcon = L.divIcon({ className: 'map-marker origin', html: '<span></span>', iconSize: [14, 14], iconAnchor: [7, 7] });
 
-/** Kartenobjekte des Einsatzes; live aktualisiert über das Thema „mapObjects“ */
+/** Kartenobjekte der Lage; live aktualisiert über das Thema „mapObjects“ */
 export function useMapObjects(incidentId: number | null | undefined) {
   return useQuery({
     queryKey: ['mapObjects', incidentId],
@@ -160,7 +160,7 @@ export function objectBounds(o: MapObject): L.LatLngBounds {
 }
 
 function GaussLayer({ object, wind, now }: { object: Extract<MapObject, { kind: 'gauss' }>; wind: Wind | undefined; now: Date }) {
-  const plume = usePlume(object.data, object, wind, now);
+  const plume = usePlume(object.data, object, gaussWind(wind, object.data), now);
   return (
     <>
       {plume?.contours.map(({ level, polygon }) => <Polygon key={level.threshold} positions={polygon} pathOptions={level.path} interactive={false} />)}

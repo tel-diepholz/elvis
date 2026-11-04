@@ -36,7 +36,7 @@ export interface WifiSettings {
   guest: { enabled: boolean; ssid: string };
 }
 
-/** Gastnetz des laufenden Einsatzes; für Bildschirme und angemeldete Benutzer lesbar */
+/** Gastnetz der laufenden Lage; für Bildschirme und angemeldete Benutzer lesbar */
 export type WifiGuestInfo = { active: false; reason: string } | { active: true; ssid: string; password: string; incidentId: number };
 
 /** Netzname des Gastnetzes im Einsatz: eingestellter Name mit angehängter Einsatznummer */

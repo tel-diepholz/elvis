@@ -48,9 +48,9 @@ export function PrintSettingsCard() {
         Unter <em>Drucken</em> können alle Arbeitsplätze, auch ohne Anmeldung, PDFs auf den Druckern des Addons „Druckserver (CUPS)“ ausgeben.
         {!status?.available && ' Derzeit läuft kein Druckserver-Addon.'}
       </p>
-      <Toggle label="Drucke im laufenden Einsatz ablegen" checked={form.archive} onChange={(v) => change({ archive: v })} />
+      <Toggle label="Drucke in der laufenden Lage ablegen" checked={form.archive} onChange={(v) => change({ archive: v })} />
       <div className="form-grid">
-        <Field label="Ablageort im Einsatz" hint="Leer = oberste Ebene. Fehlende Ordner werden angelegt.">
+        <Field label="Ablageort in der Lage" hint="Leer = oberste Ebene. Fehlende Ordner werden angelegt.">
           <input value={form.folderPath} onChange={(e) => change({ folderPath: e.target.value })} maxLength={200} placeholder="Drucke/{{datum.iso}}" disabled={!form.archive} />
         </Field>
         <Field label="Vorausgewählter Drucker">
@@ -132,7 +132,7 @@ export function PrintSettingsCard() {
               </>
             )}
           </div>
-          <Toggle label="Nur annehmen, solange das Gast-WLAN läuft (Einsatz eröffnet)" checked={form.guest.onlyWithGuestWifi} onChange={(v) => changeGuest({ onlyWithGuestWifi: v })} />
+          <Toggle label="Nur annehmen, solange das Gast-WLAN läuft (Lage eröffnet)" checked={form.guest.onlyWithGuestWifi} onChange={(v) => changeGuest({ onlyWithGuestWifi: v })} />
         </>
       )}
 

@@ -73,7 +73,7 @@ function ForceUnitForm({ initial, all, pending, onSubmit }: { initial?: ForceUni
         <Field label="Bemerkung">
           <input value={f.notes} onChange={set('notes')} maxLength={1000} />
         </Field>
-        <Field label="E-Mail" hint="Für Meldungen per E-Mail, geht bei der Übernahme in den Einsatz mit">
+        <Field label="E-Mail" hint="Für Meldungen per E-Mail, geht bei der Übernahme in die Lage mit">
           <input type="email" value={f.email} onChange={set('email')} placeholder="wird aus eingehenden Mails übernommen" maxLength={254} />
         </Field>
       </div>
@@ -156,7 +156,7 @@ export function ForcesCard() {
 
   const confirmRemove = (u: ForceUnit) => {
     const parents = units.filter((p) => p.members.some((m) => m.unitId === u.id)).map((p) => p.name);
-    const msg = `Systemeinheit „${u.name}“ löschen?${parents.length ? `\nSie wird auch aus ${parents.join(', ')} entfernt.` : ''}\nLaufende und archivierte Einsätze behalten ihre Kopie.`;
+    const msg = `Systemeinheit „${u.name}“ löschen?${parents.length ? `\nSie wird auch aus ${parents.join(', ')} entfernt.` : ''}\nLaufende und archivierte Lagen behalten ihre Kopie.`;
     if (window.confirm(msg)) remove.mutate(u.id);
   };
 
@@ -177,13 +177,13 @@ export function ForcesCard() {
       }
     >
       <p className="muted">
-        Systemeinheiten lassen sich im Einsatz mit allen Untereinheiten übernehmen. Eine Einheit ist ein Fahrzeug, ein Zug oder ein Verband; dieselbe Einheit darf in
+        Systemeinheiten lassen sich in der Lage mit allen Untereinheiten übernehmen. Eine Einheit ist ein Fahrzeug, ein Zug oder ein Verband; dieselbe Einheit darf in
         mehreren Einheiten stecken. Änderungen gelten nur für künftige Übernahmen.
       </p>
       {units.length > 8 && <input className="force-filter" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Einheiten filtern …" aria-label="Einheiten filtern" />}
       {units.length === 0 ? (
         <EmptyState title="Noch keine Systemeinheiten">
-          <p>Fahrzeuge anlegen und daraus Züge und Verbände zusammenstellen – oder im Einsatz erfasste Einheiten übernehmen.</p>
+          <p>Fahrzeuge anlegen und daraus Züge und Verbände zusammenstellen – oder in der Lage erfasste Einheiten übernehmen.</p>
         </EmptyState>
       ) : (
         <ul className="simple-list force-list">

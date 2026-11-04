@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './components/Layout';
 import { RequireLogin, ViewOnlyUnlessLoggedIn } from './components/auth/Guards';
@@ -44,6 +44,17 @@ import './styles/app.css';
 
 applyTheme();
 
+/** Alte Adressen /einsatz/… → /lage/… (Unterseite, Suche und Anker bleiben erhalten) */
+function LegacyIncidentRedirect() {
+  const { pathname, search, hash } = useLocation();
+  return <Navigate to={`${pathname.replace(/^\/einsatz/, '/lage')}${search}${hash}`} replace />;
+}
+function LegacyUnitRedirect() {
+  const { id } = useParams();
+  const { search, hash } = useLocation();
+  return <Navigate to={`/lage/kraefte/${id}${search}${hash}`} replace />;
+}
+
 // Freshness comes from WebSocket invalidations, so no polling or focus refetching.
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: Infinity, refetchOnWindowFocus: false, retry: 1 } },
@@ -78,17 +89,21 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="bildschirme" element={<ViewOnlyUnlessLoggedIn><DisplaysPage /></ViewOnlyUnlessLoggedIn>} />
                 <Route path="kameras" element={<ViewOnlyUnlessLoggedIn><CamerasPage /></ViewOnlyUnlessLoggedIn>} />
                 <Route path="medien" element={<Navigate to="/" replace />} />
-                {/* Einsatzbereich – Unterseiten erst mit aufgelegtem Einsatz */}
-                <Route path="einsatz" element={<RequireLogin><IncidentPage /></RequireLogin>} />
-                <Route path="einsatz/tagebuch" element={<RequireLogin><JournalPage /></RequireLogin>} />
-                <Route path="einsatz/aufgaben" element={<RequireLogin><TasksPage /></RequireLogin>} />
-                <Route path="einsatz/meldungen" element={<RequireLogin><MessagesPage /></RequireLogin>} />
-                <Route path="einsatz/anforderungen" element={<RequireLogin><RequestsPage /></RequireLogin>} />
-                <Route path="einsatz/schadenkonten" element={<RequireLogin><DamagePage /></RequireLogin>} />
-                <Route path="einsatz/kraefte" element={<RequireLogin><UnitsPage /></RequireLogin>} />
-                {/* auch für abgeschlossene Einsätze (aus dem Archiv) */}
-                <Route path="einsatz/kraefte/:id" element={<RequireLogin><UnitDetailPage /></RequireLogin>} />
-                <Route path="einsatz/dokumente" element={<RequireLogin><DocumentsPage /></RequireLogin>} />
+                {/* Lagebereich – Unterseiten erst mit aufgelegter Lage */}
+                <Route path="lage" element={<RequireLogin><IncidentPage /></RequireLogin>} />
+                <Route path="lage/tagebuch" element={<RequireLogin><JournalPage /></RequireLogin>} />
+                <Route path="lage/aufgaben" element={<RequireLogin><TasksPage /></RequireLogin>} />
+                <Route path="lage/meldungen" element={<RequireLogin><MessagesPage /></RequireLogin>} />
+                <Route path="lage/anforderungen" element={<RequireLogin><RequestsPage /></RequireLogin>} />
+                <Route path="lage/schadenkonten" element={<RequireLogin><DamagePage /></RequireLogin>} />
+                <Route path="lage/kraefte" element={<RequireLogin><UnitsPage /></RequireLogin>} />
+                {/* auch für abgeschlossene Lagen (aus dem Archiv) */}
+                <Route path="lage/kraefte/:id" element={<RequireLogin><UnitDetailPage /></RequireLogin>} />
+                <Route path="lage/dokumente" element={<RequireLogin><DocumentsPage /></RequireLogin>} />
+                {/* alte Adressen /einsatz/… (Lesezeichen) */}
+                <Route path="einsatz" element={<Navigate to="/lage" replace />} />
+                <Route path="einsatz/kraefte/:id" element={<LegacyUnitRedirect />} />
+                <Route path="einsatz/*" element={<LegacyIncidentRedirect />} />
                 <Route path="dokument/:id" element={<RequireLogin><DocumentEditorPage /></RequireLogin>} />
                 {/* Verwaltung */}
                 <Route path="archiv" element={<RequireLogin><ArchivePage /></RequireLogin>} />

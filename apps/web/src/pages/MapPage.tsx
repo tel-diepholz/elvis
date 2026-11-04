@@ -4,10 +4,11 @@ import L, { type LatLngBoundsExpression, type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Check, Flag, History, ListPlus, MapPin, Plane, Printer, Ship, Trash2, Undo2, X } from 'lucide-react';
+import { Check, Flag, History, ListPlus, MapPin, PenTool, Plane, Printer, Ship, Trash2, Undo2, X } from 'lucide-react';
 import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type OverpassFeature, type TacticalSign, type TrackedData, type TrafficHit, type Unit, type DamageAccount } from '@elvis/shared';
 import { api } from '../lib/api';
-import { useActiveIncident, useNow, useSettings } from '../lib/hooks';
+import { useActiveIncident, useNow, useSettings, useVehiclePosition } from '../lib/hooks';
+import { fmtDateTime } from '../lib/format';
 import { useAuth } from '../lib/auth';
 import { autoSource, printSource } from '../lib/mapSources';
 import { loadMapView, saveMapView } from '../lib/mapView';
@@ -72,7 +73,10 @@ const saveSource = (id: string | null) => {
 const incidentIcon = L.divIcon({ className: 'map-marker incident', html: '<span>!</span>', iconSize: [30, 30], iconAnchor: [15, 15] });
 const searchIcon = L.divIcon({ className: 'map-marker search', html: '<span></span>', iconSize: [20, 20], iconAnchor: [10, 10] });
 
-const PLACE_LABELS: Record<PlaceKind, string> = { incident: 'den Einsatzort', point: 'den Punkt', sign: 'das Zeichen', gauss: 'die Quelle der Gauß-Fahne', sector: 'den Ursprung des Sektors' };
+/** Was gerade in die Karte getippt wird: Objekte aus dem Menü oder der eigene Fahrzeugstandort (ohne GPS) */
+type Placing = PlaceKind | 'vehicle';
+
+const PLACE_LABELS: Record<Placing, string> = { vehicle: 'den Fahrzeugstandort', incident: 'den Einsatzort', point: 'den Punkt', sign: 'das Zeichen', gauss: 'die Quelle der Gauß-Fahne', sector: 'den Ursprung des Sektors' };
 
 type FlyTarget = { pos: LatLngExpression; bounds?: LatLngBoundsExpression; zoom?: number; n: number };
 
@@ -147,7 +151,7 @@ export function MapPage() {
   const objects = history ? history.objects : liveObjects;
   const units = history ? history.units : liveUnits;
   const shownIncident = incident && history ? { ...incident, ...history.incident } : incident;
-  const [placing, setPlacing] = useState<PlaceKind | null>(null);
+  const [placing, setPlacing] = useState<Placing | null>(null);
   /** Einheit der Kräfteübersicht bzw. Schadenkonto, dessen Position gerade gesetzt wird */
   const [placingUnit, setPlacingUnit] = useState<Unit | DamageAccount | null>(null);
   const { data: accounts = [] } = useDamageAccounts(incident?.id);
@@ -211,7 +215,7 @@ export function MapPage() {
   // Für Ausbreitung nötig: Windgeschwindigkeit und -richtung
   const ws = weather?.state;
   const wind = ws && ws.windSpeedMs !== null && ws.windDirectionDeg !== null ? { windSpeedMs: ws.windSpeedMs, windDirectionDeg: ws.windDirectionDeg } : undefined;
-  /** Objekte ändern: angemeldet, laufender Einsatz und die aktuelle Lage (nicht im Verlauf) */
+  /** Objekte ändern: angemeldet, laufende Lage und der aktuelle Stand (nicht im Verlauf) */
   const canEdit = !!user && !!incident && !incident.closedAt && !historyAt;
   /** Zeitpunkt wählen; in der Vergangenheit enden Setzen, Zeichnen und Bearbeiten */
   const travel = (at: string | null) => {
@@ -248,9 +252,23 @@ export function MapPage() {
     onError: (e) => toast('error', e.message),
   });
 
-  // Fahrzeugstandort aus dem GPS der Wetterstation (Airmar); ohne GPS kein Fahrzeugmarker
-  const gps = weather?.state.position ?? null;
-  const vPos: [number, number] | null = gps ? [gps.lat, gps.lon] : null;
+  // Fahrzeugstandort aus dem GPS der Wetterstation (Airmar); ohne GPS-Fix von Hand gesetzt, sonst die letzte GPS-Position
+  const { position: vehicle, canSet: canSetVehicle } = useVehiclePosition();
+  const vPos: [number, number] | null = vehicle ? [vehicle.lat, vehicle.lon] : null;
+  /** Von Hand setzen: angemeldet, kein GPS-Fix und der aktuelle Stand */
+  const vehicleEditable = !!user && canSetVehicle && !historyAt;
+  const noGpsReason = weather?.state.position ? 'Kein GPS-Empfang' : 'Kein GPS-Empfänger';
+  const setVehicle = useMutation({
+    mutationFn: api.setVehiclePosition,
+    onSuccess: () => toast('success', 'Fahrzeugposition gesetzt'),
+    onError: (e) => toast('error', e.message),
+  });
+  const clearVehicle = useMutation({
+    mutationFn: api.clearVehiclePosition,
+    onSuccess: () => toast('success', 'Von Hand gesetzte Fahrzeugposition entfernt'),
+    onError: (e) => toast('error', e.message),
+  });
+  const placeVehicle = () => (setPlacingUnit(null), setDrawing(null), setShapeEdit(null), setPlacing('vehicle'));
   /** Mitte Deutschlands, falls weder Einsatzort noch Fahrzeugposition bekannt sind. */
   const fallback: [number, number] = [51.1657, 10.4515];
   const iPos: [number, number] | null = origin ? [origin.lat, origin.lon] : null;
@@ -387,10 +405,11 @@ export function MapPage() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const place = (kind: PlaceKind | Unit | DamageAccount, lat: number, lon: number) => {
+  const place = (kind: Placing | Unit | DamageAccount, lat: number, lon: number) => {
     setPlacing(null);
     setPlacingUnit(null);
     if (typeof kind === 'object') return 'status' in kind ? moveUnit.mutate({ unit: kind, lat, lon }) : moveAccount.mutate({ account: kind, lat, lon });
+    if (kind === 'vehicle') return setVehicle.mutate({ lat, lon });
     if (kind === 'incident') setLocation.mutate({ lat, lon });
     else if (kind === 'point') addObject.mutate({ kind: 'point', name: 'Punkt', lat, lon, data: { detail: '' } });
     // Name wie in der Auswahl (Dateiname des Zeichens ohne Unterstriche) bzw. Grundzeichen mit Text
@@ -425,6 +444,26 @@ export function MapPage() {
               <strong>{vehicleName}</strong>
               <br />
               {vPos![0].toFixed(5)}, {vPos![1].toFixed(5)}
+              {vehicle!.source !== 'gps' && (
+                <>
+                  <br />
+                  <span className="muted">
+                    {vehicle!.source === 'manual' ? `Von Hand gesetzt ${fmtDateTime(vehicle!.setAt!)} von ${vehicle!.setBy}` : `${noGpsReason} – letzte GPS-Position`}
+                  </span>
+                </>
+              )}
+              {vehicleEditable && (
+                <span className="map-popup-actions">
+                  <button type="button" className="btn btn-sm" onClick={placeVehicle}>
+                    <PenTool size={14} /> {vehicle!.source === 'manual' ? 'Verschieben' : 'Position setzen'}
+                  </button>
+                  {vehicle!.source === 'manual' && (
+                    <button type="button" className="btn btn-sm" disabled={clearVehicle.isPending} onClick={() => clearVehicle.mutate()}>
+                      <X size={14} /> Entfernen
+                    </button>
+                  )}
+                </span>
+              )}
             </Popup>
           </Marker>
         )}
@@ -499,7 +538,7 @@ export function MapPage() {
         <ObjectMenu
           loggedIn={!!user}
           enabled={canEdit}
-          reason={!incident ? 'Objekte gehören zu einem Einsatz – erst einen Einsatz auflegen' : 'Zum Bearbeiten anmelden'}
+          reason={!incident ? 'Objekte gehören zu einer Lage – erst eine Lage auflegen' : 'Zum Bearbeiten anmelden'}
           hasLocation={!!iPos}
           onPlace={(k) => (setPlacingUnit(null), setDrawing(null), setShapeEdit(null), setPlacing(k))}
           onDraw={startDrawing}
@@ -542,7 +581,7 @@ export function MapPage() {
           adopt={
             canEdit
               ? { run: () => route.data && addObject.mutate(routeObject(routePlan.stops, route.data)), pending: addObject.isPending }
-              : { reason: !incident ? 'Objekte gehören zu einem Einsatz – erst einen Einsatz auflegen' : historyAt ? 'Nur in der aktuellen Lage' : 'Zum Bearbeiten anmelden' }
+              : { reason: !incident ? 'Objekte gehören zu einer Lage – erst eine Lage auflegen' : historyAt ? 'Nur im aktuellen Stand (nicht im Verlauf)' : 'Zum Bearbeiten anmelden' }
           }
           onPrint={() => setRoutePrinting(true)}
           onClose={() => setRoutePlan(null)}
@@ -658,7 +697,9 @@ export function MapPage() {
       {incident && (
         <ObjectList
           incident={shownIncident!}
-          vehicle={{ name: vehicleName, pos: vPos }}
+          vehicle={{ name: vehicleName, pos: vPos, source: vehicle?.source ?? null }}
+          onMoveVehicle={vehicleEditable && canEdit ? placeVehicle : undefined}
+          onClearVehicle={vehicleEditable && canEdit && vehicle?.source === 'manual' ? () => clearVehicle.mutate() : undefined}
           objects={objects}
           units={units}
           wind={wind}

@@ -1,13 +1,14 @@
 # Einsatzbericht
 
-ELVIS fasst alles, was zu einem Einsatz erfasst wurde, in einem PDF zusammen. Dazu gehören auch die Dokumente.
+ELVIS fasst alles, was zu einer Lage erfasst wurde, in einem PDF zusammen. Dazu gehören auch die Dokumente.
 
-- **Automatisch beim Beenden:** Nach *Einsatz → Einsatz beenden* erstellt ELVIS den Bericht im Hintergrund. Er
-  landet im Dokumentenordner **Protokolle** des Einsatzes, z. B. `Protokolle/Einsatzbericht_B3_031755nov26.pdf`.
+- **Automatisch beim Beenden:** Nach *Lage → Lage beenden* erstellt ELVIS den Bericht im Hintergrund. Er
+  landet im Dokumentenordner **Protokolle** der Lage, z. B. `Protokolle/Einsatzbericht_B3_031755nov26.pdf` (ohne Einsatzstichwort
+  `Einsatzbericht_Lage-<ID>_…`).
   Das Tagebuch erhält dazu „Dokument hinzugefügt …“. Schlägt die Erstellung fehl, steht der Grund als System-Eintrag
   im Tagebuch.
-- **Auf Abruf:** *Archiv → Einsatz → Einsatzbericht (PDF)* erstellt den Bericht jederzeit neu. Während des Einsatzes
-  gibt es *Einsatz → Zwischenbericht (PDF)*. Dafür ist eine Anmeldung nötig, jeder Abruf steht im Audit-Log.
+- **Auf Abruf:** *Archiv → Lage → Einsatzbericht (PDF)* erstellt den Bericht jederzeit neu. Während der Lage
+  gibt es *Lage → Zwischenbericht (PDF)*. Dafür ist eine Anmeldung nötig, jeder Abruf steht im Audit-Log.
 - **Inhalt** (jeder Abschnitt beginnt auf einer neuen Seite und hat ein PDF-Lesezeichen):
   - Deckblatt mit Einsatzdaten und Inhaltsverzeichnis
   - Übersicht mit Kennzahlen und Personenschäden gesamt
@@ -19,7 +20,7 @@ ELVIS fasst alles, was zu einem Einsatz erfasst wurde, in einem PDF zusammen. Da
   - **Personal mit allen erfassten Feldern**, also auch Geburtsdatum, Anschrift, Arbeitgeber und Notfallkontakt. Der
     Bericht enthält damit personenbezogene Daten und ist entsprechend zu behandeln.
   - Aufgaben, Anforderungen, Meldungen (mit Antworten, Kopien und Quittungen) und Telefonate
-  - Chat/SMS und E-Mail im Einsatzzeitraum. Beides ist keinem Einsatz fest zugeordnet; aufgenommen wird der gesamte
+  - Chat/SMS und E-Mail im Einsatzzeitraum. Beides ist keiner Lage fest zugeordnet; aufgenommen wird der gesamte
     Verkehr zwischen Beginn und Ende.
   - Kartenobjekte und das Dokumentenverzeichnis mit Anlagennummern (A1, A2 …)
 - **Dokumente im Anhang:**

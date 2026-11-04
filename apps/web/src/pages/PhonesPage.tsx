@@ -65,7 +65,7 @@ function PhoneKeysCard({ phone, phones }: { phone: Phone; phones: Phone[] }) {
             type="button"
             className="btn btn-sm"
             disabled={reset.isPending}
-            onClick={() => window.confirm(`Alle ${overrides} Änderungen für diesen Einsatz zurücknehmen?`) && reset.mutate()}
+            onClick={() => window.confirm(`Alle ${overrides} Änderungen für diese Lage zurücknehmen?`) && reset.mutate()}
           >
             <RotateCcw size={16} /> Grundbelegung
           </button>
@@ -80,7 +80,7 @@ function PhoneKeysCard({ phone, phones }: { phone: Phone; phones: Phone[] }) {
             value={scope}
             onChange={setScope}
             options={[
-              { value: 'incident', label: 'Nur für diesen Einsatz', disabled: !incident, title: incident ? undefined : 'Kein Einsatz aufgelegt' },
+              { value: 'incident', label: 'Nur für diese Lage', disabled: !incident, title: incident ? undefined : 'Keine Lage aufgelegt' },
               { value: 'phone', label: 'Grundbelegung' },
             ]}
           />
@@ -89,16 +89,16 @@ function PhoneKeysCard({ phone, phones }: { phone: Phone; phones: Phone[] }) {
       <p className="muted">
         {scope === 'incident'
           ? incident
-            ? 'Änderungen gelten nur für den laufenden Einsatz – mit dem Einsatzende bekommt das Telefon wieder seine Grundbelegung.'
-            : 'Tasten lassen sich im laufenden Einsatz ändern. Ohne Einsatz gilt die Grundbelegung (pflegen Admins).'
-          : 'Grundbelegung dieses Telefons – gilt außerhalb von Einsätzen und zu Beginn jedes Einsatzes. Freie Tasten übernimmt es aus der Vorlage (Einstellungen → Telefone).'}
+            ? 'Änderungen gelten nur für die laufende Lage – mit dem Einsatzende bekommt das Telefon wieder seine Grundbelegung.'
+            : 'Tasten lassen sich in der laufenden Lage ändern. Ohne Lage gilt die Grundbelegung (pflegen Admins).'
+          : 'Grundbelegung dieses Telefons – gilt außerhalb von Lagen und zu Beginn jeder Lage. Freie Tasten übernimmt es aus der Vorlage (Einstellungen → Telefone).'}
       </p>
       {!slots ? <Loading /> : <KeyGrid slots={slots} perPage={PHONE_MODEL[phone.model].keysPerPage} onSelect={setEditing} disabled={!canEdit} />}
       {editing && (
         <KeyEditor
           slot={editing}
           layer={layer(editing)}
-          title={`${phone.name}: Taste ${editing.idx + 1}${scope === 'incident' ? ' (Einsatz)' : ' (Grundbelegung)'}`}
+          title={`${phone.name}: Taste ${editing.idx + 1}${scope === 'incident' ? ' (Lage)' : ' (Grundbelegung)'}`}
           phones={phones.filter((p) => p.id !== phone.id)}
           pending={save.isPending || clear.isPending}
           clearLabel={scope === 'incident' ? 'Zurück auf Grundbelegung' : 'Vorlage verwenden'}

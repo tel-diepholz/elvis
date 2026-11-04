@@ -36,7 +36,7 @@ export function chatRoutes(app: FastifyInstance, deps: { chat: ChatService; reac
     chat.remove(parse(idParam, req.params).id, operatorOf(req));
     return reply.code(204).send();
   });
-  // Bild einer Nachricht in die Dokumente eines Einsatzes übernehmen (Eintrag im Einsatztagebuch schreibt die Dokumentverwaltung)
+  // Bild einer Nachricht in die Dokumente einer Lage übernehmen (Eintrag im Einsatztagebuch schreibt die Dokumentverwaltung)
   app.post('/api/chat/messages/:id/document', async (req, reply) => {
     const input = parse(chatToDocumentSchema, req.body);
     const msg = chat.message(parse(idParam, req.params).id);

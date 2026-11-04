@@ -93,7 +93,7 @@ function duration(item: TimelineItem, now: number): string | null {
 /**
  * Timeline des Funkverkehrs für Fernmelder: wer hat wann auf welchem Gerät gefunkt. Bekannte ISSIs erscheinen mit
  * der Kraft aus dem Einsatz; „Meldung erstellen“ erfasst den Funkspruch als Eingangsmeldung – wählt der Fernmelder
- * dabei eine Kraft, merkt sie sich die ISSI für diesen Einsatz.
+ * dabei eine Kraft, merkt sie sich die ISSI für diese Lage.
  */
 export function RadioTimeline({
   devices,
@@ -204,8 +204,8 @@ export function RadioTimeline({
                       <button
                         type="button"
                         className="btn btn-sm"
-                        disabled={!msgCtx?.radio}
-                        title={msgCtx?.radio ? undefined : 'Eingangsmeldungen erfassen nur Fernmelder (Rolle über das Profilmenü übernehmen)'}
+                        disabled={!msgCtx?.captureIn}
+                        title={msgCtx?.captureIn ? undefined : 'Eingangsmeldungen erfassen nur Fernmelder (Rolle über das Profilmenü übernehmen)'}
                         onClick={() => setCompose(item)}
                       >
                         <MessageSquarePlus size={16} /> Meldung erstellen

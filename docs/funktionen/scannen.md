@@ -5,9 +5,9 @@ ELVIS betreibt dafür einen eigenen SMTP-Empfänger (Port 2525, `scan.smtpPort` 
 `ELVIS_SCAN_PORT`, `off` schaltet ihn ab). Weitere Dienste braucht es nicht.
 
 - **Posteingang** (*Fahrzeug → Posteingang*, angemeldet): Jeder PDF-Anhang wird ein Scan mit Absender, Betreff und
-  Zeit. Ansehen, herunterladen, aus dem Eingang löschen oder nachträglich im laufenden Einsatz ablegen. Scans im Eingang
-  werden nach der eingestellten Frist (Vorgabe 14 Tage) gelöscht; abgelegte Dokumente bleiben im Einsatz.
-- **Ablage:** Ist ein Einsatz eröffnet, legt ELVIS jeden Scan zusätzlich in dessen Dokumentverwaltung ab (Vorgabe
+  Zeit. Ansehen, herunterladen, aus dem Eingang löschen oder nachträglich in der laufenden Lage ablegen. Scans im Eingang
+  werden nach der eingestellten Frist (Vorgabe 14 Tage) gelöscht; abgelegte Dokumente bleiben in der Lage.
+- **Ablage:** Ist eine Lage eröffnet, legt ELVIS jeden Scan zusätzlich in deren Dokumentverwaltung ab (Vorgabe
   `Scans/{{datum.iso}}`, Platzhalter wie bei [Vorlagen](dokumente.md)) und vermerkt das im Einsatztagebuch.
 - **Einstellungen** (*Einstellungen → Scannen*, nur Admins): Annahme an/aus, Ablage, erlaubte Geräte (IP-Adressen) und
   optional SMTP-Anmeldung (PLAIN/LOGIN). Mails ohne PDF-Anhang lehnt ELVIS ab, das Gerät zeigt dann einen Fehler.

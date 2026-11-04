@@ -9,7 +9,7 @@ import { archivePathSchema } from './documents';
 export interface ScanSettings {
   /** SMTP-Empfänger nimmt Scans an */
   enabled: boolean;
-  /** Scans im laufenden Einsatz ablegen */
+  /** Scans in der laufenden Lage ablegen */
   archive: boolean;
   /** Ordnerpfad im Einsatz, Platzhalter wie bei Vorlagen, z. B. „Scans/{{datum.iso}}“ */
   folderPath: string;

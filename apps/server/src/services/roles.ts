@@ -13,7 +13,7 @@ interface RoleRow {
 const toRole = (r: RoleRow): Role => ({ id: r.id, name: r.name, description: r.description, sort: r.sort });
 
 /**
- * Rollen im Einsatz (z. B. Einsatzleiter, Führungsassistent, Funker). Admins pflegen die Liste,
+ * Rollen in der Lage (z. B. Einsatzleiter, Führungsassistent, Funker). Admins pflegen die Liste,
  * jede Sitzung kann mehrere Rollen übernehmen (session_roles). Besetzt ist eine Rolle,
  * solange eine gültige Sitzung sie hält – nach Abmeldung oder Ablauf wird sie wieder frei.
  */

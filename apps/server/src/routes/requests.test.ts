@@ -188,7 +188,7 @@ describe('Beschaffung über den Stab', () => {
   });
 
   it('erzeugt eine Ausgangsmeldung und verschiebt die Wiedervorlage', async () => {
-    expect((await req<Incident>('PATCH', `/api/incidents/${inc.id}`, { procurementMode: 'staff', procurementStaff: 'Stab HVB' })).body).toMatchObject({ procurementMode: 'staff', procurementStaff: 'Stab HVB' });
+    expect((await req<Incident>('PATCH', `/api/incidents/${inc.id}`, { kind: 'staff', procurementStaff: 'Stab HVB' })).body).toMatchObject({ kind: 'staff', procurementMode: 'staff', procurementStaff: 'Stab HVB' });
     const r = (await create()).body;
     expect((await forward(r.id, stab.cookie)).status).toBe(403);
     const sent = await forward(r.id);

@@ -14,19 +14,19 @@ export function ArchivePage() {
   const { data: incidents, isLoading } = useQuery({ queryKey: ['incident', 'list'], queryFn: api.incidents });
   return (
     <>
-      <PageHeader title="Einsatzarchiv" subtitle="Abgeschlossene Einsätze – schreibgeschützt" />
+      <PageHeader title="Einsatzarchiv" subtitle="Abgeschlossene Lagen – schreibgeschützt" />
       <Card>
         {isLoading ? (
           <Loading />
         ) : !incidents?.length ? (
-          <EmptyState icon={<Archive size={40} />} title="Noch keine Einsätze" />
+          <EmptyState icon={<Archive size={40} />} title="Noch keine Lagen" />
         ) : (
           <div className="table-wrap">
             <table className="table table-click">
               <thead>
                 <tr>
                   <th>Beginn</th>
-                  <th>Einsatz</th>
+                  <th>Lage</th>
                   <th>Ort</th>
                   <th>Dauer</th>
                   <th />
@@ -37,7 +37,7 @@ export function ArchivePage() {
                   <tr key={i.id}>
                     <td className="mono">{fmtDateTime(i.startedAt)}</td>
                     <td>
-                      <Link to={i.closedAt ? `/archiv/${i.id}` : '/einsatz'} className="cell-title">
+                      <Link to={i.closedAt ? `/archiv/${i.id}` : '/lage'} className="cell-title">
                         {[i.keyword, i.title].filter(Boolean).join(' · ')}
                       </Link>
                     </td>
@@ -63,7 +63,7 @@ export function ArchivedIncidentPage() {
   const { data: incident, isLoading, error } = useQuery({ queryKey: ['incident', id], queryFn: () => api.incident(id) });
 
   if (isLoading) return <Loading />;
-  if (!incident) return <EmptyState title="Einsatz nicht gefunden">{error?.message}</EmptyState>;
+  if (!incident) return <EmptyState title="Lage nicht gefunden">{error?.message}</EmptyState>;
 
   return (
     <>

@@ -398,6 +398,36 @@ input[type='checkbox'] {
   text-align: left;
   cursor: pointer;
 }
+.nav-group-collapsible {
+  margin-bottom: 4px;
+}
+.nav-group-toggle {
+  color: var(--text-muted);
+}
+.nav-group-toggle .nav-chevron {
+  margin-left: auto;
+  transition: transform 0.15s;
+}
+.nav-group-toggle .nav-badge + .nav-chevron {
+  margin-left: 0;
+}
+.nav-group-collapsible:not(.open) .nav-chevron {
+  transform: rotate(-90deg);
+}
+.nav-group-items {
+  margin: 2px 0 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+  margin-left: 19px;
+}
+.nav-collapsed .sidebar .nav-group-toggle .nav-chevron {
+  display: none;
+}
+.nav-collapsed .sidebar .nav-group-items {
+  margin: 0;
+  padding: 0;
+  border-left: 0;
+}
 .nav-footer {
   padding-top: 12px;
   border-top: 1px solid var(--border);
@@ -2397,6 +2427,14 @@ input[type='checkbox'] {
 .dispersion-warning svg {
   flex: none;
   margin-top: 2px;
+}
+.dispersion-wind {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.dispersion-wind .dispersion-note {
+  margin: 0;
 }
 .dispersion-note {
   margin: 0;

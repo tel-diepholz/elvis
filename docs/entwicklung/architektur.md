@@ -17,7 +17,7 @@ apps/windows      ELVIS lite: Windows-Installer (Dienst um node.exe mit apps/ser
   Bedienprotokoll, auch abgelehnte (z. B. Rufgruppe eines Handfunkgeräts umschalten).
 - **Einsatztagebuch:** Einträge sind per Datenbank-Trigger unveränderlich. Korrekturen werden als neue
   Einträge mit Verweis erfasst. Kräfte-Statuswechsel, Abschnittszuordnung, Dokumente sowie das Eröffnen
-  und Beenden eines Einsatzes werden automatisch als Systemeintrag protokolliert. CSV-Export ist möglich.
+  und Beenden einer Lage werden automatisch als Systemeintrag protokolliert. CSV-Export ist möglich.
 
 ## Ausbaustufen (Edition)
 

@@ -9,7 +9,7 @@ meldet sich per SIP an der Telefonanlage des Fahrzeugs an. ELVIS zeigt unter **F
 - **Laufende Gespräche** mit Richtung, Trunk und Dauer. Ist die Nummer in den Kontakten, steht dort der Name.
 - **Anrufliste** der letzten 24 Stunden. Sie wird 90 Tage aufbewahrt.
 
-**Einsatztagebuch:** Solange ein Einsatz läuft, wird jedes beendete Gespräch als Eintrag der Kategorie
+**Einsatztagebuch:** Solange eine Lage läuft, wird jedes beendete Gespräch als Eintrag der Kategorie
 „Telefon“ geschrieben. Als Zeitpunkt gilt der Beginn des Gesprächs, als Verfasser „Telefonie“. Das gilt für
 ein- und ausgehende Gespräche, auch für verpasste und nicht erreichte, z. B.
 „Anruf von Muster, Max (Mobil), +49 170 1234567 über GSM 1, Dauer 2:11 min“.

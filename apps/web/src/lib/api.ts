@@ -1,4 +1,5 @@
 import type { DamageAccount, DamageAccountInput, DamageAccountPatch, DamageCountBooking, DamageCountInput, DamageEntry, DamageEntryInput, DamageEntryPatch } from '@elvis/shared';
+import type { ManualPosition, ManualPositionInput, VehiclePosition } from '@elvis/shared';
 import type { EnergyFlowInput, EnergyFlowSettings, UpdateStatus } from '@elvis/shared';
 import type { Phone, PhoneConfigInput, PhoneInput, PhoneKeyInput, PhoneKeySlot, PhoneSystemStatus, PagingZone } from '@elvis/shared';
 import {
@@ -195,6 +196,8 @@ import {
   type RequestNoteInput,
   type RequestPatch,
   type RequestSettings,
+  type IncidentSettings,
+  type IncidentSettingsInput,
   type RequestSettingsInput,
   type RequestStatusInput,
 } from '@elvis/shared';
@@ -243,6 +246,8 @@ export const api = {
   startIncident: (input: NewIncident) => request<Incident>('POST', '/api/incidents', input),
   updateIncident: (id: number, patch: IncidentPatch) => request<Incident>('PATCH', `/api/incidents/${id}`, patch),
   closeIncident: (id: number) => request<Incident>('POST', `/api/incidents/${id}/close`),
+  incidentSettings: () => request<IncidentSettings>('GET', '/api/incidents/settings'),
+  saveIncidentSettings: (input: IncidentSettingsInput) => request<IncidentSettings>('PUT', '/api/system/incident', input),
 
   journal: (id: number) => request<JournalEntry[]>('GET', `/api/incidents/${id}/journal`),
   addJournal: (id: number, entry: NewJournalEntry) => request<JournalEntry>('POST', `/api/incidents/${id}/journal`, entry),
@@ -499,6 +504,9 @@ export const api = {
   audit: (limit = 200) => request<AuditEntry[]>('GET', `/api/audit?limit=${limit}`),
 
   settings: () => request<Settings>('GET', '/api/settings'),
+  vehiclePosition: () => request<{ manual: ManualPosition | null; current: VehiclePosition | null }>('GET', '/api/map/vehicle-position'),
+  setVehiclePosition: (input: ManualPositionInput) => request<ManualPosition>('PUT', '/api/map/vehicle-position', input),
+  clearVehiclePosition: () => request<void>('DELETE', '/api/map/vehicle-position'),
   updateSettings: (input: SettingsInput) => request<Settings>('PUT', '/api/settings', input),
 
   deviceModules: () => request<DeviceModule[]>('GET', '/api/system/devices'),

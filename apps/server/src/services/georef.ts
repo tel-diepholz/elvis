@@ -309,7 +309,7 @@ export class GeorefService {
 
   createOverlay(docId: number, viewerId: number | null, input: z.output<typeof georefRequestSchema>, operator: string): GeorefJob {
     const doc = this.pdf(docId, viewerId);
-    if (this.deps.incidents.get(doc.incidentId).closedAt) throw new HttpError(409, 'Einsatz ist abgeschlossen und kann nicht mehr geändert werden');
+    if (this.deps.incidents.get(doc.incidentId).closedAt) throw new HttpError(409, 'Lage ist abgeschlossen und kann nicht mehr geändert werden');
     const pagePath = this.pagePath(docId, viewerId, input.page, false);
     const fit = fitAffine(input.gcps);
     if (!fit) throw new HttpError(400, 'Die Passpunkte liegen (fast) auf einer Linie – bitte weiter verteilt setzen');

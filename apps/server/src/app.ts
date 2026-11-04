@@ -35,6 +35,8 @@ import { deviceRoutes } from './routes/devices.js';
 import { incidentRoutes } from './routes/incidents.js';
 import { LiveHub } from './routes/live.js';
 import { mapRoutes } from './routes/map.js';
+import { vehiclePositionRoutes } from './routes/vehiclePosition.js';
+import { VehiclePositionService } from './services/vehiclePosition.js';
 import { ForceService } from './services/forces.js';
 import { IncidentService } from './services/incidents.js';
 import { SettingsService } from './services/settings.js';
@@ -167,6 +169,9 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices, config.edition), { cameras, wifi, monitoring, bluetooth, telephony: telephonyBus, messenger: messengerBus, vault: dbVault(db), hooks, messengerServices });
   const settings = new SettingsService(db, { vehicle: config.vehicle });
   const hub = new LiveHub(devices, () => settings.get().vehicle);
+  // Fahrzeugstandort: GPS der Wetterstation, ohne GPS-Fix von Hand in der Karte gesetzt
+  const vehiclePos = new VehiclePositionService(db, () => devices.adapter('weather')?.getState().position, () => hub.invalidate(['settings']));
+  devices.onDevice((d) => d.id === 'weather' && vehiclePos.gpsChanged());
   settings.onChange(() => hub.invalidate(['settings']));
   const videos = new VideoSourceService();
   videos.onChange(() => hub.invalidate(['videoSources']));
@@ -238,12 +243,12 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     { ...config.weather, userAgent: config.map.userAgent, cacheFile: config.dataDir === ':memory:' ? null : join(config.dataDir, 'weather-cache.json') },
     opts.weatherFetch,
   );
-  // Unwetter am Fahrzeugstandort (GPS der Wetterstation, sonst Einsatzort) erscheinen als Meldung
+  // Unwetter am Fahrzeugstandort (GPS bzw. von Hand gesetzt, sonst Einsatzort) erscheinen als Meldung
   const weatherWatch = new WeatherAlertWatch(
     weather,
     () => {
-      const gps = devices.adapter('weather')?.getState().position;
-      if (gps) return gps;
+      const pos = vehiclePos.current();
+      if (pos) return pos;
       const incident = store.activeIncident();
       return incident?.lat != null && incident.lon != null ? { lat: incident.lat, lon: incident.lon } : null;
     },
@@ -259,7 +264,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       center: () => {
         const incident = store.activeIncident();
         if (incident?.lat != null && incident.lon != null) return { lat: incident.lat, lon: incident.lon };
-        return devices.adapter('weather')?.getState().position ?? null;
+        return vehiclePos.current();
       },
     },
     opts.trafficFetch,
@@ -436,6 +441,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     wifiRoutes(api, { wifi, store, notify: (t) => hub.invalidate(t) });
     monitoringRoutes(api, { monitoring, store, notify: (t) => hub.invalidate(t) });
     bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
+    vehiclePositionRoutes(api, { position: vehiclePos, store, notify: (t) => hub.invalidate(t) });
     mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder, overpass, router, radar, (id, z, x, y) => georef.tile(id, z, x, y));
     weatherRoutes(api, weather, weatherWatch, {
       settings,

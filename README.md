@@ -12,11 +12,25 @@ Projekthomepage mit Bildern und Funktionsübersicht: **<https://einsatzleitwagen
 | Bereich | Verfügbarkeit | Inhalt |
 | --- | --- | --- |
 | **Fahrzeug** | immer | Übersicht, Karte, Wetter, Funk, Telefonie, Tischtelefone, Netzwerk, E-Mail (mit Postfach), SMS (mit Telefonie), Kontakte |
-| **Einsatz** | Unterseiten erst mit aufgelegtem Einsatz | Einsatztagebuch, Schadenkonten, Kräfteübersicht, Dokumente |
+| **Lage** | Unterseiten erst mit angelegter Lage | Einsatztagebuch, Schadenkonten, Kräfteübersicht, Dokumente |
 | **Verwaltung** | immer | Einsatzarchiv (schreibgeschützt); nur Admins: Bedienprotokoll, Einstellungen |
 
-Die Sperre der Einsatzbereiche wird im Backend durchgesetzt: Schreibzugriffe sind nur auf den offenen
-Einsatz möglich, abgeschlossene Einsätze sind nur lesbar.
+Die Sperre der Einsatzbereiche wird im Backend durchgesetzt: Schreibzugriffe sind nur auf die offene
+Lage möglich, abgeschlossene Lagen sind nur lesbar.
+
+Eine **Lage** ist das Gesamtereignis, künftig mit einzelnen Einsätzen (Schadenstellen) darin, z. B. „Orkan Kyrill
+ist eine Unwetterlage mit 120 Einsätzen“.
+
+**Lage anlegen** öffnet einen Dialog, erreichbar über die Seite *Lage*, die Kachel auf der Übersicht oder die
+gesperrten Bereiche:
+
+- **Bezeichnung** und **Art:** Brand/Technische Hilfe (Vorgabe), Flächenlage oder Stab.
+- **Einsatzstichwort** und **Einsatzort** erscheinen nur bei Brand/Technische Hilfe. Das Stichwort wird aus einer
+  Liste gewählt, die Admins unter *Einstellungen → Lage → Einsatzstichworte* pflegen. Freie
+  Eingaben sind nicht möglich.
+- **Einsatzleiter** gibt es bei jeder Art.
+- Bei der Art **Stab** werden Anforderungen über den Stab beschafft, dafür erscheint das Feld **Stab (Empfänger)**.
+  Sonst beschafft die Beschaffungsrolle selbst (siehe [Rollen](docs/rollen.md#anforderungen)).
 
 ## Schnellstart
 

@@ -82,7 +82,7 @@ export function ObjectMenu({
   onRoute,
 }: {
   loggedIn: boolean;
-  /** Objekte des Einsatzes ändern */
+  /** Objekte der Lage ändern */
   enabled: boolean;
   reason: string;
   hasLocation: boolean;

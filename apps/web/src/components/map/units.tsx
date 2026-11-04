@@ -6,7 +6,7 @@ import { fmtAgo } from '../../lib/format';
 import { api } from '../../lib/api';
 import { tacticalIcon } from '../tactical/TacticalSign';
 
-/** Kräfte des Einsatzes; live aktualisiert über das Thema „units“ (gemeinsamer Cache mit der Kräfteübersicht) */
+/** Kräfte der Lage; live aktualisiert über das Thema „units“ (gemeinsamer Cache mit der Kräfteübersicht) */
 export function useMapUnits(incidentId: number | null | undefined) {
   return useQuery({
     queryKey: ['units', incidentId],

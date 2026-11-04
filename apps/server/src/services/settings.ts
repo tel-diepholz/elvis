@@ -21,9 +21,9 @@ export class SettingsService {
   ) {}
 
   get(): Settings {
-    // device:<id> gehört zur Modulkonfiguration (DeviceConfigStore), wifi:* zum WLAN (WifiService), documents:* zu den Dokumenten, print:* zum Druckserver, app:* zur App-Anbindung, map:* zu den Kartenquellen (TileService), traffic:* zum Luft- und Schiffsverkehr, messages:* zu den Meldungen, requests:* zu den Anforderungen, mail:* zum Postfach, backup:* zum Backup, phonebook:* zum Telefonbuch, chat:* zu den Nachrichten, driver:* zur Ablage der Treiber
+    // device:<id> gehört zur Modulkonfiguration (DeviceConfigStore), wifi:* zum WLAN (WifiService), documents:* zu den Dokumenten, print:* zum Druckserver, app:* zur App-Anbindung, map:* zu den Kartenquellen (TileService), traffic:* zum Luft- und Schiffsverkehr, messages:* zu den Meldungen, requests:* zu den Anforderungen, mail:* zum Postfach, backup:* zum Backup, phonebook:* zum Telefonbuch, chat:* zu den Nachrichten, driver:* zur Ablage der Treiber, incident:* zur Lage, position:* zum Fahrzeugstandort
     const rows = this.db
-      .prepare("SELECT * FROM settings WHERE key NOT LIKE 'device:%' AND key NOT LIKE 'wifi:%' AND key NOT LIKE 'documents:%' AND key NOT LIKE 'print:%' AND key NOT LIKE 'app:%' AND key NOT LIKE 'map:%' AND key NOT LIKE 'traffic:%' AND key NOT LIKE 'messages:%' AND key NOT LIKE 'requests:%' AND key NOT LIKE 'mail:%' AND key NOT LIKE 'backup:%' AND key NOT LIKE 'phonebook:%' AND key NOT LIKE 'chat:%' AND key NOT LIKE 'driver:%'")
+      .prepare("SELECT * FROM settings WHERE key NOT LIKE 'device:%' AND key NOT LIKE 'wifi:%' AND key NOT LIKE 'documents:%' AND key NOT LIKE 'print:%' AND key NOT LIKE 'app:%' AND key NOT LIKE 'map:%' AND key NOT LIKE 'traffic:%' AND key NOT LIKE 'messages:%' AND key NOT LIKE 'requests:%' AND key NOT LIKE 'mail:%' AND key NOT LIKE 'backup:%' AND key NOT LIKE 'phonebook:%' AND key NOT LIKE 'chat:%' AND key NOT LIKE 'driver:%' AND key NOT LIKE 'incident:%' AND key NOT LIKE 'position:%'")
       .all() as Row[];
     const value = <T>(key: string): T | undefined => {
       const r = rows.find((x) => x.key === key);

@@ -39,8 +39,8 @@ brauchen es nicht.
   über die sie erreichbar ist. Ein Klick öffnet eine neue Nachricht über diesen Kanal. Signal, Threema und Telegram
   prüft ELVIS für die Mobilnummern der Kontakte (nach Änderungen sofort, sonst wöchentlich). WhatsApp lässt sich nicht
   prüfen und gilt nach der ersten Nachricht als erreichbar. SMS erreichen jede Mobilnummer.
-- **Meldungen per Nachricht:** Im laufenden Einsatz erfassen Fernmelder eine eingegangene Nachricht mit **Meldung
-  erstellen** als Eingangsmeldung. Wählen sie als Absender eine Kraft im Einsatz oder eine Systemeinheit, merkt sich
+- **Meldungen per Nachricht:** In der laufenden Lage erfassen Fernmelder eine eingegangene Nachricht mit **Meldung
+  erstellen** als Eingangsmeldung. Wählen sie als Absender eine Kraft der Lage oder eine Systemeinheit, merkt sich
   diese die Rufnummer (änderbar an der Einheit). Beim nächsten Mal ist sie vorausgewählt. Bei Ausgangsmeldungen bietet
   der Meldungsdialog **Per Nachricht senden** an. Ist die Rufnummer des Empfängers bekannt, ist sie vorbelegt. Nach dem
   Senden gilt die Meldung als erledigt.

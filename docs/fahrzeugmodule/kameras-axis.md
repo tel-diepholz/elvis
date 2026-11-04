@@ -21,9 +21,9 @@ zeigt Modell und Funktionen der Kamera.
     per Gedrückthalten, Grundstellung.
   - Bewegungen stoppen spätestens 1,2 s nach dem letzten Befehl von selbst, auch wenn die Verbindung zum Tablet abreißt.
     Bewegungen per Gedrückthalten stehen nicht im Bedienprotokoll, alle anderen Befehle schon.
-- **Gespeicherte Positionen** gehören zum laufenden Einsatz. ELVIS speichert die absolute Position (Schwenk, Neigung,
+- **Gespeicherte Positionen** gehören zur laufenden Lage. ELVIS speichert die absolute Position (Schwenk, Neigung,
   Zoom, Fokus), nicht die Presets der Kamera. Bei Kameras mit nur relativen Befehlen fährt ELVIS die Differenz an:
-  erst den Zoom, dann den Fokus, mit Nachkorrektur wegen des Getriebespiels. Wird der Einsatz beendet oder ein neuer eröffnet, ist die Liste leer.
-  Die Einträge bleiben dem alten Einsatz zugeordnet.
+  erst den Zoom, dann den Fokus, mit Nachkorrektur wegen des Getriebespiels. Wird die Lage beendet oder eine neue eröffnet, ist die Liste leer.
+  Die Einträge bleiben der alten Lage zugeordnet.
 - Für Zoom und Fokus über die Optics Control API und für Tag/Nacht über `param.cgi` braucht ELVIS ein Kamerakonto mit
   Administratorrechten. Für das Livebild reicht ein Konto mit geringeren Rechten.

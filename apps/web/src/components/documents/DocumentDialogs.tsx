@@ -187,8 +187,8 @@ export function NewDocumentDialog({
         <Field label="Name">
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={160} required autoFocus placeholder="z. B. Lageskizze Abschnitt Nord" />
         </Field>
-        <Field label="Speicherort im Einsatz">
-          <FolderSelect folders={folders} value={folderId} onChange={setFolderId} rootLabel="Einsatz (oberste Ebene)" />
+        <Field label="Speicherort in der Lage">
+          <FolderSelect folders={folders} value={folderId} onChange={setFolderId} rootLabel="Lage (oberste Ebene)" />
         </Field>
         <div className="btn-row">
           <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>
@@ -236,7 +236,7 @@ export function DocumentPropertiesDialog({
           <input value={v.filename} onChange={(e) => setV({ ...v, filename: e.target.value })} maxLength={200} required />
         </Field>
         <Field label="Ordner">
-          <FolderSelect folders={folders} value={v.folderId} onChange={(folderId) => setV({ ...v, folderId })} rootLabel="Einsatz (oberste Ebene)" />
+          <FolderSelect folders={folders} value={v.folderId} onChange={(folderId) => setV({ ...v, folderId })} rootLabel="Lage (oberste Ebene)" />
         </Field>
         <Field label="Beschreibung">
           <input value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} maxLength={500} />

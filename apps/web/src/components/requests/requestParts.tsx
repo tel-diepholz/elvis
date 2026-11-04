@@ -7,7 +7,7 @@ import { useLive } from '../../lib/live';
 import { Badge, type Tone } from '../ui';
 import { DueFields, fromLocalInput, toLocalInput, type DueMode } from '../tasks/TaskForm';
 
-export const REQUESTS_PATH = '/einsatz/anforderungen';
+export const REQUESTS_PATH = '/lage/anforderungen';
 
 export function useRequests(incident: Incident | null | undefined) {
   const { user } = useAuth();

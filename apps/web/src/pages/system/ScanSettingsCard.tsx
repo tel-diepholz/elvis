@@ -9,7 +9,7 @@ import { Badge, Card, Field, Loading, Toggle } from '../../components/ui';
 
 type Form = Omit<ScanSettingsInput, 'allowedHosts'> & { allowedHosts: string };
 
-/** Eingang (SMTP für „Scan an E-Mail“): Annahme, Ablage im Einsatz, Absender und Anmeldung. Nur Admins. */
+/** Eingang (SMTP für „Scan an E-Mail“): Annahme, Ablage in der Lage, Absender und Anmeldung. Nur Admins. */
 export function ScanSettingsCard() {
   const toast = useToast();
   const { data } = useQuery({ queryKey: ['scans', 'system'], queryFn: api.scanSettings });
@@ -66,17 +66,17 @@ export function ScanSettingsCard() {
       }
     >
       <p className="muted">
-        Multifunktionsgeräte schicken Scans per <em>Scan an E-Mail</em> an ELVIS. Jeder Scan erscheint im <em>Posteingang</em>; läuft ein Einsatz, wird er
-        zusätzlich in dessen Dokumenten abgelegt.
+        Multifunktionsgeräte schicken Scans per <em>Scan an E-Mail</em> an ELVIS. Jeder Scan erscheint im <em>Posteingang</em>; läuft eine Lage, wird er
+        zusätzlich in deren Dokumenten abgelegt.
         {status?.lastReceivedAt && ` Letzter Scan: ${fmtDateTime(status.lastReceivedAt)}.`}
       </p>
       {status?.error && <p className="tone-alarm">Empfänger nicht gestartet: {status.error}</p>}
       {status && !status.listening && !status.error && <p className="tone-alarm">Der SMTP-Empfänger ist in der Serverkonfiguration abgeschaltet (scan.smtpPort).</p>}
 
       <Toggle label="Scans annehmen" checked={form.enabled} onChange={(v) => change({ enabled: v })} />
-      <Toggle label="Scans im laufenden Einsatz ablegen" checked={form.archive} onChange={(v) => change({ archive: v })} />
+      <Toggle label="Scans in der laufenden Lage ablegen" checked={form.archive} onChange={(v) => change({ archive: v })} />
       <div className="form-grid">
-        <Field label="Ablageort im Einsatz" hint="Leer = oberste Ebene. Fehlende Ordner werden angelegt.">
+        <Field label="Ablageort in der Lage" hint="Leer = oberste Ebene. Fehlende Ordner werden angelegt.">
           <input value={form.folderPath} onChange={(e) => change({ folderPath: e.target.value })} maxLength={200} placeholder="Scans/{{datum.iso}}" disabled={!form.archive} />
         </Field>
         <Field label="Aufbewahrung im Posteingang (Tage)" hint="Danach werden Scans aus dem Posteingang gelöscht; abgelegte Dokumente bleiben.">

@@ -33,6 +33,7 @@ import { api } from '../../lib/api';
 import { fmtAgo, fmtDateTime, fmtDuration, fmtNum, fmtTime } from '../../lib/format';
 import { useActiveIncident, useNow } from '../../lib/hooks';
 import { useDevice } from '../../lib/live';
+import { StartIncidentButton } from '../StartIncidentButton';
 import { useAuth } from '../../lib/auth';
 import { LoginButton } from '../auth/Guards';
 import { Badge, Dot, Modal, Stat } from '../ui';
@@ -73,14 +74,14 @@ export const DASHBOARD_ICONS: Record<DashboardTileType, LucideIcon> = {
 
 /** Zielseite beim Klick auf die Kachelüberschrift */
 export const DASHBOARD_LINKS: Partial<Record<DashboardTileType, string>> = {
-  incident: '/einsatz',
-  journal: '/einsatz/tagebuch',
+  incident: '/lage',
+  journal: '/lage/tagebuch',
   messages: MESSAGES_PATH,
   chat: '/nachrichten',
   mail: '/mail',
-  tasks: '/einsatz/aufgaben',
-  forces: '/einsatz/kraefte',
-  damage: '/einsatz/schadenkonten',
+  tasks: '/lage/aufgaben',
+  forces: '/lage/kraefte',
+  damage: '/lage/schadenkonten',
   map: '/karte',
   weather: '/wetter',
   forecast: '/wetter',
@@ -116,10 +117,8 @@ function IncidentTile() {
     return (
       <Empty>
         <span className="dash-empty-stack">
-          Kein Einsatz aufgelegt
-          <Link to="/einsatz" className="btn btn-primary">
-            Einsatz eröffnen
-          </Link>
+          Keine Lage aufgelegt
+          <StartIncidentButton />
         </span>
       </Empty>
     );
@@ -133,7 +132,7 @@ function IncidentSummary({ incident }: { incident: Incident }) {
   return (
     <div className="dash-incident">
       <div className="dash-incident-main">
-        <div className="incident-keyword">{incident.keyword || 'Einsatz'}</div>
+        <div className="incident-keyword">{incident.keyword || 'Lage'}</div>
         <div className="incident-title">{incident.title}</div>
         {incident.location && <div className="muted">{incident.location}</div>}
       </div>
@@ -148,7 +147,7 @@ function IncidentSummary({ incident }: { incident: Incident }) {
 function JournalTile() {
   const { data: incident } = useActiveIncident();
   const { data: journal } = useQuery({ queryKey: ['journal', incident?.id ?? 0], queryFn: () => api.journal(incident!.id), enabled: !!incident });
-  if (!incident) return <Empty>Kein Einsatz aufgelegt</Empty>;
+  if (!incident) return <Empty>Keine Lage aufgelegt</Empty>;
   if (!journal) return <Empty>Lade Einsatztagebuch …</Empty>;
   if (!journal.length) return <Empty>Noch keine Einträge</Empty>;
   return (
@@ -171,7 +170,7 @@ function MessagesTile() {
   const now = useNow();
   const { incident, attention } = useMessageAttention(now);
   const [openId, setOpenId] = useState<number | null>(null);
-  if (!incident) return <Empty>Kein Einsatz aufgelegt</Empty>;
+  if (!incident) return <Empty>Keine Lage aufgelegt</Empty>;
   if (!attention.length) return <Empty>Nichts zu tun</Empty>;
   return (
     <>

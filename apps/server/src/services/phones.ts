@@ -301,12 +301,12 @@ export class PhoneService {
     return this.slots(id);
   }
 
-  /** Taste nur für den laufenden Einsatz überschreiben (null = Überschreibung entfernen) */
+  /** Taste nur für die laufende Lage überschreiben (null = Überschreibung entfernen) */
   setOverride(id: string, idx: number, key: PhoneKey | null, actor: string): PhoneKeySlot[] {
     const r = this.row(id);
     this.checkIdx(idx, PHONE_MODEL[r.model as PhoneModel].keys);
     const incident = this.deps.activeIncident();
-    if (!incident) throw new HttpError(409, 'Kein Einsatz aufgelegt – Tasten lassen sich nur für einen laufenden Einsatz überschreiben');
+    if (!incident) throw new HttpError(409, 'Keine Lage aufgelegt – Tasten lassen sich nur für eine laufende Lage überschreiben');
     if (key) {
       this.db
         .prepare(

@@ -1,6 +1,9 @@
 import type { z } from 'zod';
 import {
   COLORABLE_KINDS,
+  INCIDENT_KIND_LABELS,
+  incidentSettingsSchema,
+  kindHasSite,
   MAP_OBJECT_LABELS,
   TRACK_LOST_MS,
   TRAIL_MAX_POINTS,
@@ -24,6 +27,8 @@ import {
   type TrackedData,
   type NewIncident,
   type NewJournalEntry,
+  type IncidentSettings,
+  type IncidentSettingsInput,
   type Topic,
   type RadioIdentity,
   type Unit,
@@ -41,6 +46,7 @@ import { HttpError } from '../errors.js';
 
 /** Felder fürs Einsatztagebuch; null = Darstellungsfrage, kein Tagebuchereignis */
 const INCIDENT_FIELD_LABELS: Record<keyof IncidentPatch, string | null> = {
+  kind: 'Art',
   keyword: 'Stichwort',
   title: 'Bezeichnung',
   location: 'Einsatzort',
@@ -48,9 +54,21 @@ const INCIDENT_FIELD_LABELS: Record<keyof IncidentPatch, string | null> = {
   lat: 'Position',
   lon: 'Position',
   vehicleVisible: null,
-  procurementMode: 'Beschaffung',
   procurementStaff: 'Stab für Anforderungen',
 };
+
+const SETTINGS_KEY = 'incident:settings';
+
+/** Felder, die zur Art nicht passen, werden geleert (Stichwort/Einsatzort nur bei Brand/TH, Stab nur bei Stablage) */
+function fitKind<T extends Partial<NewIncident>>(input: T, kind: Incident['kind']): T {
+  const out = { ...input };
+  if (!kindHasSite(kind)) {
+    out.keyword = '';
+    out.location = '';
+  }
+  if (kind !== 'staff') out.procurementStaff = '';
+  return out;
+}
 
 /**
  * Einsatzführung. All incident-scoped data (Tagebuch, Kräfte, Dokumente) is only writable while
@@ -78,13 +96,13 @@ export class IncidentService {
 
   get(id: number): Incident {
     const incident = this.store.incident(id);
-    if (!incident) throw new HttpError(404, `Einsatz ${id} nicht gefunden`);
+    if (!incident) throw new HttpError(404, `Lage ${id} nicht gefunden`);
     return incident;
   }
 
   private requireOpen(id: number): Incident {
     const incident = this.get(id);
-    if (incident.closedAt) throw new HttpError(409, 'Einsatz ist abgeschlossen und kann nicht mehr geändert werden');
+    if (incident.closedAt) throw new HttpError(409, 'Lage ist abgeschlossen und kann nicht mehr geändert werden');
     return incident;
   }
 
@@ -93,11 +111,11 @@ export class IncidentService {
   }
 
   start(input: NewIncident, operator: string): Incident {
-    if (this.store.activeIncident()) throw new HttpError(409, 'Es ist bereits ein Einsatz aufgelegt');
+    if (this.store.activeIncident()) throw new HttpError(409, 'Es ist bereits eine Lage aufgelegt');
     const incident = this.store.transaction(() => {
-      const created = this.store.createIncident(input);
+      const created = this.store.createIncident(fitKind(input, input.kind ?? 'rescue'));
       const desc = [created.keyword, created.title].filter(Boolean).join(' – ');
-      this.system(created.id, `Einsatz eröffnet: ${desc}${created.location ? `, ${created.location}` : ''}`, operator);
+      this.system(created.id, `Lage eröffnet (${INCIDENT_KIND_LABELS[created.kind]}): ${desc}${created.location ? `, ${created.location}` : ''}`, operator);
       this.onStart(created);
       return created;
     });
@@ -107,6 +125,9 @@ export class IncidentService {
 
   update(id: number, patch: IncidentPatch, operator: string): Incident {
     const before = this.requireOpen(id);
+    // Felder, die nicht zur (neuen) Art passen, leeren – nur wenn die Art oder ein solches Feld geändert wird
+    const touchesKind = ['kind', 'keyword', 'location', 'procurementStaff'].some((k) => k in patch);
+    if (touchesKind) patch = fitKind(patch, patch.kind ?? before.kind);
     const after = this.store.transaction(() => {
       const updated = this.store.updateIncident(id, patch);
       const changed = new Set(
@@ -121,11 +142,30 @@ export class IncidentService {
     return after;
   }
 
+  // --- Einstellungen ---
+
+  settings(): IncidentSettings {
+    const r = this.store.db.prepare('SELECT * FROM settings WHERE key = ?').get(SETTINGS_KEY) as { value: string; updated_at: string; updated_by: string } | undefined;
+    const value = r ? (JSON.parse(r.value) as Partial<IncidentSettings>) : {};
+    return { keywords: value.keywords ?? [], updatedAt: r?.updated_at ?? null, updatedBy: r?.updated_by ?? null };
+  }
+
+  setSettings(raw: IncidentSettingsInput, actor: string): IncidentSettings {
+    const input = incidentSettingsSchema.parse(raw);
+    const keywords = [...new Set(input.keywords)];
+    this.store.db
+      .prepare(
+        'INSERT INTO settings (key, value, updated_at, updated_by) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by',
+      )
+      .run(SETTINGS_KEY, JSON.stringify({ keywords }), new Date().toISOString(), actor);
+    return this.settings();
+  }
+
   close(id: number, operator: string): Incident {
     this.requireOpen(id);
     const closed = this.store.transaction(() => {
       const active = this.store.units(id).filter((u) => u.status !== 'entlassen').length;
-      this.system(id, `Einsatz beendet${active ? ` (${active} Einheit(en) nicht formell entlassen)` : ''}`, operator);
+      this.system(id, `Lage beendet${active ? ` (${active} Einheit(en) nicht formell entlassen)` : ''}`, operator);
       return this.store.closeIncident(id);
     });
     this.notify(['incident', 'journal', 'cameraPresets']);

@@ -20,7 +20,7 @@ export interface DocumentFolder {
   createdAt: string;
 }
 
-/** Vorgabe der Ordnerstruktur für neue Einsätze (Einstellungen) */
+/** Vorgabe der Ordnerstruktur für neue Lagen (Einstellungen) */
 export interface FolderSpec {
   name: string;
   children: FolderSpec[];
@@ -230,7 +230,7 @@ export function documentPlaceholders(
   };
 }
 
-/** Ablageort im Einsatz (Druck, Scan): Ordnerpfad mit Platzhaltern, z. B. „Drucke/{{datum.iso}}“ */
+/** Ablageort in der Lage (Druck, Scan): Ordnerpfad mit Platzhaltern, z. B. „Drucke/{{datum.iso}}“ */
 export const archivePathSchema = z
   .string()
   .trim()

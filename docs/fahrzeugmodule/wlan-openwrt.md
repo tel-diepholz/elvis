@@ -13,9 +13,9 @@ diesem AP kein Gastnetz.
   alle anderen WLANs unverändert. Geschrieben und neu geladen wird nur bei Abweichungen; der Abgleich läuft bei jeder
   Änderung und jede Minute (holt zurückgesetzte APs wieder auf den Sollstand). „Jetzt übertragen“ stößt ihn sofort an.
 - **Betriebs-WLAN** (Einstellungen → WLAN-Accesspoints): Netzname und Passwort, dauerhaft auf allen aktiven APs.
-- **Gastnetz:** einschaltbar mit eigenem Netznamen. Sobald ein Einsatz eröffnet ist, richtet ELVIS es auf allen APs
-  mit Gastnetz-Bridge ein – Netzname mit angehängter Einsatznummer (`Gast-12`), Passwort je Einsatz neu erzeugt, Clients
-  untereinander abgeschottet. Mit Ende des Einsatzes verschwindet es wieder.
+- **Gastnetz:** einschaltbar mit eigenem Netznamen. Sobald eine Lage eröffnet ist, richtet ELVIS es auf allen APs
+  mit Gastnetz-Bridge ein – Netzname mit angehängter Einsatznummer (`Gast-12`), Passwort je Lage neu erzeugt, Clients
+  untereinander abgeschottet. Mit Ende der Lage verschwindet es wieder.
 - **Fahrzeugmodul „WLAN-Accesspoints“** (Treiber *OpenWrt*, unter *Einstellungen → Fahrzeugmodule*): fragt alle aktiven APs
   im Hintergrund ab (Vorgabe alle 10 s, `iwinfo assoclist`, Zuordnung der WLANs über `luci-rpc`) und schreibt die
   angemeldeten Geräte in die Tabelle `wifi_clients` – nur der aktuelle Stand, abgemeldete Geräte verschwinden. Unter

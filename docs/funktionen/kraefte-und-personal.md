@@ -2,13 +2,13 @@
 
 ## Personal der Einheiten (Personalbögen)
 
-Ein Klick auf eine Einheit in der Kräfteübersicht öffnet ihre **Detailseite** (`/einsatz/kraefte/:id`) mit Stammdaten,
+Ein Klick auf eine Einheit in der Kräfteübersicht öffnet ihre **Detailseite** (`/lage/kraefte/:id`) mit Stammdaten,
 Untereinheiten und dem **Personal**. Über *Personalbogen ausfüllen* werden eine oder mehrere Personen erfasst: Name,
 Geburtsdatum, Einordnung (Führer / Unterführer / Mannschaft), Funktion, Qualifikationen, Organisation, Telefon,
 E-Mail, Anschrift, Arbeitgeber, Notfallkontakt und Bemerkung. Weicht die daraus gezählte Stärke von der Einheit ab, lässt sie
 sich mit einem Klick übernehmen. *An andere Einheit übergeben* verschiebt ausgewählte Personen zu einer anderen Einheit
-des Einsatzes (z. B. bei falsch zugeordnetem Bogen). Ins Einsatztagebuch kommen nur Anzahlen, keine Namen.
-Das Symbol *In Kontakte übernehmen* legt eine Person als [Kontakt](kontakte.md) an (auch aus abgeschlossenen Einsätzen). Das
+der Lage (z. B. bei falsch zugeordnetem Bogen). Ins Einsatztagebuch kommen nur Anzahlen, keine Namen.
+Das Symbol *In Kontakte übernehmen* legt eine Person als [Kontakt](kontakte.md) an (auch aus abgeschlossenen Lagen). Das
 Online-Formular fragt die E-Mail-Adresse noch nicht ab.
 
 **Cloud-Personalabfrage:** Im *Posteingang* erzeugt ELVIS einen Link (6–72 Stunden gültig, längstens bis zum
@@ -39,7 +39,7 @@ App ──HTTPS──▶ Relay (Cloudflare) ◀──Abruf alle 15 s── ELVIS
   kommen nur „App gekoppelt/entkoppelt“ und der Wechsel auf „Position per App“, nicht jede Meldung. Die Karte zeigt
   Alter und Genauigkeit im Tooltip und blasst Einheiten ohne Meldung seit 20 Minuten ab. Verschiebt man eine
   Einheit von Hand, gilt das bis zur nächsten App-Meldung.
-- **Ende:** Die Kopplung endet beim Entkoppeln (Smartphone-Symbol), beim Entlassen der Einheit und mit dem Einsatz.
+- **Ende:** Die Kopplung endet beim Entkoppeln (Smartphone-Symbol), beim Entlassen der Einheit und mit der Lage.
   Die App erfährt es mit ihrer nächsten Meldung und hört auf zu orten. Ist das Relay gerade nicht erreichbar,
   holt ELVIS das Entkoppeln nach. Die Einsatzkraft kann die Ortung in der App jederzeit stoppen.
 - **Datenschutz:** Das Relay kennt nur zufällige IDs, keine Namen. Positionen löscht es mit der Abholung,

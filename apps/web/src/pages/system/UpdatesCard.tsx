@@ -87,7 +87,7 @@ export function UpdatesCard() {
       <Modal open={confirm} title={`Update auf ${s.latest?.version ?? ''} installieren`} onClose={() => setConfirm(false)}>
         {incident && (
           <p className="tone-alarm">
-            <strong>Achtung: Ein Einsatz ist aufgelegt.</strong> ELVIS ist während des Updates einige Minuten nicht erreichbar – auch nicht für Tablets.
+            <strong>Achtung: Eine Lage ist aufgelegt.</strong> ELVIS ist während des Updates einige Minuten nicht erreichbar – auch nicht für Tablets.
           </p>
         )}
         <p>
@@ -99,7 +99,7 @@ export function UpdatesCard() {
             Abbrechen
           </button>
           <button className={`btn ${incident ? 'btn-danger' : 'btn-primary'}`} disabled={install.isPending} onClick={() => install.mutate()}>
-            {incident ? 'Trotz Einsatz installieren' : 'Jetzt installieren'}
+            {incident ? 'Trotz laufender Lage installieren' : 'Jetzt installieren'}
           </button>
         </div>
       </Modal>

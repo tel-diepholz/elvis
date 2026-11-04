@@ -42,7 +42,7 @@ export function DocumentsView({ incident, readOnly }: { incident: Incident; read
   const folders = listing?.folders ?? [];
   const docs = listing?.documents ?? [];
   const path = (id: number | null) => folderPath(folders, id);
-  const here = path(folder) || 'Einsatz';
+  const here = path(folder) || 'Lage';
   const counts = useMemo(() => {
     const m = new Map<number | null, number>();
     for (const d of docs) m.set(d.folderId, (m.get(d.folderId) ?? 0) + 1);
@@ -130,7 +130,7 @@ export function DocumentsView({ incident, readOnly }: { incident: Incident; read
           )
         }
       >
-        {isLoading ? <Loading /> : <FolderTree folders={folders} rootLabel="Einsatz" selected={folder} onSelect={(id) => (setFolder(id), setQ(''))} counts={counts} />}
+        {isLoading ? <Loading /> : <FolderTree folders={folders} rootLabel="Lage" selected={folder} onSelect={(id) => (setFolder(id), setQ(''))} counts={counts} />}
         {canRemoveFolder && (
           <button
             className="btn btn-ghost btn-sm"
@@ -189,7 +189,7 @@ export function DocumentsView({ incident, readOnly }: { incident: Incident; read
         >
           <label className="search-field">
             <Search size={18} />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Alle Dokumente des Einsatzes durchsuchen" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Alle Dokumente der Lage durchsuchen" />
           </label>
           <input
             ref={inputRef}
@@ -226,7 +226,7 @@ export function DocumentsView({ incident, readOnly }: { incident: Incident; read
                     {d.draft && <Badge tone="warn">Entwurf – erst nach dem Speichern für alle sichtbar</Badge>}
                     {d.description && <div>{d.description}</div>}
                     <div className="cell-sub">
-                      {q.trim() && `${path(d.folderId) || 'Einsatz'} · `}
+                      {q.trim() && `${path(d.folderId) || 'Lage'} · `}
                       {fmtBytes(d.sizeBytes)} · {d.updatedBy} · {fmtDateTime(d.updatedAt)}
                       {d.version > 1 && ` · Version ${d.version}`}
                     </div>

@@ -608,7 +608,7 @@ export class TrafficService {
 
   // --- Verfolgung ---
 
-  /** Verfolgte Objekte des laufenden Einsatzes nachführen (alle 10 s) */
+  /** Verfolgte Objekte der laufenden Lage nachführen (alle 10 s) */
   async track(): Promise<void> {
     this.ensureAis();
     const incident = this.deps.store.activeIncident();

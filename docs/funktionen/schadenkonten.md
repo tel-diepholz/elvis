@@ -1,8 +1,8 @@
 # Schadenkonten
 
 Ein Schadenkonto beschreibt eine Schadenstelle bzw. einen Einsatzabschnitt als **T-Konto**. Links stehen Schäden und
-Gefahren, rechts die Kräfte und Maßnahmen. Darunter stehen die Personenschäden. Die Seite *Einsatz → Schadenkonten*
-(`/einsatz/schadenkonten`) ersetzt damit den Vordruck am Rand der Lagekarte.
+Gefahren, rechts die Kräfte und Maßnahmen. Darunter stehen die Personenschäden. Die Seite *Lage → Schadenkonten*
+(`/lage/schadenkonten`) ersetzt damit den Vordruck am Rand der Lagekarte.
 
 ## Lehrbezug
 
@@ -32,9 +32,9 @@ Jedes Konto ist zugleich ein **Einsatzabschnitt**.
 - **Zuordnen:** In der Kräfteübersicht wählt das Feld *Einsatzabschnitt* ein offenes Konto. Mit *+ neues
   Schadenkonto …* legt man direkt dort eines an. Untereinheiten folgen wie bisher.
 - **Kräfte:** Die rechte Spalte zeigt alle nicht entlassenen Einheiten des Abschnitts mit Status und Stärke.
-- **Nummer:** Konten werden je Einsatz fortlaufend nummeriert. Zwei offene Konten mit gleicher Bezeichnung gibt es
+- **Nummer:** Konten werden je Lage fortlaufend nummeriert. Zwei offene Konten mit gleicher Bezeichnung gibt es
   nicht.
-- **Kopfdaten:** Abschnittsleiter (eine Einheit des Einsatzes oder Freitext) und Fm-Verbindung.
+- **Kopfdaten:** Abschnittsleiter (eine Einheit der Lage oder Freitext) und Fm-Verbindung.
 - **Auflösen:** Das geht erst, wenn keine aktive Einheit mehr im Abschnitt ist. Aufgelöste Konten bleiben lesbar
   und zählen weiter zur Summe der Personenschäden.
 

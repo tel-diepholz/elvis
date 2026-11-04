@@ -202,7 +202,7 @@ function Reader({
         </dl>
         <div className="mail-reader-actions btn-row">
         {onMessage && m.folder === 'inbox' && (
-          <button className="btn btn-sm" disabled={!ctx?.radio} title={ctx?.radio ? 'Als Eingangsmeldung im Einsatz erfassen' : 'Eingangsmeldungen erfassen nur Fernmelder'} onClick={() => onMessage(m)}>
+          <button className="btn btn-sm" disabled={!ctx?.captureIn} title={ctx?.captureIn ? 'Als Eingangsmeldung in der Lage erfassen' : 'Eingangsmeldungen erfassen nur Fernmelder'} onClick={() => onMessage(m)}>
             <MessageSquarePlus size={16} /> Meldung erstellen
           </button>
         )}

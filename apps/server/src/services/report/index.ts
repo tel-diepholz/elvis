@@ -35,13 +35,13 @@ export class ReportService {
   constructor(private readonly deps: ReportDeps) {}
 
   filename(incident: Incident, at: Date): string {
-    const name = sanitizeName(`Einsatzbericht_${incident.keyword || `Einsatz-${incident.id}`}_${formatDtg(at)}.pdf`.replace(/\s+/g, '_'));
+    const name = sanitizeName(`Einsatzbericht_${incident.keyword || `Lage-${incident.id}`}_${formatDtg(at)}.pdf`.replace(/\s+/g, '_'));
     return name || `Einsatzbericht_${incident.id}.pdf`;
   }
 
   async generate(incidentId: number, operator: string, now = new Date()): Promise<{ pdf: Buffer; filename: string }> {
     const incident = this.deps.store.incident(incidentId);
-    if (!incident) throw new HttpError(404, `Einsatz ${incidentId} nicht gefunden`);
+    if (!incident) throw new HttpError(404, `Lage ${incidentId} nicht gefunden`);
     const data = collectReport(this.deps, incident);
     const { vehicle, mapSign } = this.deps.settings();
 

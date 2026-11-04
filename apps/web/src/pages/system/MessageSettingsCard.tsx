@@ -61,7 +61,7 @@ export function MessageSettingsCard() {
         Eingangsmeldungen für den Stab. Ist ein Dispatcher angemeldet, verteilt er die Eingangsmeldungen an die Zielrollen.
       </p>
       {roles.length === 0 ? (
-        <EmptyState title="Noch keine Rollen">Rollen zuerst unter „Rollen im Einsatz“ anlegen.</EmptyState>
+        <EmptyState title="Noch keine Rollen">Rollen zuerst unter „Rollen in der Lage“ anlegen.</EmptyState>
       ) : (
         <form
           className="form"

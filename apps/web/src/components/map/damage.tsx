@@ -54,7 +54,7 @@ export function DamageLayer({ accounts, movable = null, onMove }: { accounts: Da
                 </ul>
               )}
               {counts.length > 0 && <div>{counts.map((c) => `${DAMAGE_COUNT_LABELS[c.category]} ${formatDamageCount(c)}`).join(' · ')}</div>}
-              <Link to="/einsatz/schadenkonten">Zum Schadenkonto</Link>
+              <Link to="/lage/schadenkonten">Zum Schadenkonto</Link>
             </Popup>
           </Marker>
         );
