@@ -61,8 +61,11 @@ import { reportRoutes } from './routes/report.js';
 import { ReportService } from './services/report/index.js';
 import type { OfficeConverter } from './services/report/attachments.js';
 import { chatRoutes } from './routes/chat.js';
+import { messagingRoutes } from './routes/messaging.js';
 import { telephonyRoutes } from './routes/telephony.js';
 import { ChatService } from './services/chat.js';
+import { MessagingService, type MessagingFetch } from './services/messaging/index.js';
+import type { SocketFactory } from './services/messaging/socket.js';
 import { ReachabilityService } from './services/reachability.js';
 import { MessengerBus } from './devices/messaging/bus.js';
 import { dbVault } from './devices/messaging/vault.js';
@@ -129,6 +132,7 @@ export interface App {
   personnel: PersonnelService;
   mail: MailService;
   chat: ChatService;
+  messaging: MessagingService;
   report: ReportService;
   reachability: ReachabilityService;
   calls: CallLogService;
@@ -139,7 +143,7 @@ export interface App {
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; officeConvert?: OfficeConverter | null; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; updateFetch?: UpdateFetch; phoneFetch?: PhoneFetch; phonePushDelayMs?: number; restart?: () => void } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; officeConvert?: OfficeConverter | null; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; messagingFetch?: MessagingFetch; messagingSocket?: SocketFactory; updateFetch?: UpdateFetch; phoneFetch?: PhoneFetch; phonePushDelayMs?: number; restart?: () => void } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -320,13 +324,33 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   });
   // Ohne Neustart-Funktion (Tests) bleibt die Wiederherstellung vorbereitet bis zum nächsten Start
   const restore = new RestoreService({ dataDir: config.dataDir, drivers: backupDrivers, hasUsers: () => users.hasUsers(), restart: opts.restart ?? (() => undefined) });
-  const mail = new MailService(db, store, (t) => hub.invalidate(t), relay, {
+  const mail = new MailService(db, store, (t) => {
+    hub.invalidate(t);
+    // Postfach aktiv geworden oder weg: Cloud Messaging verbindet bzw. trennt
+    if (t.includes('mail')) messaging.mailChanged();
+  }, relay, {
     ...config.mail,
     dataDir: config.dataDir,
     vehicleName: () => settings.get().vehicle.name,
     fetch: opts.mailFetch,
     wkdFetch: opts.wkdFetch,
   });
+  // Cloud Messaging: Fahrzeug-Chat mit anderen ELVIS-Installationen (Kanal „Fahrzeug-Chat“ in den Nachrichten)
+  const messaging: MessagingService = new MessagingService({
+    db,
+    store,
+    notify: (t) => hub.invalidate(t),
+    relay,
+    mail,
+    vehicle: () => settings.get().vehicle,
+    crew: () => sessions.activeMembers().map(({ name, roles }) => ({ name, roles })),
+    log: server.log,
+    fetch: opts.messagingFetch,
+    socketFactory: opts.messagingSocket,
+  });
+  messaging.attachChat(chat);
+  chat.attachCloud(messaging);
+  settings.onChange(() => void messaging.syncProfile());
   const users = new UserService(db);
   const limiter = new LoginLimiter();
   const workstations = new WorkstationService(db, store, () => wifi.opsCredentials());
@@ -455,6 +479,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     appLinkRoutes(api, appLinks);
     personnelRoutes(api, personnel);
     mailRoutes(api, mail);
+    messagingRoutes(api, messaging);
     chatRoutes(api, { chat, reachability, contacts, documents });
     telephonyRoutes(api, { calls });
     reportRoutes(api, { report, store, notify: (t) => hub.invalidate(t) });
@@ -506,6 +531,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     mail,
     report,
     chat,
+    messaging,
     reachability,
     calls,
     traffic,
@@ -523,6 +549,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       appLinks.start();
       personnel.start();
       mail.start();
+      messaging.start();
       backup.start();
       reachability.start();
       cleanup();
@@ -546,6 +573,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       appLinks.stop();
       personnel.stop();
       mail.stop();
+      messaging.stop();
       backup.stop();
       reachability.stop();
       phones.stop();

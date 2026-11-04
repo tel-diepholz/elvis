@@ -20,6 +20,7 @@ import {
   Plane,
   Printer,
   Radio,
+  RadioTower,
   Router,
   ScanLine,
   Smartphone,
@@ -41,6 +42,7 @@ import { SettingsGroup, SettingsSection } from '../components/SettingsSection';
 import { Loading, PageHeader } from '../components/ui';
 import { AppRelayCard } from './system/AppRelayCard';
 import { MailCard } from './system/MailCard';
+import { MessagingCard } from './system/MessagingCard';
 import { BackupCard } from './system/BackupCard';
 import { UpdatesCard } from './system/UpdatesCard';
 import { BluetoothCard } from './system/BluetoothCard';
@@ -172,6 +174,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="mail" title="E-Mail" icon={<AtSign {...ICON} />} summary="Verschlüsseltes Postfach des ELW (…@einsatzleitwagen.app)">
             <MailCard />
+          </SettingsSection>
+          <SettingsSection id="cloud-messaging" title="Cloud Messaging" icon={<RadioTower {...ICON} />} summary="Fahrzeug-Chat mit anderen ELVIS-Installationen">
+            <MessagingCard />
           </SettingsSection>
           {full && (
             <SettingsSection id="telefonbuch" title="Telefonbuch (DECT)" icon={<Phone {...ICON} />} summary="Kontakte als Remote-Telefonbuch für die DECT-Basis">

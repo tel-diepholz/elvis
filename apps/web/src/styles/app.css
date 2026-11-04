@@ -9309,3 +9309,171 @@ a.dash-tile-title:hover {
 a.nav-version:hover {
   color: var(--text);
 }
+
+/* --- Cloud Messaging: Regionsauswahl, Fahrzeugsuche, Fahrzeug-Chat --- */
+.region-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.region-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+.region-crumb-sep {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-muted);
+}
+.region-crumb {
+  font: inherit;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.region-crumb:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.region-crumb.active {
+  background: var(--info-bg);
+  color: var(--info);
+  font-weight: 600;
+}
+.region-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+.region-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+}
+.region-search input:focus {
+  outline: none;
+}
+.region-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.region-list li + li {
+  border-top: 1px solid var(--border);
+}
+.region-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.region-list button:hover,
+.region-list button.active {
+  background: var(--bg-hover);
+}
+.region-list li.muted {
+  padding: 8px 10px;
+}
+.vehicle-search {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.vehicle-search-region {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.vehicle-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.vehicle-hit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+.vehicle-hit + .vehicle-hit {
+  border-top: 1px solid var(--border);
+}
+.vehicle-hit > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.messaging-contacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+dd .messaging-contact {
+  display: block;
+}
+.cloud-chat-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+.cloud-chat-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cloud-chat-state .spacer {
+  flex: 1;
+}
+.cloud-chat-crew {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.cloud-chat-member {
+  white-space: nowrap;
+}
+.chat-request {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+}
+.chat-request .btn-row {
+  margin-top: 4px;
+}
+@media (max-width: 640px) {
+  .vehicle-hit {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

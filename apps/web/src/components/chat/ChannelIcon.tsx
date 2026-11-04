@@ -7,6 +7,7 @@ const COLOR: Record<ChatChannel, string> = {
   threema: '#262a2e',
   whatsapp: '#25d366',
   telegram: '#229ed9',
+  elvis: '#c8102e',
 };
 
 /** Weißes Zeichen im Kreis, vereinfacht (keine Original-Logos) */
@@ -35,6 +36,15 @@ const GLYPH: Record<ChatChannel, JSX.Element> = {
     <g>
       <path d="M12 6.3a5.7 5.7 0 0 0-4.9 8.6l-.8 2.8 2.9-.8A5.7 5.7 0 1 0 12 6.3z" fill="none" stroke="#fff" strokeWidth="1.4" strokeLinejoin="round" />
       <path d="M10.1 9.6c.2-.3.6-.3.8 0l.5 1c.1.2 0 .4-.1.6l-.3.3c.4.8 1 1.4 1.8 1.8l.3-.3c.2-.1.4-.2.6-.1l1 .5c.3.2.3.6 0 .8-.6.6-1.4.8-2.2.4a6 6 0 0 1-2.8-2.8c-.3-.8-.2-1.6.4-2.2z" fill="#fff" />
+    </g>
+  ),
+  // Einsatzfahrzeug von der Seite
+  elvis: (
+    <g fill="#fff">
+      <path d="M5.5 9.5h8.2v5.6H5.5zM13.7 11h2.8l2 2.2v1.9h-4.8z" />
+      <rect x="8" y="8" width="3" height="1.2" rx=".4" />
+      <circle cx="8.2" cy="16" r="1.3" stroke="#c8102e" strokeWidth=".8" />
+      <circle cx="16" cy="16" r="1.3" stroke="#c8102e" strokeWidth=".8" />
     </g>
   ),
   // Papierflieger

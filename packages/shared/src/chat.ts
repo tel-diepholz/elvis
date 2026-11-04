@@ -3,11 +3,16 @@ import { phoneKey } from './telephony';
 
 /**
  * Nachrichten: SMS und Messenger (Signal, Threema, WhatsApp, Telegram) in einer gemeinsamen Ansicht. Jeder Messenger
- * ist ein eigenes Fahrzeugmodul mit Treiber; SMS laufen über das Modul Telefonie (GSM-Gateway).
+ * ist ein eigenes Fahrzeugmodul mit Treiber; SMS laufen über das Modul Telefonie (GSM-Gateway). Dazu kommt der
+ * Fahrzeug-Chat mit anderen ELVIS-Installationen über das Cloud-Relay (messaging.ts).
  */
 
-export const CHAT_CHANNELS = ['sms', 'signal', 'threema', 'whatsapp', 'telegram'] as const;
+export const CHAT_CHANNELS = ['sms', 'signal', 'threema', 'whatsapp', 'telegram', 'elvis'] as const;
 export type ChatChannel = (typeof CHAT_CHANNELS)[number];
+
+/** Kanäle an Rufnummern, in der eingestellten Reihenfolge (der Fahrzeug-Chat geht an Installationen, nicht an Nummern) */
+export const PHONE_CHANNELS = ['sms', 'signal', 'threema', 'whatsapp', 'telegram'] as const satisfies readonly ChatChannel[];
+export type PhoneChannel = (typeof PHONE_CHANNELS)[number];
 
 /** Messenger mit eigenem Fahrzeugmodul (alles außer SMS) */
 export const MESSENGER_IDS = ['signal', 'threema', 'whatsapp', 'telegram'] as const;
@@ -19,10 +24,11 @@ export const CHAT_CHANNEL_LABEL: Record<ChatChannel, string> = {
   threema: 'Threema',
   whatsapp: 'WhatsApp',
   telegram: 'Telegram',
+  elvis: 'Fahrzeug-Chat',
 };
 
 /** Vorgabe für den Kanal einer neuen Nachricht: der erste erreichbare in dieser Reihenfolge */
-export const DEFAULT_CHANNEL_ORDER: ChatChannel[] = ['signal', 'threema', 'whatsapp', 'telegram', 'sms'];
+export const DEFAULT_CHANNEL_ORDER: PhoneChannel[] = ['signal', 'threema', 'whatsapp', 'telegram', 'sms'];
 
 export const isMessenger = (c: string): c is MessengerId => (MESSENGER_IDS as readonly string[]).includes(c);
 
@@ -206,7 +212,7 @@ export interface ChatAvailability {
   /** Mindestens ein Kanal verfügbar */
   available: boolean;
   channels: ChatChannelInfo[];
-  order: ChatChannel[];
+  order: PhoneChannel[];
   /** SMS: Trunks am Gateway */
   ports: { port: number; name: string; status: string }[];
   defaultPort: number | null;
@@ -275,8 +281,8 @@ export type ChatDraft = z.input<typeof chatDraftSchema>;
 
 export const chatSettingsSchema = z.object({
   order: z
-    .array(z.enum(CHAT_CHANNELS))
-    .refine((o) => new Set(o).size === o.length && o.length === CHAT_CHANNELS.length, 'Jeder Kanal genau einmal'),
+    .array(z.enum(PHONE_CHANNELS))
+    .refine((o) => new Set(o).size === o.length && o.length === PHONE_CHANNELS.length, 'Jeder Kanal genau einmal'),
 });
 export type ChatSettings = z.output<typeof chatSettingsSchema>;
 

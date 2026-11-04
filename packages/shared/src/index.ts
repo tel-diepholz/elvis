@@ -37,6 +37,8 @@ export * from './overpass';
 export * from './radar';
 export * from './mailrelay';
 export * from './mail';
+export * from './messagingrelay';
+export * from './messaging';
 export * from './contacts';
 export * from './telephony';
 export * from './chat';

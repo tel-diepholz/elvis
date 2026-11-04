@@ -20,6 +20,7 @@
 - [Kontakte](funktionen/kontakte.md) – Adressbuch des ELW
 - [E-Mail](funktionen/email.md) – Postfach des ELW über das Relay, OpenPGP
 - [Nachrichten](funktionen/nachrichten.md) – SMS, Signal, Threema, WhatsApp und Telegram in einer Ansicht
+- [Cloud Messaging](funktionen/cloud-messaging.md) – Fahrzeug-Chat mit anderen ELVIS-Installationen, Verzeichnis nach Gebietskörperschaft
 - [Dokumente, Vorlagen und Collabora](funktionen/dokumente.md)
 - [Einsatzbericht](funktionen/einsatzbericht.md) – PDF mit allen erfassten Daten und Dokumenten, automatisch beim Beenden
 - [Drucken](funktionen/drucken.md) – Druckserver (CUPS), Lagekarten, Gastdrucker

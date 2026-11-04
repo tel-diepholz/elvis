@@ -90,6 +90,27 @@ export class SessionStore {
       .all(new Date(t - SESSION_IDLE_MS).toISOString(), new Date(t - SESSION_MAX_MS).toISOString()) as { roleId: number; userId: number; name: string }[];
   }
 
+  /** Wer gerade angemeldet ist, mit den übernommenen Rollen (auch ohne Rolle); je Benutzer einmal */
+  activeMembers(): { userId: number; name: string; roles: string[] }[] {
+    const t = this.now();
+    const rows = this.db
+      .prepare(
+        `SELECT u.id AS userId, u.first_name || ' ' || u.last_name AS name, r.name AS role
+         FROM sessions s JOIN users u ON u.id = s.user_id
+         LEFT JOIN session_roles sr ON sr.token_hash = s.token_hash LEFT JOIN roles r ON r.id = sr.role_id
+         WHERE s.last_seen_at > ? AND s.created_at > ?
+         ORDER BY u.last_name COLLATE NOCASE, u.first_name COLLATE NOCASE, r.sort, r.name COLLATE NOCASE`,
+      )
+      .all(new Date(t - SESSION_IDLE_MS).toISOString(), new Date(t - SESSION_MAX_MS).toISOString()) as { userId: number; name: string; role: string | null }[];
+    const members = new Map<number, { userId: number; name: string; roles: string[] }>();
+    for (const r of rows) {
+      const m = members.get(r.userId) ?? { userId: r.userId, name: r.name, roles: [] };
+      if (r.role && !m.roles.includes(r.role)) m.roles.push(r.role);
+      members.set(r.userId, m);
+    }
+    return [...members.values()];
+  }
+
   revoke(token: string): void {
     this.db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hash(token));
   }

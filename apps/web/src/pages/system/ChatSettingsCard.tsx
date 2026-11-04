@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, MessagesSquare } from 'lucide-react';
-import { CHAT_CHANNEL_LABEL, type ChatChannel } from '@elvis/shared';
+import { CHAT_CHANNEL_LABEL, type PhoneChannel } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Card, Loading } from '../../components/ui';
@@ -13,12 +13,12 @@ export function ChatSettingsCard() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['chat', 'settings'], queryFn: api.chatSettings });
   const { data: avail } = useQuery({ queryKey: ['chat', 'available'], queryFn: api.chatAvailable });
-  const [order, setOrder] = useState<ChatChannel[] | null>(null);
+  const [order, setOrder] = useState<PhoneChannel[] | null>(null);
   useEffect(() => {
     if (data) setOrder(data.order);
   }, [data]);
   const save = useMutation({
-    mutationFn: (o: ChatChannel[]) => api.updateChatSettings({ order: o }),
+    mutationFn: (o: PhoneChannel[]) => api.updateChatSettings({ order: o }),
     onSuccess: () => (toast('success', 'Reihenfolge gespeichert'), void qc.invalidateQueries({ queryKey: ['chat'] })),
     onError: (e) => toast('error', e.message),
   });
