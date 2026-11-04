@@ -42,7 +42,8 @@ describe('Docker-PKI', () => {
     again.init();
     expect(again.caPem).toBe(pki.caPem);
     expect(again.clientBundle.certPem).toBe(pki.clientBundle.certPem);
-    expect(statSync(join(dir, 'ca-key.pem')).mode & 0o777).toBe(0o600);
+    // POSIX-Dateirechte gibt es unter Windows nicht (dort schützt die ACL des Benutzerprofils)
+    if (process.platform !== 'win32') expect(statSync(join(dir, 'ca-key.pem')).mode & 0o777).toBe(0o600);
   });
 
   it('stellt Server-Zertifikate mit IP und Name als SAN aus, signiert von der CA', () => {

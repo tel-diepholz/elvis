@@ -70,7 +70,8 @@ describe('Serielle Schnittstellen', () => {
   beforeEach(() => (dir = mkdtempSync(join(tmpdir(), 'elvis-serial-'))));
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  it('bevorzugt stabile Namen aus /dev/serial/by-id und sortiert USB nach vorn', async () => {
+  // /dev/serial/by-id gibt es nur unter Linux
+  it.skipIf(process.platform === 'win32')('bevorzugt stabile Namen aus /dev/serial/by-id und sortiert USB nach vorn', async () => {
     const dev = join(dir, 'ttyUSB0');
     writeFileSync(dev, '');
     symlinkSync(dev, join(dir, 'usb-Actisense_NGX-1_ABC123-if00-port0'));
