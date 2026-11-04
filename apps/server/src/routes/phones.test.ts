@@ -16,7 +16,7 @@ let phoneStatus = 200;
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 const req = async <T = unknown>(method: Method, url: string, payload?: unknown, cookie = admin, headers: Record<string, string> = {}) => {
   const res = await app.server.inject({ method, url, payload: payload as object, headers: { ...(cookie ? { cookie } : {}), ...headers } });
-  return { status: res.statusCode, body: (res.body ? (res.headers['content-type']?.includes('json') ? res.json() : res.body) : undefined) as T, raw: res.body };
+  return { status: res.statusCode, body: (res.body ? (String(res.headers['content-type'] ?? '').includes('json') ? res.json() : res.body) : undefined) as T, raw: res.body };
 };
 
 const PHONE = { name: 'Lagetisch', mac: '00:04:13:AA:BB:01', extension: '101', displayName: 'ELW Lage', sipPassword: 'geh eim<&>' };
