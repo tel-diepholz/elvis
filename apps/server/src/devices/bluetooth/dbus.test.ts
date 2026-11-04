@@ -67,7 +67,8 @@ function fakeBus(path: string, onCall?: (m: DbusMessage, reply: (msg: Buffer) =>
   return new Promise((resolve) => server.listen(path, () => resolve({ server, clients })));
 }
 
-describe('D-Bus-Verbindung', () => {
+// D-Bus über Unix-Socket gibt es nur unter Linux (BlueZ)
+describe.skipIf(process.platform === 'win32')('D-Bus-Verbindung', () => {
   let dir: string;
   let server: Server | null = null;
 

@@ -133,7 +133,8 @@ describe('E-Mail', () => {
     expect(key.isPrivate()).toBe(false);
     expect(res.body.fingerprint).toBe(key.getFingerprint().toUpperCase());
     // Passphrase liegt getrennt von der Datenbank und ist nur für den Dienst lesbar
-    expect(statSync(join(dataDir, 'mail.secret')).mode & 0o077).toBe(0);
+    // POSIX-Dateirechte gibt es unter Windows nicht (dort schützt die ACL des Benutzerprofils)
+    if (process.platform !== 'win32') expect(statSync(join(dataDir, 'mail.secret')).mode & 0o077).toBe(0);
     expect((await req<{ available: boolean }>('GET', '/api/mail/available')).body.available).toBe(false);
 
     relay.mailbox!.status = 'active';

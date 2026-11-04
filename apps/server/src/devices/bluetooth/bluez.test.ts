@@ -99,7 +99,8 @@ function fakeBluez(path: string, opts: { powered?: boolean; startError?: string;
   );
 }
 
-describe('BlueZ-Suche', () => {
+// BlueZ (D-Bus über Unix-Socket) gibt es nur unter Linux
+describe.skipIf(process.platform === 'win32')('BlueZ-Suche', () => {
   let dir: string;
   let server: Server | null = null;
   afterEach(() => {
