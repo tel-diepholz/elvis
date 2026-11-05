@@ -26,6 +26,7 @@ import { Badge, EmptyState, Field, Loading, Modal, PageHeader } from '../compone
 import { pointIcon, pointSymbol } from '../components/map/objects';
 import { MapIcon, useMapIcons } from '../components/map/mapIcons';
 import { useLibraryTypes } from '../components/map/library';
+import { CloudBadge, localEditable } from '../components/CloudBadge';
 import { MapSearch } from './map/search';
 
 const FALLBACK: [number, number] = [51.16, 10.45];
@@ -99,6 +100,8 @@ function FieldInput({ field: f, value, onChange }: { field: ObjectField; value: 
 function ObjectEditor({ initial, types, onDone }: { initial: LibraryObjectDetail | { typeId: number }; types: ObjectType[]; onDone: () => void }) {
   const toast = useToast();
   const existing = 'id' in initial ? initial : null;
+  // Gepflegt von einem anderen Bereich in der Cloud: hier nur lesen
+  const readOnly = !!existing && !localEditable(existing);
   const center = useCenter();
   const icons = useMapIcons();
   const [typeId, setTypeId] = useState(initial.typeId);
@@ -151,6 +154,12 @@ function ObjectEditor({ initial, types, onDone }: { initial: LibraryObjectDetail
 
   return (
     <form className="form" onSubmit={submit}>
+      {readOnly && (
+        <p>
+          <CloudBadge cloud={existing.cloud} /> Dieses Objekt pflegt {existing.cloud?.name} in der Cloud – hier nur lesbar.
+        </p>
+      )}
+      <fieldset disabled={readOnly} className="library-fieldset">
       <div className="form-grid">
         <Field label="Typ">
           <select value={typeId} onChange={(e) => setTypeId(Number(e.target.value))}>
@@ -197,6 +206,7 @@ function ObjectEditor({ initial, types, onDone }: { initial: LibraryObjectDetail
       <Field label="Bemerkung">
         <textarea rows={3} maxLength={5000} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
+      </fieldset>
       <Field label="Dateien" hint={objectId === null ? 'Dateien lassen sich nach dem Speichern anhängen' : 'z. B. Feuerwehrplan, Objektinformation (höchstens 50 MB je Datei)'}>
         {files.length > 0 && (
           <ul className="simple-list">
@@ -214,14 +224,14 @@ function ObjectEditor({ initial, types, onDone }: { initial: LibraryObjectDetail
                 <a className="btn btn-ghost btn-icon" href={api.libraryFileUrl(f.id, true)} aria-label={`${f.filename} herunterladen`}>
                   <Download size={16} />
                 </a>
-                <button type="button" className="btn btn-ghost btn-icon" aria-label={`${f.filename} entfernen`} onClick={() => window.confirm(`„${f.filename}“ entfernen?`) && removeFile.mutate(f.id)}>
+                <button type="button" className="btn btn-ghost btn-icon" disabled={readOnly} aria-label={`${f.filename} entfernen`} onClick={() => window.confirm(`„${f.filename}“ entfernen?`) && removeFile.mutate(f.id)}>
                   <Trash2 size={16} />
                 </button>
               </li>
             ))}
           </ul>
         )}
-        {objectId !== null && (
+        {objectId !== null && !readOnly && (
           <label className="btn btn-sm library-upload">
             <Paperclip size={16} /> {upload.isPending ? 'Lädt hoch …' : 'Datei anhängen'}
             <input
@@ -239,7 +249,7 @@ function ObjectEditor({ initial, types, onDone }: { initial: LibraryObjectDetail
       </Field>
       <div className="form-actions spread">
         <span>
-          {objectId !== null && (
+          {objectId !== null && !readOnly && (
             <button type="button" className="btn btn-danger" disabled={remove.isPending} onClick={() => window.confirm(`„${name}“ aus der Objektbibliothek löschen?`) && remove.mutate()}>
               <Trash2 size={16} /> Löschen
             </button>
@@ -251,7 +261,7 @@ function ObjectEditor({ initial, types, onDone }: { initial: LibraryObjectDetail
               Fertig
             </button>
           )}
-          <button type="submit" className="btn btn-primary" disabled={save.isPending}>
+          <button type="submit" className="btn btn-primary" disabled={save.isPending || readOnly}>
             Speichern
           </button>
         </span>
@@ -379,7 +389,7 @@ export function LibraryPage() {
                 )}
                 <Link className="grow" to={`/objekte?id=${o.id}`}>
                   <div className="cell-title">
-                    {o.name} {badge && <Badge>{badge}</Badge>}
+                    {o.name} {badge && <Badge>{badge}</Badge>} <CloudBadge cloud={o.cloud} />
                   </div>
                   <div className="cell-sub">{[t?.name, o.address, summary].filter(Boolean).join(' · ')}</div>
                 </Link>

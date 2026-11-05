@@ -1,4 +1,7 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   DEFAULT_UNIT_SIGN,
   RECORD_KINDS,
@@ -49,10 +52,22 @@ interface SyncState {
 
 const EMPTY: SyncState = { enabled: false, cursor: 0, nodeId: null, lastRunAt: null, lastSuccessAt: null, lastError: null, conflicts: [] };
 
-const TABLE: Record<RecordKind, string> = { force: 'force_units', keyword: 'incident_keywords', role: 'roles', user: 'users', taskTemplate: 'task_templates' };
+const TABLE: Record<RecordKind, string> = {
+  force: 'force_units',
+  keyword: 'incident_keywords',
+  role: 'roles',
+  user: 'users',
+  taskTemplate: 'task_templates',
+  objectType: 'object_types',
+  object: 'library_objects',
+  objectFile: 'library_files',
+};
+/** Objektbibliothek: gelöschte bleiben lokal als Tombstone (deleted_at) stehen */
+const LIBRARY: RecordKind[] = ['objectType', 'object', 'objectFile'];
+const live = (kind: RecordKind) => (LIBRARY.includes(kind) ? ' WHERE deleted_at IS NULL' : '');
 /** Reihenfolge beim Übernehmen und Senden: Verweise zuerst */
-const ORDER: RecordKind[] = ['role', 'keyword', 'user', 'force', 'taskTemplate'];
-const TOPICS: Topic[] = ['forces', 'roles', 'users', 'taskTemplates', 'settings', 'tasks', 'cloud'];
+const ORDER: RecordKind[] = ['role', 'keyword', 'user', 'force', 'taskTemplate', 'objectType', 'object', 'objectFile'];
+const TOPICS: Topic[] = ['forces', 'roles', 'users', 'taskTemplates', 'settings', 'tasks', 'library', 'cloud'];
 
 type Row = Record<string, unknown> & { id: number; uid: string | null; origin_node: string | null; origin_name: string | null };
 
@@ -69,12 +84,14 @@ const canon = <K extends RecordKind>(kind: K, data: unknown): RecordDataMap[K] =
 export class CloudSyncService {
   private timer: NodeJS.Timeout | null = null;
   private running: Promise<void> | null = null;
+  /** Dateien gelöschter Objekte, nach dem Übernehmen entfernen */
+  private unlinkLater: string[] = [];
 
   constructor(
     private readonly db: Db,
     private readonly store: Store,
     private readonly cloud: CloudService,
-    private readonly opts: { notify: (t: Topic[]) => void; log?: { warn: (o: unknown, msg: string) => void }; intervalMs?: number },
+    private readonly opts: { notify: (t: Topic[]) => void; log?: { warn: (o: unknown, msg: string) => void }; intervalMs?: number; libraryDir: string },
   ) {
     cloud.onUnlink(() => this.detach());
   }
@@ -117,7 +134,7 @@ export class CloudSyncService {
     const own = s.nodeId;
     const counts = Object.fromEntries(
       RECORD_KINDS.map((k) => {
-        const rows = this.db.prepare(`SELECT origin_node FROM ${TABLE[k]}`).all() as { origin_node: string | null }[];
+        const rows = this.db.prepare(`SELECT origin_node FROM ${TABLE[k]}${live(k)}`).all() as { origin_node: string | null }[];
         return [k, { foreign: rows.filter((r) => r.origin_node && r.origin_node !== own).length, own: rows.filter((r) => r.origin_node && r.origin_node === own).length, local: rows.filter((r) => !r.origin_node).length }];
       }),
     ) as CloudSyncStatus['counts'];
@@ -206,6 +223,8 @@ export class CloudSyncService {
         this.save({ cursor: res.next });
         if (!res.more) break;
       }
+      for (const path of this.unlinkLater.splice(0)) await unlink(path).catch(() => {});
+      if (await this.fetchFiles()) changed = true;
       if (await this.push()) changed = true;
       this.save({ lastRunAt: at, lastSuccessAt: at, lastError: null });
       if (changed) this.opts.notify(TOPICS);
@@ -220,7 +239,7 @@ export class CloudSyncService {
   // --- Lokale Datensätze ---
 
   private rows(kind: RecordKind): Row[] {
-    return this.db.prepare(`SELECT * FROM ${TABLE[kind]}`).all() as Row[];
+    return this.db.prepare(`SELECT * FROM ${TABLE[kind]}${live(kind)}`).all() as Row[];
   }
 
   private uidOf(kind: RecordKind, id: number): string | null {
@@ -228,7 +247,7 @@ export class CloudSyncService {
   }
 
   private idOf(kind: RecordKind, uid: string): number | null {
-    return (this.db.prepare(`SELECT id FROM ${TABLE[kind]} WHERE uid = ?`).get(uid) as { id: number } | undefined)?.id ?? null;
+    return (this.db.prepare(`SELECT id FROM ${TABLE[kind]} WHERE uid = ?${LIBRARY.includes(kind) ? ' AND deleted_at IS NULL' : ''}`).get(uid) as { id: number } | undefined)?.id ?? null;
   }
 
   /** Lokaler Datensatz in der Form der Cloud */
@@ -269,6 +288,22 @@ export class CloudSyncService {
           sort: r.sort,
         };
       }
+      case 'objectType':
+        return { name: r.name, icon: r.icon, color: r.color, fields: JSON.parse(r.fields as string), builtin: r.builtin ?? null, visibility: r.visibility ?? 'both', sort: r.sort };
+      case 'object':
+        return {
+          typeUid: this.uidOf('objectType', r.type_id as number),
+          name: r.name,
+          lat: r.lat,
+          lon: r.lon,
+          address: r.address,
+          notes: r.notes,
+          props: JSON.parse(r.props as string),
+          source: r.source ?? null,
+          geometry: r.geometry ? JSON.parse(r.geometry as string) : null,
+        };
+      case 'objectFile':
+        return { objectUid: this.uidOf('object', r.object_id as number), filename: r.filename, mimeType: r.mime_type, sizeBytes: r.size_bytes, sha256: r.sha256 };
     }
   }
 
@@ -281,6 +316,12 @@ export class CloudSyncService {
         return `${lower(d.firstName ?? d.first_name)}|${lower(d.lastName ?? d.last_name)}`;
       case 'taskTemplate':
         return lower(d.summary);
+      case 'objectType':
+        return d.builtin ? `b:${String(d.builtin)}` : lower(d.name);
+      case 'object':
+        return d.source ? `s:${String(d.source)}` : `${String(d.typeUid)}|${lower(d.name)}|${Number(d.lat).toFixed(5)}|${Number(d.lon).toFixed(5)}`;
+      case 'objectFile':
+        return `${String(d.objectUid)}|${lower(d.filename)}|${String(d.sha256)}`;
       default:
         return lower(d.name);
     }
@@ -333,8 +374,14 @@ export class CloudSyncService {
       this.db.prepare('DELETE FROM cloud_sync WHERE uid = ?').run(item.uid);
       if (id === null) return;
       if (kind === 'user' && this.isLastAdmin(id)) return this.conflict(kind, this.label(kind, id), 'Letzter Admin mit PIN bleibt lokal');
-      if (kind === 'force') this.db.prepare('DELETE FROM force_units WHERE id = ?').run(id);
-      else this.db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
+      if (kind === 'object' || kind === 'objectFile') {
+        const files = this.db.prepare(`SELECT storage_name FROM library_files WHERE ${kind === 'object' ? 'object_id' : 'id'} = ?`).all(id) as { storage_name: string }[];
+        for (const f of files) this.unlinkLater.push(join(this.opts.libraryDir, f.storage_name));
+      }
+      if (kind === 'objectType' && this.db.prepare('SELECT 1 FROM library_objects WHERE type_id = ? AND deleted_at IS NULL').get(id)) {
+        return this.conflict(kind, this.label(kind, id), 'Typ hat hier noch Objekte – bleibt lokal');
+      }
+      this.db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
       return;
     }
 
@@ -342,7 +389,9 @@ export class CloudSyncService {
     if (id === null) {
       // Erster Abgleich: passenden lokalen Datensatz ohne uid übernehmen
       const key = this.naturalKey(kind, data as Record<string, unknown>);
-      const match = this.rows(kind).find((r) => !r.uid && this.naturalKey(kind, this.serialize(kind, r) as Record<string, unknown>) === key);
+      // Kandidaten: nur lokal und noch nie abgeglichen (die Objektbibliothek vergibt uids schon beim Anlegen)
+      const synced = this.db.prepare('SELECT 1 FROM cloud_sync WHERE uid = ?');
+      const match = this.rows(kind).find((r) => !r.origin_node && (!r.uid || !synced.get(r.uid)) && this.naturalKey(kind, this.serialize(kind, r) as Record<string, unknown>) === key);
       if (match) {
         this.db.prepare(`UPDATE ${table} SET uid = ? WHERE id = ?`).run(item.uid, match.id);
         id = match.id;
@@ -401,6 +450,43 @@ export class CloudSyncService {
           [d.summary, d.description, tpl?.id ?? null, d.intervalMinutes, d.intervalMinutes !== null ? (d.offsetMinutes ?? d.intervalMinutes) : d.offsetMinutes, d.sort],
         );
       }
+      case 'objectType': {
+        const d = data as RecordDataMap['objectType'];
+        const params = [d.name, d.icon, d.color, JSON.stringify(d.fields), d.visibility, d.sort, now];
+        if (id === null) {
+          if (d.builtin && this.db.prepare('SELECT 1 FROM object_types WHERE builtin = ?').get(d.builtin)) throw new Error(`Vordefinierter Typ ${d.builtin} gibt es schon`);
+          return Number(
+            this.db
+              .prepare('INSERT INTO object_types (uid, builtin, name, icon, color, fields, visibility, sort, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+              .run(item.uid, d.builtin, ...params).lastInsertRowid,
+          );
+        }
+        this.db.prepare('UPDATE object_types SET name = ?, icon = ?, color = ?, fields = ?, visibility = ?, sort = ?, updated_at = ?, deleted_at = NULL WHERE id = ?').run(...params, id);
+        return id;
+      }
+      case 'object': {
+        const d = data as RecordDataMap['object'];
+        const typeId = this.idOf('objectType', d.typeUid);
+        if (typeId === null) throw new Error('Objekttyp fehlt');
+        const params = [typeId, d.name, d.lat, d.lon, d.address, d.notes, JSON.stringify(d.props), d.source, d.geometry ? JSON.stringify(d.geometry) : null, now, `Cloud (${item.updatedBy})`];
+        return run(
+          'INSERT INTO library_objects (uid, type_id, name, lat, lon, address, notes, props, source, geometry, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'UPDATE library_objects SET type_id = ?, name = ?, lat = ?, lon = ?, address = ?, notes = ?, props = ?, source = ?, geometry = ?, updated_at = ?, updated_by = ? WHERE id = ?',
+          id === null ? [item.uid, ...params] : params,
+        );
+      }
+      case 'objectFile': {
+        const d = data as RecordDataMap['objectFile'];
+        const objectId = this.idOf('object', d.objectUid);
+        if (objectId === null) throw new Error('Objekt fehlt');
+        if (id !== null) return id; // Dateien sind unveränderlich
+        // Inhalt holt der Durchlauf danach (fetchFiles)
+        return Number(
+          this.db
+            .prepare('INSERT INTO library_files (uid, object_id, filename, mime_type, size_bytes, storage_name, sha256, uploaded_at, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(item.uid, objectId, d.filename, d.mimeType, d.sizeBytes, randomUUID(), d.sha256, now, `Cloud (${item.updatedBy})`).lastInsertRowid,
+        );
+      }
     }
   }
 
@@ -439,6 +525,28 @@ export class CloudSyncService {
     return kind === 'user' ? `${d.firstName as string} ${d.lastName as string}` : String(d.name ?? d.summary ?? id);
   }
 
+  /** Inhalte von Dateien aus der Cloud holen, die hier noch fehlen (Prüfsumme muss stimmen) */
+  private async fetchFiles(): Promise<boolean> {
+    const own = this.state().nodeId;
+    const rows = this.db
+      .prepare('SELECT id, uid, storage_name, sha256, filename FROM library_files WHERE origin_node IS NOT NULL AND origin_node IS NOT ? AND deleted_at IS NULL')
+      .all(own) as { id: number; uid: string; storage_name: string; sha256: string; filename: string }[];
+    let got = false;
+    for (const r of rows) {
+      const path = join(this.opts.libraryDir, r.storage_name);
+      if (existsSync(path)) continue;
+      try {
+        const bytes = await this.cloud.signedRaw('GET', `/v1/elws/me/cloud/files/${r.uid}`);
+        if (createHash('sha256').update(bytes).digest('hex') !== r.sha256) throw new Error('Prüfsumme stimmt nicht');
+        await writeFile(path, bytes);
+        got = true;
+      } catch (e) {
+        this.conflict('objectFile', r.filename, `Datei nicht geladen: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    return got;
+  }
+
   // --- Senden ---
 
   private async push(): Promise<boolean> {
@@ -449,7 +557,8 @@ export class CloudSyncService {
     this.db.transaction(() => {
       for (const kind of ORDER) {
         const table = TABLE[kind];
-        const local = this.rows(kind).filter((r) => !r.origin_node || r.origin_node === own);
+        // Vordefinierte Objekttypen gehören der Wurzel (Betreiber), nie einer Installation
+        const local = this.rows(kind).filter((r) => (!r.origin_node || r.origin_node === own) && !(kind === 'objectType' && r.builtin));
         for (const r of local) {
           if (!r.uid) {
             const uid = randomUUID();
@@ -470,7 +579,9 @@ export class CloudSyncService {
           names.set(r.uid!, this.label(kind, r.id));
         }
         // Lokal gelöscht: eigene Datensätze, die es nicht mehr gibt
-        const gone = this.db.prepare(`SELECT s.uid, s.rev, s.data FROM cloud_sync s LEFT JOIN ${table} t ON t.uid = s.uid WHERE s.kind = ? AND s.node_id = ? AND t.id IS NULL`).all(kind, own) as { uid: string; rev: number; data: string }[];
+        const gone = this.db
+          .prepare(`SELECT s.uid, s.rev, s.data FROM cloud_sync s LEFT JOIN ${table} t ON t.uid = s.uid${LIBRARY.includes(kind) ? ' AND t.deleted_at IS NULL' : ''} WHERE s.kind = ? AND s.node_id = ? AND t.id IS NULL`)
+          .all(kind, own) as { uid: string; rev: number; data: string }[];
         for (const g of gone) {
           changes.push({ uid: g.uid, kind, baseRev: g.rev, deleted: true });
           const d = JSON.parse(g.data) as Record<string, unknown>;
@@ -479,6 +590,18 @@ export class CloudSyncService {
       }
     })();
     if (!changes.length) return false;
+
+    // Neue Dateien: erst den Inhalt hochladen, dann den Datensatz senden
+    for (const c of changes.filter((x) => x.kind === 'objectFile' && x.baseRev === 0 && !x.deleted)) {
+      const row = this.db.prepare('SELECT storage_name FROM library_files WHERE uid = ?').get(c.uid) as { storage_name: string } | undefined;
+      if (!row) continue;
+      try {
+        await this.cloud.signedRaw('PUT', `/v1/elws/me/cloud/files/${c.uid}`, await readFile(join(this.opts.libraryDir, row.storage_name)));
+      } catch (e) {
+        // 409: schon hochgeladen (z. B. ein früherer Durchlauf brach danach ab)
+        if (!(e instanceof Error && /schon/.test(e.message))) throw e;
+      }
+    }
 
     for (let i = 0; i < changes.length; i += SYNC_MAX_CHANGES) {
       const batch = changes.slice(i, i + SYNC_MAX_CHANGES);
@@ -506,3 +629,4 @@ export class CloudSyncService {
     return true;
   }
 }
+

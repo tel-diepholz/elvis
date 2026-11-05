@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import { mapColorSchema, mapIconNameSchema, type GeoPath } from './mapobjects';
 import type { GeoOutline } from './geocode';
+import { OBJECT_VISIBILITIES, type CloudOrigin, type ObjectVisibility } from './cloudsync';
 
 export const OBJECT_FIELD_TYPES = ['text', 'longtext', 'number', 'select', 'bool', 'url', 'phone'] as const;
 export type ObjectFieldType = (typeof OBJECT_FIELD_TYPES)[number];
@@ -49,6 +50,8 @@ export const objectTypeInputSchema = z
     icon: mapIconNameSchema,
     color: mapColorSchema,
     fields: z.array(objectFieldSchema).max(40).default([]),
+    /** Wer die Objekte beim Cloud-Abgleich sieht */
+    visibility: z.enum(OBJECT_VISIBILITIES).default('both'),
   })
   .superRefine((t, ctx) => {
     const keys = new Set<string>();
@@ -71,11 +74,13 @@ export interface ObjectType {
   icon: string;
   color: string;
   fields: ObjectField[];
+  visibility: ObjectVisibility;
   sort: number;
   rev: number;
   updatedAt: string;
   /** Anzahl Objekte dieses Typs */
   count: number;
+  cloud?: CloudOrigin | null;
 }
 
 export const WATER_KINDS = ['Hydrant Unterflur', 'Hydrant Überflur', 'Hydrant Wand', 'Löschwasserbrunnen', 'Löschteich', 'Löschwasserbehälter / Zisterne', 'Saugstelle', 'Offenes Gewässer'] as const;
@@ -158,6 +163,7 @@ export interface LibraryObject {
   updatedBy: string;
   /** Anzahl angehängter Dateien */
   fileCount: number;
+  cloud?: CloudOrigin | null;
 }
 
 export interface LibraryObjectDetail extends LibraryObject {
