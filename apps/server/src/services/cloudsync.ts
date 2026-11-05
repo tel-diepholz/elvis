@@ -134,6 +134,15 @@ export class CloudSyncService {
   /** Getrennt: Cloud-Datensätze bleiben als lokale stehen */
   private detach(): void {
     this.db.transaction(() => {
+      // Herkunft (osm:…) ist unter lokalen Objekten eindeutig: gibt es sie lokal oder bei einem früheren Cloud-Objekt schon,
+      // verliert das bisherige Cloud-Objekt sie
+      this.db
+        .prepare(
+          `UPDATE library_objects SET source = NULL WHERE origin_node IS NOT NULL AND source IS NOT NULL AND (
+             source IN (SELECT source FROM library_objects WHERE origin_node IS NULL AND source IS NOT NULL AND deleted_at IS NULL)
+             OR EXISTS (SELECT 1 FROM library_objects o WHERE o.source = library_objects.source AND o.origin_node IS NOT NULL AND o.deleted_at IS NULL AND o.id < library_objects.id))`,
+        )
+        .run();
       for (const t of Object.values(TABLE)) this.db.prepare(`UPDATE ${t} SET origin_node = NULL, origin_name = NULL WHERE origin_node IS NOT NULL`).run();
       this.db.prepare('DELETE FROM cloud_sync').run();
     })();
@@ -326,9 +335,10 @@ export class CloudSyncService {
         if (typeId === null) throw new Error('Objekttyp fehlt');
         const params = [typeId, d.name, d.lat, d.lon, d.address, d.notes, JSON.stringify(d.props), d.source, d.geometry ? JSON.stringify(d.geometry) : null, now, `Cloud (${item.updatedBy})`];
         return run(
-          'INSERT INTO library_objects (uid, type_id, name, lat, lon, address, notes, props, source, geometry, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          // Herkunft gleich mit: lokal ist source eindeutig (Index), Cloud-Objekte dürfen dieselbe haben
+          'INSERT INTO library_objects (uid, origin_node, origin_name, type_id, name, lat, lon, address, notes, props, source, geometry, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           'UPDATE library_objects SET type_id = ?, name = ?, lat = ?, lon = ?, address = ?, notes = ?, props = ?, source = ?, geometry = ?, updated_at = ?, updated_by = ? WHERE id = ?',
-          id === null ? [item.uid, ...params] : params,
+          id === null ? [item.uid, item.nodeId, item.nodeName, ...params] : params,
         );
       }
       case 'objectFile': {

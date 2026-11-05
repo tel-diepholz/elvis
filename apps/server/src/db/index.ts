@@ -1218,6 +1218,13 @@ const MIGRATIONS: Migration[] = [
     db.prepare("UPDATE object_types SET uid = ? WHERE builtin = 'water'").run(BUILTIN_TYPE_UIDS.water);
     db.prepare("UPDATE object_types SET uid = ? WHERE builtin = 'site'").run(BUILTIN_TYPE_UIDS.site);
   },
+  // Cloud nur abholen: lokale und Cloud-Objekte mit derselben Herkunft (osm:…, fireboard:…) stehen nebeneinander, eindeutig
+  // ist die Herkunft nur unter den lokalen. Danach alles neu abholen, was daran gescheitert war.
+  `
+  DROP INDEX IF EXISTS library_objects_source;
+  CREATE UNIQUE INDEX library_objects_source ON library_objects(source) WHERE source IS NOT NULL AND deleted_at IS NULL AND origin_node IS NULL;
+  UPDATE settings SET value = json_set(value, '$.cursor', 0, '$.notices', json('[]')) WHERE key = 'cloud:sync';
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

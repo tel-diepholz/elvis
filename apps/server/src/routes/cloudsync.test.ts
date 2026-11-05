@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RECORD_SCHEMAS, type CloudSyncStatus, type ForceUnit, type IncidentSettings, type LoginCandidate, type RecordKind, type Role, type SyncRecord, type TaskTemplate, type User } from '@elvis/shared';
 import { buildApp, type App } from '../app.js';
@@ -276,5 +277,35 @@ describe('Objektbibliothek aus der Cloud', () => {
     relay.remove(fileUid);
     await run();
     expect((await req<LibObj[]>('GET', '/api/library/objects')).body.map((o) => o.name)).toEqual(['H lokal', 'Klinikum']);
+  });
+
+  it('gleiche Herkunft (OSM-Import) lokal und aus der Cloud: beide stehen nebeneinander, auch nach dem Trennen', async () => {
+    // Lokal aus OSM importiert
+    const local = new Database(join(dataDir, 'elvis.sqlite'));
+    const waterId = (local.prepare("SELECT id FROM object_types WHERE builtin = 'water'").get() as { id: number }).id;
+    local
+      .prepare("INSERT INTO library_objects (uid, type_id, name, lat, lon, source, updated_at, updated_by) VALUES (?, ?, 'H OSM lokal', 52.9, 8.8, 'osm:1', '2026-11-05T10:00:00Z', 'Test')")
+      .run(randomUUID(), waterId);
+    local.close();
+    // Dasselbe aus der Cloud, zweimal (Kreis und Gemeinde haben beide importiert)
+    relay.put('objectType', 'ars:', { name: 'Wasserentnahmestelle', icon: 'Droplet', color: '#2563eb', builtin: 'water' }, WATER);
+    relay.put('object', KREIS, { typeUid: WATER, name: 'H OSM Kreis', lat: 52.9, lon: 8.8, source: 'osm:1' });
+    relay.put('object', OWN, { typeUid: WATER, name: 'H OSM Weyhe', lat: 52.9, lon: 8.8, source: 'osm:1' });
+
+    expect((await link()).body).toMatchObject({ lastError: null, notices: [] });
+    const objects = async () => (await req<LibObj[]>('GET', '/api/library/objects')).body.map((o) => [o.name, o.source, o.cloud?.name ?? null]);
+    expect(await objects()).toEqual([
+      ['H OSM Kreis', 'osm:1', 'Landkreis Diepholz'],
+      ['H OSM lokal', 'osm:1', null],
+      ['H OSM Weyhe', 'osm:1', 'Weyhe'],
+    ]);
+
+    // Getrennt: alle lokal, die Herkunft bleibt beim bisherigen lokalen
+    expect((await req('DELETE', '/api/system/cloud')).status).toBe(200);
+    expect(await objects()).toEqual([
+      ['H OSM Kreis', null, null],
+      ['H OSM lokal', 'osm:1', null],
+      ['H OSM Weyhe', null, null],
+    ]);
   });
 });
