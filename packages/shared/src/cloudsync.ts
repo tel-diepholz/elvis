@@ -205,26 +205,27 @@ export type SyncResult =
 
 // --- Nur ELVIS ---
 
-/** Herkunft eines Stammdatensatzes in ELVIS: null = nur lokal (noch nicht abgeglichen) */
+/**
+ * Herkunft eines Stammdatensatzes in ELVIS: null = lokal (änderbar, geht nie in die Cloud). Mit Herkunft „Quelle: Cloud“:
+ * hier nur lesbar, gepflegt im Portal.
+ */
 export interface CloudOrigin {
   /** Knoten, der den Datensatz pflegt */
   node: string;
   /** Anzeige, z. B. „Landkreis Diepholz“ */
   name: string;
-  /** Eigener Knoten: in ELVIS änderbar; sonst nur lesbar */
-  editable: boolean;
 }
 
 export interface CloudSyncStatus {
-  /** Abgleich eingeschaltet (nach „Abgleich starten“) */
-  enabled: boolean;
+  /** Holt ab (solange verknüpft) */
+  active: boolean;
   /** Läuft gerade */
   running: boolean;
   lastRunAt: string | null;
   lastSuccessAt: string | null;
   lastError: string | null;
-  /** Datensätze je Art: aus der Cloud (fremde Knoten), eigene abgeglichene, nur lokal */
-  counts: Record<RecordKind, { foreign: number; own: number; local: number }>;
-  /** Letzte verworfene lokale Änderungen (Cloud-Stand übernommen) */
-  conflicts: { at: string; kind: RecordKind; name: string; reason: string }[];
+  /** Datensätze je Art: aus der Cloud bzw. lokal */
+  counts: Record<RecordKind, { cloud: number; local: number }>;
+  /** Letzte Hinweise (nicht übernommen, Datei nicht geladen …) */
+  notices: { at: string; kind: RecordKind; name: string; reason: string }[];
 }

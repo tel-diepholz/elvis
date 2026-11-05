@@ -144,26 +144,22 @@ export class IncidentService {
 
   // --- Einstellungen ---
 
-  /** Eigener Knoten beim Cloud-Abgleich (setzt app.ts); Stichworte anderer Knoten sind hier nur lesbar */
-  cloudNode: () => string | null = () => null;
-
   settings(): IncidentSettings {
     const r = this.store.db.prepare('SELECT * FROM settings WHERE key = ?').get(SETTINGS_KEY) as { updated_at: string; updated_by: string } | undefined;
     const rows = this.store.db.prepare('SELECT name, origin_node, origin_name FROM incident_keywords ORDER BY sort, id').all() as { name: string; origin_node: string | null; origin_name: string | null }[];
-    const own = this.cloudNode();
-    const managed = rows.filter((k) => k.origin_node && k.origin_node !== own).map((k) => ({ name: k.name, origin: k.origin_name ?? '' }));
+    // Aus der Cloud: hier nur lesbar
+    const managed = rows.filter((k) => k.origin_node).map((k) => ({ name: k.name, origin: k.origin_name ?? '' }));
     return { keywords: [...new Set(rows.map((k) => k.name))], managed, updatedAt: r?.updated_at ?? null, updatedBy: r?.updated_by ?? null };
   }
 
-  /** Setzt die eigenen Stichworte (Reihenfolge wie übergeben); die anderer Knoten bleiben unverändert */
+  /** Setzt die lokalen Stichworte (Reihenfolge wie übergeben); die aus der Cloud bleiben unverändert */
   setSettings(raw: IncidentSettingsInput, actor: string): IncidentSettings {
     const input = incidentSettingsSchema.parse(raw);
-    const own = this.cloudNode();
     const db = this.store.db;
     db.transaction(() => {
       const rows = db.prepare('SELECT id, name, origin_node FROM incident_keywords').all() as { id: number; name: string; origin_node: string | null }[];
-      const foreign = new Set(rows.filter((k) => k.origin_node && k.origin_node !== own).map((k) => k.name.toLowerCase()));
-      const editable = rows.filter((k) => !k.origin_node || k.origin_node === own);
+      const foreign = new Set(rows.filter((k) => k.origin_node).map((k) => k.name.toLowerCase()));
+      const editable = rows.filter((k) => !k.origin_node);
       const wanted = [...new Set(input.keywords)].filter((k) => !foreign.has(k.toLowerCase()));
       for (const k of editable) if (!wanted.includes(k.name)) db.prepare('DELETE FROM incident_keywords WHERE id = ?').run(k.id);
       wanted.forEach((name, i) => {

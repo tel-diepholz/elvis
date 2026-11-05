@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Lock, Siren } from 'lucide-react';
+import { Cloud, Siren } from 'lucide-react';
 import { api } from '../../lib/api';
 import { fmtDateTime } from '../../lib/format';
 import { useToast } from '../../lib/toast';
@@ -40,9 +40,9 @@ export function IncidentSettingsCard() {
           <span className="field-label">Aus der Cloud (hier nur lesbar)</span>
           <div className="chip-row">
             {data.managed.map((m) => (
-              <span key={m.name} title={`Gepflegt von ${m.origin}`}>
+              <span key={m.name} title={`Quelle: Cloud${m.origin ? ` (${m.origin})` : ''}`}>
                 <Badge>
-                  <Lock size={12} /> {m.name}
+                  <Cloud size={12} /> {m.name}
                 </Badge>
               </span>
             ))}
