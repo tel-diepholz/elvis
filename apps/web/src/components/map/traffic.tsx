@@ -19,24 +19,36 @@ import { api } from '../../lib/api';
 import { aircraftMarker } from './aircraftIcons';
 
 /** Ebenen der Karte (pro Browser gemerkt) */
-export interface TrafficLayers {
+export interface MapLayers {
   aircraft: boolean;
   ships: boolean;
   radar: boolean;
+  /** Objektbibliothek */
+  library: boolean;
+  /** Ausgeblendete Typen der Objektbibliothek (neue Typen erscheinen so automatisch) */
+  libraryHidden: number[];
 }
 
 const LAYERS_KEY = 'elvis.map.layers';
 
-export function readLayers(): TrafficLayers {
+const NO_LAYERS: MapLayers = { aircraft: false, ships: false, radar: false, library: false, libraryHidden: [] };
+
+export function readLayers(): MapLayers {
   try {
-    const v = JSON.parse(localStorage.getItem(LAYERS_KEY) ?? '{}') as Partial<TrafficLayers>;
-    return { aircraft: v.aircraft === true, ships: v.ships === true, radar: v.radar === true };
+    const v = JSON.parse(localStorage.getItem(LAYERS_KEY) ?? '{}') as Partial<MapLayers>;
+    return {
+      aircraft: v.aircraft === true,
+      ships: v.ships === true,
+      radar: v.radar === true,
+      library: v.library === true,
+      libraryHidden: Array.isArray(v.libraryHidden) ? v.libraryHidden.filter((n): n is number => typeof n === 'number') : [],
+    };
   } catch {
-    return { aircraft: false, ships: false, radar: false };
+    return NO_LAYERS;
   }
 }
 
-export function saveLayers(l: TrafficLayers): void {
+export function saveLayers(l: MapLayers): void {
   try {
     localStorage.setItem(LAYERS_KEY, JSON.stringify(l));
   } catch {

@@ -18,6 +18,7 @@
 - [Kräfte und Personal](funktionen/kraefte-und-personal.md) – Personalbögen, Cloud-Personalabfrage, Ortung per App
 - [Schadenkonten](funktionen/schadenkonten.md) – T-Konto je Schadenstelle/Einsatzabschnitt, Personenschäden
 - [Kontakte](funktionen/kontakte.md) – Adressbuch des ELW
+- [Objektbibliothek](funktionen/objektbibliothek.md) – Wasserentnahmestellen, Einsatzobjekte und eigene Typen, auf der Karte einblendbar
 - [E-Mail](funktionen/email.md) – Postfach des ELW über das Relay, OpenPGP
 - [Nachrichten](funktionen/nachrichten.md) – SMS, Signal, Threema, WhatsApp und Telegram in einer Ansicht
 - [Cloud Messaging](funktionen/cloud-messaging.md) – Fahrzeug-Chat mit anderen ELVIS-Installationen, Verzeichnis nach Gebietskörperschaft

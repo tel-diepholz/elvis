@@ -47,6 +47,8 @@ export function accessLevel(method: string, rawUrl: string): AccessLevel {
 
   if (read) {
     if (url === '/api/health' || url === '/api/info' || url === '/api/live' || url === '/api/alerts') return 'public';
+    // Objektbibliothek liest auch die anonyme Kartenansicht (Pflege nur angemeldet)
+    if (url.startsWith('/api/library/')) return 'public';
     if (url.startsWith('/api/devices') || url === '/api/energy-flow' || url.startsWith('/api/map/') || url === '/api/weather' || url.startsWith('/api/weather/')) return 'public';
     // Livebild wie der Fahrzeugzustand; gespeicherte Positionen sind Einsatzdaten (Anmeldung)
     if (/^\/api\/cameras\/[^/]+\/stream$/.test(url)) return 'public';

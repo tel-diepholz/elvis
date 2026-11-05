@@ -24,10 +24,11 @@ import { useDamageAccounts } from '../components/damage/damageParts';
 import { Dv102Picker, GeneratorSignDialog, generatorName, generatorSign } from '../components/map/dv102';
 import { ALTITUDE_LEGEND } from '../components/map/aircraftIcons';
 import { RadarControl, RadarLayer, useRadar } from '../components/map/radar';
-import { AircraftLayer, ShipLayer, readLayers, saveLayers, trafficObject, type TrafficLayers, type TrafficStatus } from '../components/map/traffic';
+import { AircraftLayer, ShipLayer, readLayers, saveLayers, trafficObject, type MapLayers, type TrafficStatus } from '../components/map/traffic';
 import { PrintDialog } from './map/PrintDialog';
 import { MapSearch } from './map/search';
 import { ObjectList } from './map/objectlist';
+import { LibraryLayer, useLibraryTypes } from '../components/map/library';
 import { MapStylePicker, ObjectMenu, WindTile, ZoomControl, CursorPosition, type PlaceKind } from './map/toolbar';
 import { TrafficSearch } from './map/trafficSearch';
 import { TimelineBar, useSettled } from './map/timeline';
@@ -191,8 +192,9 @@ export function MapPage() {
   const [generating, setGenerating] = useState<TacticalSign | null>(null);
   const placeSign = (s: { sign: string } | { tactical: TacticalSign }) => (setSign(s), setChoosingSign(false), setGenerating(null), setPlacingUnit(null), setDrawing(null), setShapeEdit(null), setPlacing('sign'));
   /** Ebenen Flugzeuge/Schiffe (pro Browser) und was sie gerade zeigen */
-  const [layers, setLayers] = useState<TrafficLayers>(readLayers);
-  const chooseLayers = (l: TrafficLayers) => (setLayers(l), saveLayers(l));
+  const [layers, setLayers] = useState<MapLayers>(readLayers);
+  const chooseLayers = (l: MapLayers) => (setLayers(l), saveLayers(l));
+  const { data: libraryTypes = [] } = useLibraryTypes(layers.library);
   const [aircraftStatus, setAircraftStatus] = useState<TrafficStatus | null>(null);
   const radar = useRadar(layers.radar);
   const [shipStatus, setShipStatus] = useState<TrafficStatus | null>(null);
@@ -432,6 +434,7 @@ export function MapPage() {
         {layers.radar && <RadarLayer radar={radar} />}
         {layers.aircraft && !historyAt && <AircraftLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setAircraftStatus} />}
         {layers.ships && !historyAt && <ShipLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setShipStatus} />}
+        {layers.library && !historyAt && <LibraryLayer hidden={layers.libraryHidden} onAdopt={canEdit ? (o) => addObject.mutate(o) : undefined} />}
         <MapObjectsLayer objects={shapeEdit ? objects.filter((o) => o.id !== shapeEdit.id) : objects} wind={wind} now={now} links />
         {overpassHits && <OverpassLayer hits={overpassHits} taken={takenOsm} adding={addObject.isPending} onAdd={canEdit ? addFeature : undefined} />}
         <UnitsLayer units={units} movable={placingUnit && 'status' in placingUnit ? placingUnit.id : null} onMove={canEdit ? (unit, lat, lon) => place(unit, lat, lon) : undefined} />
@@ -655,6 +658,7 @@ export function MapPage() {
       )}
 
       <MapStylePicker
+        libraryTypes={libraryTypes}
         sources={sources}
         value={sources.some((s) => s.id === sourceId) ? sourceId : null}
         auto={autoSource(sources, dark)}
