@@ -97,7 +97,7 @@ beforeEach(async () => {
   await new Promise<void>((r) => tileServer.listen(0, '127.0.0.1', r));
   const { port } = tileServer.address() as AddressInfo;
   dataDir = mkdtempSync(join(tmpdir(), 'elvis-route-'));
-  app = await buildApp(parseConfig({ dataDir, map: { sources: [{ id: 'test', name: 'Test', url: `http://127.0.0.1:${port}/{z}/{x}/{y}.png`, attribution: '© Test' }] } }), {
+  app = await buildApp(parseConfig({ dataDir, map: { sources: [{ id: 'test', name: 'Test', url: `http://127.0.0.1:${port}/{z}/{x}/{y}.png`, attribution: '© Test' }], routerUrl: null } }), {
     logger: false,
     routerFetch,
   });
@@ -130,6 +130,26 @@ describe('Routing', () => {
     expect(res.status).toBe(503);
     expect(res.body.error).toContain('OSM-Daten');
     expect(calls).toHaveLength(0);
+  });
+
+  it('nimmt ohne Addon den öffentlichen Valhalla-Server', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'elvis-route-online-'));
+    const online = await buildApp(parseConfig({ dataDir: dir }), { logger: false, routerFetch });
+    try {
+      const c = await adminCookie(online);
+      const status = await online.server.inject({ method: 'GET', url: '/api/map/router' });
+      expect(status.json()).toEqual({ available: true, name: 'Routing (online, FOSSGIS)' });
+      const res = await online.server.inject({ method: 'POST', url: '/api/map/route', payload: { stops }, headers: { cookie: c } });
+      expect(res.json()).toMatchObject({ source: 'Routing (online, FOSSGIS)', distanceM: 420 });
+      expect(calls[0]!.url).toBe('https://valhalla1.openstreetmap.de/route');
+      // läuft das Addon, geht es zuerst lokal
+      online.router.setProvisions([{ id: 'osm-daten-valhalla', name: 'Routing (lokal)', type: 'valhalla', url: 'http://10.0.0.5:8002/' }]);
+      await online.server.inject({ method: 'POST', url: '/api/map/route', payload: { stops }, headers: { cookie: c } });
+      expect(calls[1]!.url).toBe('http://10.0.0.5:8002/route');
+    } finally {
+      await online.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('verlangt eine Anmeldung', async () => {

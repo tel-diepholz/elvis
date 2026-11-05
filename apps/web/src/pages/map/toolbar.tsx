@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { Check, ChevronDown, Circle, CircleDot, CloudRain, Hexagon, RectangleHorizontal, Spline, Crosshair, Database, Loader2, Minus, Plus, Search, X, Layers, Library, MapPin, Plane, Route, Shapes, Ship, TriangleAlert, Wind as WindIcon } from 'lucide-react';
+import { Check, ChevronDown, Circle, CircleDot, CloudRain, Droplets, Hexagon, RectangleHorizontal, Spline, Crosshair, Database, Loader2, Minus, Plus, Search, X, Layers, Library, MapPin, Plane, Route, Shapes, Ship, TriangleAlert, Wind as WindIcon } from 'lucide-react';
 import { toMgrs, type MapSource, type ObjectType, type OverpassQuery } from '@elvis/shared';
 import { MapIcon } from '../../components/map/mapIcons';
 import { compass, fmtOpt } from '../../lib/format';
@@ -80,6 +80,8 @@ export function ObjectMenu({
   onClearOverpass,
   routing,
   onRoute,
+  water,
+  onWater,
 }: {
   loggedIn: boolean;
   /** Objekte der Lage ändern */
@@ -103,6 +105,9 @@ export function ObjectMenu({
   /** Routing (Addon OSM-Daten): null = nicht verfügbar, sonst ob die Routenbox offen ist */
   routing: { open: boolean } | null;
   onRoute: () => void;
+  /** Wasserversorgung: braucht Routing und Einsatzort; reason = warum nicht, sonst ob die Box offen ist */
+  water: { open: boolean; reason: string | null };
+  onWater: () => void;
 }) {
   const edit = { disabled: !enabled, title: enabled ? undefined : reason };
   return (
@@ -139,6 +144,9 @@ export function ObjectMenu({
             onClick={() => (close(), onRoute())}
           >
             <Route size={18} /> Route planen …{routing?.open && <span className="muted">offen</span>}
+          </button>
+          <button type="button" role="menuitem" className="map-dropdown-item" disabled={!!water.reason} title={water.reason ?? undefined} onClick={() => (close(), onWater())}>
+            <Droplets size={18} /> Wasserversorgung …{water.open && <span className="muted">offen</span>}
           </button>
           <div className="map-dropdown-heading">Zeichnen</div>
           <button type="button" role="menuitem" className="map-dropdown-item" {...edit} onClick={() => (close(), onPlace('point'))}>

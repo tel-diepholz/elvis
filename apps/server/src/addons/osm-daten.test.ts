@@ -43,7 +43,7 @@ const routerFetch: RouterFetch = async (url) => {
 async function setup(builtinDir = BUILTIN) {
   dataDir = mkdtempSync(join(tmpdir(), 'elvis-osm-'));
   daemon = new FakeDocker();
-  app = await buildApp(parseConfig({ dataDir, addons: { builtinDir }, map: { outlineUrl: null } }), { logger: false, dockerFactory: () => daemon.asDocker(), geocodeFetch, overpassFetch, routerFetch });
+  app = await buildApp(parseConfig({ dataDir, addons: { builtinDir }, map: { outlineUrl: null, routerUrl: null } }), { logger: false, dockerFactory: () => daemon.asDocker(), geocodeFetch, overpassFetch, routerFetch });
   await app.docker!.repos.refresh();
   cookie = await adminCookie(app);
 }

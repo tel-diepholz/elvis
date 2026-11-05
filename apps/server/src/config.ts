@@ -78,6 +78,13 @@ const configSchema = z.object({
        * nicht bereit ist (oder ausfällt); null = nur lokal.
        */
       overpassUrl: z.string().url().nullable().default('https://overpass-api.de'),
+      /**
+       * Öffentlicher Valhalla-Server (FOSSGIS) für Route und Wasserversorgung, solange das Addon „OSM-Daten“ nicht
+       * läuft (oder ausfällt); null = nur lokal.
+       */
+      routerUrl: z.string().url().nullable().default('https://valhalla1.openstreetmap.de'),
+      /** Open-Meteo Elevation API für den Höhenschnitt der Wasserversorgung (online); null = aus. */
+      elevationUrl: z.string().url().nullable().default('https://api.open-meteo.com/v1/elevation'),
       /** Regenradar des DWD (GeoServer-WMS mit Zeitachse, Messung und Vorhersage); wmsUrl null = aus. */
       radar: z
         .object({

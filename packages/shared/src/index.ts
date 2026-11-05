@@ -52,3 +52,4 @@ export * from './library';
 export * from './cloudrelay';
 export * from './cloudsync';
 export * from './vehiclePosition';
+export * from './watersupply';

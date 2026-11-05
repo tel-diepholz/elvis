@@ -134,6 +134,10 @@ import {
   type RoutePrintRequest,
   type RouteRequest,
   type RouteResult,
+  type ElevationProfile,
+  type WaterSupplyRequest,
+  type WaterSupplyResult,
+  type WaterSupplyPrintRequest,
   type RouterStatus,
   type NewMapObject,
   type MapSource,
@@ -713,8 +717,14 @@ export const api = {
   },
   routerStatus: () => request<RouterStatus>('GET', '/api/map/router'),
   route: (req: RouteRequest) => request<RouteResult>('POST', '/api/map/route', req),
+  waterSupply: (req: WaterSupplyRequest) => request<WaterSupplyResult>('POST', '/api/map/water-supply', req),
+  elevation: (path: [number, number][]) => request<ElevationProfile>('POST', '/api/map/elevation', { path }),
   printRoute: async (req: RoutePrintRequest): Promise<{ pdf: Blob; filename: string; missingTiles: number }> => {
     const { res, pdf, filename } = await fetchPdf('/api/print/route', req, 'Route.pdf');
+    return { pdf, filename, missingTiles: Number(res.headers.get('x-missing-tiles') ?? 0) };
+  },
+  printWaterSupply: async (req: WaterSupplyPrintRequest): Promise<{ pdf: Blob; filename: string; missingTiles: number }> => {
+    const { res, pdf, filename } = await fetchPdf('/api/print/water-supply', req, 'Wasserversorgung.pdf');
     return { pdf, filename, missingTiles: Number(res.headers.get('x-missing-tiles') ?? 0) };
   },
   printWeather: async (pos: { lat: number; lon: number }): Promise<{ pdf: Blob; filename: string }> => {

@@ -11,12 +11,12 @@ export interface RouterProvision {
 }
 
 /** Antwort mit HTTP-Status; Valhalla meldet „keine Route“ als 400 mit JSON-Fehler */
-export type RouterFetch = (url: string, body: unknown, opts: { timeoutMs: number }) => Promise<{ status: number; json: unknown }>;
+export type RouterFetch = (url: string, body: unknown, opts: { timeoutMs: number; userAgent?: string }) => Promise<{ status: number; json: unknown }>;
 
-const defaultFetch: RouterFetch = async (url, body, { timeoutMs }) => {
+const defaultFetch: RouterFetch = async (url, body, { timeoutMs, userAgent }) => {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...(userAgent ? { 'user-agent': userAgent } : {}) },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
   });
@@ -27,6 +27,9 @@ const TIMEOUT_MS = 30_000;
 
 /** Valhalla-Fehlercodes, bei denen keine Route existiert (statt Dienstausfall) */
 const NO_ROUTE = new Set([170, 171, 442, 443]);
+
+/** Valhalla-Kostenmodell: Fahrzeug (Routenplanung) oder zu Fuß (Schlauchweg) */
+type RouteCosting = RouteRequest['profile'] | 'pedestrian';
 
 interface ValhallaManeuver {
   type: number;
@@ -76,11 +79,34 @@ export function decodePolyline6(s: string): [number, number][] {
   return out;
 }
 
-/** Routen über den lokalen Valhalla-Dienst des Addons OSM-Daten; ohne Addon gibt es kein Routing. */
+export interface RouterOptions {
+  /** Öffentlicher Valhalla-Server (FOSSGIS) als Rückfall ohne bzw. bei Ausfall des Addons; null = nur lokal */
+  onlineUrl: string | null;
+  userAgent: string;
+}
+
+/**
+ * Routen über den lokalen Valhalla-Dienst des Addons OSM-Daten. Ohne Addon (oder wenn es ausfällt) fragt ELVIS den
+ * öffentlichen Valhalla-Server, sofern einer eingestellt ist.
+ */
 export class RouterService {
   private providers: RouterProvision[] = [];
 
-  constructor(private readonly fetchJson: RouterFetch = defaultFetch) {}
+  constructor(
+    private readonly fetchJson: RouterFetch = defaultFetch,
+    private readonly opts: RouterOptions = { onlineUrl: null, userAgent: 'ELVIS' },
+  ) {}
+
+  /** Lokale Dienste zuerst, der öffentliche zuletzt */
+  private all(): RouterProvision[] {
+    const online: RouterProvision[] = this.opts.onlineUrl ? [{ id: 'online', name: 'Routing (online, FOSSGIS)', type: 'valhalla', url: this.opts.onlineUrl }] : [];
+    return [...this.providers, ...online];
+  }
+
+  /** Nur der öffentliche Dienst steht zur Verfügung (dort Anfragen sparsam stellen) */
+  get onlineOnly(): boolean {
+    return !this.providers.length && !!this.opts.onlineUrl;
+  }
 
   /** Routing-Dienste laufender Addons; liefert true bei Änderung */
   setProvisions(list: RouterProvision[]): boolean {
@@ -90,22 +116,35 @@ export class RouterService {
   }
 
   status(): RouterStatus {
-    const p = this.providers[0];
+    const p = this.all()[0];
     return { available: !!p, name: p?.name ?? null };
   }
 
   async route(req: RouteRequest): Promise<RouteResult> {
-    if (!this.providers.length) throw new HttpError(503, 'Routing nicht verfügbar – Addon „OSM-Daten“ installieren');
+    const { trip, source } = await this.request(req.stops, req.profile);
+    return toResult(trip, req.profile, source);
+  }
+
+  /** Fußweg von `from` nach `to` (Schlauchweg der Wasserversorgung: ohne Einbahnstraßen, auch Feld- und Fußwege) */
+  async walkPath(from: { lat: number; lon: number }, to: { lat: number; lon: number }): Promise<{ distanceM: number; path: [number, number][]; source: string }> {
+    const { trip, source } = await this.request([from, to], 'pedestrian');
+    const r = toResult(trip, 'auto', source);
+    return { distanceM: r.distanceM, path: r.path, source };
+  }
+
+  private async request(stops: { lat: number; lon: number }[], costing: RouteCosting): Promise<{ trip: NonNullable<ValhallaRoute['trip']>; source: string }> {
+    const providers = this.all();
+    if (!providers.length) throw new HttpError(503, 'Routing nicht verfügbar – Addon „OSM-Daten“ installieren');
     const body = {
-      locations: req.stops.map((s) => ({ lat: s.lat, lon: s.lon, type: 'break' })),
-      costing: req.profile,
+      locations: stops.map((s) => ({ lat: s.lat, lon: s.lon, type: 'break' })),
+      costing,
       directions_options: { language: 'de-DE', units: 'kilometers' },
     };
     const errors: string[] = [];
-    for (const p of this.providers) {
+    for (const p of providers) {
       let res: Awaited<ReturnType<RouterFetch>>;
       try {
-        res = await this.fetchJson(`${p.url.replace(/\/+$/, '')}/route`, body, { timeoutMs: TIMEOUT_MS });
+        res = await this.fetchJson(`${p.url.replace(/\/+$/, '')}/route`, body, { timeoutMs: TIMEOUT_MS, userAgent: this.opts.userAgent });
       } catch (e) {
         errors.push(`${p.name}: ${(e as Error).message}`);
         continue;
@@ -118,7 +157,7 @@ export class RouterService {
         errors.push(`${p.name}: ${data.error ?? `HTTP ${res.status}`}`);
         continue;
       }
-      return toResult(data.trip, req.profile, p.name);
+      return { trip: data.trip, source: p.name };
     }
     throw new HttpError(502, `Routing fehlgeschlagen (${errors.join('; ')})`);
   }

@@ -14,7 +14,7 @@ const OVERVIEW_H_MM = 120;
 const DETAIL_MM = 34;
 const DETAIL_ZOOM = 16;
 /** Bezugszoomstufe der vorab projizierten Strecke */
-const REF_ZOOM = 20;
+export const REF_ZOOM = 20;
 
 export interface RoutePrintContext {
   vehicle: VehicleInfo;
@@ -28,7 +28,7 @@ type Pt = { x: number; y: number };
 const stopColor = (i: number, n: number) => (i === 0 ? '#2e7d32' : i === n - 1 ? '#c62828' : ROUTE_COLOR);
 
 /** Größte Zoomstufe, bei der die Strecke mit etwas Rand in w × h Kartenpixel passt */
-function fitZoom(path: [number, number][], widthPx: number, heightPx: number, maxZoom: number): { zoom: number; center: Pt } {
+export function fitZoom(path: [number, number][], widthPx: number, heightPx: number, maxZoom: number): { zoom: number; center: Pt } {
   const lats = path.map((p) => p[1]);
   const lons = path.map((p) => p[0]);
   const north = Math.max(...lats);
@@ -49,7 +49,7 @@ function fitZoom(path: [number, number][], widthPx: number, heightPx: number, ma
  * Strecke in den Ausschnitt zeichnen. `world` sind Weltpixel bei REF_ZOOM; nur Abschnitte in der Nähe des Ausschnitts
  * werden übernommen, damit die vielen kleinen Karten das PDF nicht aufblähen.
  */
-function drawPath(doc: PDFKit.PDFDocument, world: Pt[], zoom: number, origin: Pt, widthPx: number, heightPx: number, x0: number, y0: number, width: number) {
+export function drawPath(doc: PDFKit.PDFDocument, world: Pt[], zoom: number, origin: Pt, widthPx: number, heightPx: number, x0: number, y0: number, width: number, color = ROUTE_COLOR) {
   const s = 2 ** (zoom - REF_ZOOM);
   const pad = 40;
   const inside = (p: Pt) => p.x >= -pad && p.y >= -pad && p.x <= widthPx + pad && p.y <= heightPx + pad;
@@ -71,11 +71,11 @@ function drawPath(doc: PDFKit.PDFDocument, world: Pt[], zoom: number, origin: Pt
   };
   doc.save();
   stroke('#ffffff', width + 2.5);
-  stroke(ROUTE_COLOR, width);
+  stroke(color, width);
   doc.restore();
 }
 
-function drawStop(doc: PDFKit.PDFDocument, x: number, y: number, label: string, color: string, r = 7) {
+export function drawStop(doc: PDFKit.PDFDocument, x: number, y: number, label: string, color: string, r = 7) {
   doc.save();
   doc.circle(x, y, r).lineWidth(1.5).fillAndStroke(color, '#ffffff');
   doc.font('Helvetica-Bold').fontSize(r * 1.15).fillColor('#ffffff').text(label, x - r, y - r * 0.42, { width: 2 * r, align: 'center', lineBreak: false });
