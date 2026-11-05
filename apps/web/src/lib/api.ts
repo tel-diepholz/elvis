@@ -1,3 +1,4 @@
+import type { CloudStatus } from '@elvis/shared';
 import type { LibraryFile, LibraryObject, LibraryObjectDetail, LibraryObjectInput, ObjectType, ObjectTypeInput } from '@elvis/shared';
 import type { DamageAccount, DamageAccountInput, DamageAccountPatch, DamageCountBooking, DamageCountInput, DamageEntry, DamageEntryInput, DamageEntryPatch } from '@elvis/shared';
 import type { ManualPosition, ManualPositionInput, VehiclePosition } from '@elvis/shared';
@@ -338,6 +339,9 @@ export const api = {
   updateChatSettings: (input: ChatSettings) => request<ChatSettings>('PUT', '/api/system/chat', input),
   calls: (hours = 24) => request<CallRecord[]>('GET', `/api/telephony/calls?hours=${hours}`),
 
+  cloudStatus: (refresh = false) => request<CloudStatus>('GET', `/api/system/cloud${refresh ? '?refresh=1' : ''}`),
+  requestCloudLink: (name: string) => request<CloudStatus>('POST', '/api/system/cloud/link', { name }),
+  unlinkCloud: () => request<CloudStatus>('DELETE', '/api/system/cloud'),
   libraryTypes: () => request<ObjectType[]>('GET', '/api/library/types'),
   createObjectType: (input: ObjectTypeInput) => request<ObjectType>('POST', '/api/system/library/types', input),
   updateObjectType: (id: number, input: ObjectTypeInput) => request<ObjectType>('PUT', `/api/system/library/types/${id}`, input),

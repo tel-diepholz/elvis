@@ -59,7 +59,7 @@ Die vollständige Doku steht in [`docs/`](docs/README.md):
   [Einstellungen](docs/einstellungen.md)
 - **Funktionen:** [Karte](docs/funktionen/karte.md) · [Ausbreitung](docs/funktionen/ausbreitung.md) ·
   [Flugzeuge und Schiffe](docs/funktionen/luft-und-schiffsverkehr.md) · [Wetter](docs/funktionen/wetter.md) ·
-  [Kräfte und Personal](docs/funktionen/kraefte-und-personal.md) · [Schadenkonten](docs/funktionen/schadenkonten.md) · [Kontakte](docs/funktionen/kontakte.md) · [Objektbibliothek](docs/funktionen/objektbibliothek.md) ·
+  [Kräfte und Personal](docs/funktionen/kraefte-und-personal.md) · [Schadenkonten](docs/funktionen/schadenkonten.md) · [Kontakte](docs/funktionen/kontakte.md) · [Objektbibliothek](docs/funktionen/objektbibliothek.md) · [Cloud-Zugang](docs/funktionen/cloud-zugang.md) ·
   [E-Mail](docs/funktionen/email.md) · [Nachrichten](docs/funktionen/nachrichten.md) · [Dokumente](docs/funktionen/dokumente.md) ·
   [Drucken](docs/funktionen/drucken.md) · [Scannen](docs/funktionen/scannen.md) ·
   [Bildschirme](docs/funktionen/bildschirme.md)

@@ -75,6 +75,8 @@ import { CallLogService } from './services/telephony.js';
 import { TelephonyBus } from './devices/telephony/bus.js';
 import { contactRoutes } from './routes/contacts.js';
 import { libraryRoutes } from './routes/library.js';
+import { cloudRoutes } from './routes/cloud.js';
+import { CloudService, type CloudFetch } from './services/cloud.js';
 import { LibraryService } from './services/library.js';
 import { ContactService } from './services/contacts.js';
 import { phonebookRoutes } from './routes/phonebook.js';
@@ -145,7 +147,7 @@ export interface App {
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; officeConvert?: OfficeConverter | null; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; messagingFetch?: MessagingFetch; messagingSocket?: SocketFactory; updateFetch?: UpdateFetch; phoneFetch?: PhoneFetch; phonePushDelayMs?: number; restart?: () => void } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; officeConvert?: OfficeConverter | null; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; messagingFetch?: MessagingFetch; cloudFetch?: CloudFetch; messagingSocket?: SocketFactory; updateFetch?: UpdateFetch; phoneFetch?: PhoneFetch; phonePushDelayMs?: number; restart?: () => void } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -287,6 +289,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     phones.contactsChanged();
   });
   const library = new LibraryService(db, store, config.dataDir, { notify: (t) => hub.invalidate(t), overpass });
+  const cloud = new CloudService(db, store, relay, { dataDir: config.dataDir, portalUrl: config.app.cloudUrl, version: ELVIS_VERSION, notify: (t) => hub.invalidate(t), fetch: opts.cloudFetch });
   const phonebook = new PhonebookService(db, contacts);
   const phones = new PhoneService(db, {
     contacts: () => contacts.list(),
@@ -497,6 +500,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     reportRoutes(api, { report, store, notify: (t) => hub.invalidate(t) });
     contactRoutes(api, { contacts, personnel });
     libraryRoutes(api, library);
+    cloudRoutes(api, cloud);
     phonebookRoutes(api, { phonebook, store, notify: (t) => hub.invalidate(t) });
     phoneRoutes(api, { phones, store, notify: (t) => hub.invalidate(t) });
     dashboardRoutes(api, { dashboards: new DashboardService(db, config.edition) });

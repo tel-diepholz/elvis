@@ -9581,3 +9581,10 @@ dd .messaging-contact {
   width: auto;
   flex: 0 0 auto;
 }
+.cloud-code {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: 4px 0;
+  user-select: all;
+}
