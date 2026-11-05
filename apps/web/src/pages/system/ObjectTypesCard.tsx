@@ -187,7 +187,7 @@ export function ObjectTypesCard() {
             <button className="btn btn-ghost btn-icon" aria-label="Nach unten" disabled={i === types.length - 1 || reorder.isPending} onClick={() => move(i, 1)}>
               <ArrowDown size={16} />
             </button>
-            <button className="btn btn-ghost btn-icon" aria-label={`${t.name} bearbeiten`} disabled={!localEditable(t)} title={localEditable(t) ? undefined : `Gepflegt von ${t.cloud?.name} in der Cloud`} onClick={() => setEditing(t)}>
+            <button className="btn btn-ghost btn-icon" aria-label={`${t.name} bearbeiten`} disabled={!localEditable(t)} title={localEditable(t) ? undefined : 'Quelle: Cloud – Änderungen im Portal'} onClick={() => setEditing(t)}>
               <Pencil size={16} />
             </button>
             <button

@@ -34,37 +34,33 @@ ein Postfach braucht es dafür nicht. Der private Schlüssel liegt versiegelt in
 Postfach in `<dataDir>/mail.secret`. Beides ist im [Backup](../backup.md) enthalten. Anfordern und Trennen stehen im
 Bedienprotokoll (Ziel `cloud`).
 
-## Stammdaten-Abgleich
+## Stammdaten aus der Cloud
 
-Ist die Installation verknüpft, startet ein Admin unter *Einstellungen → Cloud-Zugang* den **Abgleich**. Danach
-gleicht ELVIS jede Minute ab.
+Solange die Installation verknüpft ist, holt ELVIS jede Minute die Stammdaten aus der Cloud ab. Einschalten muss man
+dafür nichts. Die Richtung ist nur **Cloud → ELVIS**.
 
 - **Wer sieht was:**
   - **Kräfte und Einsatzstichworte** kommen von allen Knoten darüber und darunter. Der Kreis-ELW kennt also auch die
     Fahrzeuge der Gemeinden, der ELW Weyhe die des Kreises.
   - **Rollen, Benutzer und Aufgabenvorlagen** kommen nur von oben. Die Rollen des Kreises gelten in jeder Gemeinde.
-- **Wer ändert was:**
-  - ELVIS ändert nur die Datensätze des **eigenen Bereichs** (Badge „Cloud“). Was ein anderer Bereich pflegt, ist
-    hier nur lesbar (Schloss mit dessen Namen). Ändern geht dann nur im Portal mit der Rolle *Pflegen*.
+- **Quelle: Cloud:** Alles aus der Cloud trägt das Badge „Cloud“, auch die Datensätze des eigenen Bereichs. In ELVIS
+  ist es nur lesbar, geändert wird es im Portal mit der Rolle *Pflegen*.
   - Ausnahme: Adressen und Rufnummern, die ELVIS sich aus eingegangenen Nachrichten merkt, bleiben lokal. Das gilt,
     solange die Cloud keine eigenen kennt.
-- **Erster Abgleich:**
-  - Alles, was nur lokal existiert, geht an den eigenen Bereich.
-  - Was es in der Cloud schon gibt, wird zusammengeführt statt doppelt angelegt. Bei Kräften zählt der Funkrufname,
-    sonst Name und Organisation, bei Benutzern Vor- und Nachname, sonst der Name.
-  - Ein zusammengeführter Datensatz eines anderen Bereichs ist danach hier nur lesbar.
-- **Konflikte:** Ändern ELVIS und Portal denselben Datensatz gleichzeitig, gilt der Stand der Cloud. Die verworfene
-  Änderung steht in der Karte unter „Konflikte“ und im Bedienprotokoll (Ziel `cloud`).
+- **Lokale Datensätze bleiben lokal.** Sie gehen nie in die Cloud und bleiben hier änderbar.
+- **Gleichnamige** Einträge werden nicht zusammengeführt, der lokale und der aus der Cloud stehen nebeneinander.
+  Rollen und Benutzer müssen eindeutig heißen: Gibt es den Namen lokal schon, bleibt der lokale, und der aus der Cloud
+  steht unter „Hinweise“ in der Karte und im Bedienprotokoll (Ziel `cloud`). Den lokalen umbenennen oder löschen,
+  dann *Alles neu abholen*.
 - **Benutzer** kommen ohne PIN, nur Name und Admin-Recht kommen aus der Cloud.
   - Solange keine PIN gesetzt ist, steht „PIN fehlt“ am Benutzer und er erscheint nicht in der Anmeldeauswahl.
   - Ein Admin setzt die PIN unter *Benutzer → Bearbeiten*.
-  - Der letzte Admin mit PIN bleibt immer Admin und wird nie gelöscht.
-- **Aufgabenvorlagen** verweisen auf Rollen und auf Dokumentvorlagen. Dokumentvorlagen werden nicht abgeglichen.
+  - Der letzte Admin mit PIN bleibt immer Admin. Löscht ihn die Cloud, bleibt er als lokaler stehen.
+- **Aufgabenvorlagen** verweisen auf Rollen und auf Dokumentvorlagen. Dokumentvorlagen kommen nicht aus der Cloud.
   ELVIS sucht sie lokal nach ihrem Namen, fehlt sie, bleibt die Aufgabe ohne Vorlage.
 - **Laufende Lagen** bleiben unberührt, sie arbeiten mit Kopien.
-- **Steuerung:** *Jetzt abgleichen* stößt einen Durchlauf an, *Alles neu laden* holt alles noch einmal ab, *Beenden*
-  stoppt den Abgleich.
-- **Trennen:** Die Daten bleiben als lokale stehen.
+- **Steuerung:** *Jetzt abholen* stößt einen Durchlauf an, *Alles neu abholen* holt alles noch einmal ab.
+- **Trennen** (hier oder im Portal): Die Daten aus der Cloud bleiben als lokale, änderbare stehen.
 
 ## Status im Portal
 

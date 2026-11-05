@@ -46,20 +46,20 @@ nicht.
 
 ## In der Cloud
 
-Ist die Installation mit dem [Cloud-Zugang](cloud-zugang.md) verknüpft und der Stammdaten-Abgleich gestartet, gleicht
-ELVIS die Objektbibliothek mit ab. Das umfasst Typen, Objekte und angehängte Dateien.
+Ist die Installation mit dem [Cloud-Zugang](cloud-zugang.md) verknüpft, holt ELVIS auch die Objektbibliothek aus der
+Cloud ab. Das umfasst Typen, Objekte und angehängte Dateien. Lokale Typen, Objekte und Dateien bleiben lokal und gehen
+nicht in die Cloud.
 
 - **Sichtbarkeit je Typ:** Der Typ legt fest, wer seine Objekte sieht, und zwar *Bereiche darüber und darunter*
   (Vorgabe), *nur darunter*, *nur darüber* oder *nur der eigene Bereich*. Ein Kreis-Typ „darunter“ zeigt seine
-  Objekte jeder Gemeinde im Kreis. Einstellbar ist das in ELVIS im Typ-Editor und im Portal.
+  Objekte jeder Gemeinde im Kreis. Einstellbar ist das im Portal.
 - **Vordefinierte Typen** (Wasserentnahmestelle, Einsatzobjekt) haben in jeder Installation und in der Cloud dieselbe
   ID. Gepflegt werden sie zentral, in ELVIS sind sie dann nur lesbar.
-- **Objekte anderer Bereiche** sind hier nur lesbar, mit Schloss und dem Namen des Bereichs. In die Lage übernehmen
-  geht trotzdem.
-- **Dateien** gehen mit, höchstens 50 MB je Datei. ELVIS lädt eigene Dateien vor dem Datensatz hoch und holt fremde
-  danach ab. Die Prüfsumme muss stimmen.
-- **Erster Abgleich:** Objekte aus demselben OSM-Import (gleiche OSM-ID) oder mit gleichem Typ, Namen und Ort werden
-  zusammengeführt statt doppelt angelegt.
+- **Objekte aus der Cloud** tragen das Badge „Cloud“ und sind hier nur lesbar, auch keine Dateien anhängen. In die
+  Lage übernehmen geht trotzdem. Lokale Objekte dürfen einen Typ aus der Cloud haben.
+- **Dateien** holt ELVIS nach dem Datensatz ab, höchstens 50 MB je Datei. Die Prüfsumme muss stimmen.
+- **Gleiche Objekte** lokal und in der Cloud (z. B. aus demselben OSM-Import) werden nicht zusammengeführt, sie stehen
+  nebeneinander.
 - **Im Portal** hat jeder Bereich eine Kartenansicht seiner Objekte, ein Formular mit Dateien und einen **CSV-Import**,
   z. B. für Hydrantenlisten des Wasserversorgers. Die Kopfzeile lautet `name;lat;lon` und kann `address;notes` und die
   Feldschlüssel enthalten, etwa `dn` oder `art`.
@@ -69,7 +69,7 @@ ELVIS die Objektbibliothek mit ab. Das umfasst Typen, Objekte und angehängte Da
 - Tabellen `object_types`, `library_objects`, `library_files`, Dateien unter `<dataDir>/library` (im
   [Backup](../backup.md) enthalten).
 - Jeder Datensatz hat eine `uid` und eine Revision, Gelöschtes bleibt als Eintrag mit `deleted_at` stehen. Daraus
-  erkennt der Cloud-Abgleich Löschungen.
+  erkennt ELVIS Löschungen in der Cloud.
 - API: `GET /api/library/types`, `GET /api/library/objects?bbox=s,w,n,e&types=1,2&q=…`, `GET/PUT/DELETE
   /api/library/objects/:id`, `POST /api/library/objects/:id/files`, `GET /api/library/files/:id/content`,
   `POST /api/library/import/osm-water`; Typen unter `/api/system/library/types` (Admins). Lesen geht ohne Anmeldung,

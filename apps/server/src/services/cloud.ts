@@ -38,6 +38,7 @@ export class CloudService {
   private checkedAt = 0;
   private lastError: string | null = null;
   private readonly unlinkListeners: (() => void)[] = [];
+  private readonly linkListeners: (() => void)[] = [];
 
   constructor(
     private readonly db: Db,
@@ -67,9 +68,13 @@ export class CloudService {
   }
 
   private remember(link: CloudLinkStatus): void {
-    const before = JSON.stringify(this.known());
+    const prev = this.known();
+    const before = JSON.stringify(prev);
     this.save(STATE_KEY, link.state === 'none' ? null : link);
     if (JSON.stringify(link) !== before) this.opts.notify(['cloud']);
+    // Verknüpft bzw. getrennt (auch im Portal): Abgleich anstoßen bzw. Cloud-Daten zu lokalen machen
+    if (prev.state !== 'linked' && link.state === 'linked') for (const cb of this.linkListeners) cb();
+    if (prev.state === 'linked' && link.state !== 'linked') for (const cb of this.unlinkListeners) cb();
   }
 
   private async key(create: boolean): Promise<StoredKey | null> {
@@ -145,9 +150,14 @@ export class CloudService {
     return this.call<T>(method, path, key, body);
   }
 
-  /** Beim Trennen (Abgleich beenden) */
+  /** Beim Trennen (hier oder im Portal) */
   onUnlink(cb: () => void): void {
     this.unlinkListeners.push(cb);
+  }
+
+  /** Sobald die Verknüpfung bekannt wird (Code im Portal eingegeben) */
+  onLink(cb: () => void): void {
+    this.linkListeners.push(cb);
   }
 
   private view(link: CloudLinkStatus): CloudStatus {
@@ -198,7 +208,6 @@ export class CloudService {
     this.save(KEY_KEY, null);
     this.signer = null;
     this.remember({ state: 'none' });
-    for (const cb of this.unlinkListeners) cb();
     this.lastError = null;
     if (before.state !== 'none') {
       this.store.addAudit({ operator, target: 'cloud', action: 'unlink', params: '', success: true, message: before.state === 'linked' ? `Von ${before.node.path.join(' › ')} getrennt` : 'Verknüpfungscode zurückgezogen' });

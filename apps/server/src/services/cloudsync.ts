@@ -1,21 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   DEFAULT_UNIT_SIGN,
   RECORD_KINDS,
   RECORD_SCHEMAS,
-  SYNC_MAX_CHANGES,
   tacticalSignSchema,
-  type CloudOrigin,
   type CloudSyncStatus,
   type RecordDataMap,
   type RecordKind,
-  type SyncChange,
   type SyncPull,
   type SyncRecord,
-  type SyncResult,
   type Topic,
 } from '@elvis/shared';
 import type { Db } from '../db/index.js';
@@ -23,34 +19,32 @@ import type { Store } from '../db/store.js';
 import type { CloudService } from './cloud.js';
 
 /**
- * Stammdaten-Abgleich mit der Cloud (Kräfte, Einsatzstichworte, Rollen, Benutzer, Aufgabenvorlagen).
+ * Stammdaten aus der Cloud (Kräfte, Einsatzstichworte, Rollen, Benutzer, Aufgabenvorlagen, Objektbibliothek).
  *
- * - **Abholen:** Änderungen ab dem Cursor; ELVIS übernimmt sie in die lokalen Tabellen (Herkunft = Knoten). Datensätze
- *   anderer Knoten sind hier nur lesbar.
- * - **Senden:** eigene Datensätze (nur lokal oder vom eigenen Knoten) vergleicht ELVIS mit dem zuletzt abgeglichenen
- *   Stand in `cloud_sync`; Neues, Geändertes und Gelöschtes geht an die Cloud. Bei einem Konflikt gewinnt die Cloud,
- *   die verworfene Änderung steht im Bedienprotokoll.
- * - **Erster Abgleich:** Lokale Datensätze ohne uid, die einem Cloud-Datensatz entsprechen (Funkrufname bzw. Name), werden
- *   übernommen statt doppelt angelegt.
+ * - **Nur abholen:** Solange die Installation verknüpft ist, holt ELVIS jede Minute die Änderungen ab dem Cursor und
+ *   übernimmt sie in die lokalen Tabellen (Herkunft = Knoten). Diese Datensätze zeigt ELVIS mit „Quelle: Cloud“; sie
+ *   sind hier nur lesbar, gepflegt werden sie im Portal.
+ * - **Lokale Datensätze bleiben lokal:** Sie gehen nie in die Cloud und werden nicht mit Cloud-Datensätzen
+ *   zusammengeführt (gleichnamige stehen nebeneinander; Rollen und Benutzer haben eindeutige Namen – dort bleibt der
+ *   lokale und der aus der Cloud steht als Hinweis da).
+ * - **Getrennt:** Die Cloud-Datensätze bleiben als lokale (änderbare) stehen.
  *
  * Laufende Lagen bleiben unberührt: Sie arbeiten mit Kopien (units, tasks).
  */
 
 const STATE_KEY = 'cloud:sync';
 const INTERVAL_MS = 60_000;
-const MAX_CONFLICTS = 20;
+const MAX_NOTICES = 20;
 
 interface SyncState {
-  enabled: boolean;
   cursor: number;
-  nodeId: string | null;
   lastRunAt: string | null;
   lastSuccessAt: string | null;
   lastError: string | null;
-  conflicts: CloudSyncStatus['conflicts'];
+  notices: CloudSyncStatus['notices'];
 }
 
-const EMPTY: SyncState = { enabled: false, cursor: 0, nodeId: null, lastRunAt: null, lastSuccessAt: null, lastError: null, conflicts: [] };
+const EMPTY: SyncState = { cursor: 0, lastRunAt: null, lastSuccessAt: null, lastError: null, notices: [] };
 
 const TABLE: Record<RecordKind, string> = {
   force: 'force_units',
@@ -65,20 +59,10 @@ const TABLE: Record<RecordKind, string> = {
 /** Objektbibliothek: gelöschte bleiben lokal als Tombstone (deleted_at) stehen */
 const LIBRARY: RecordKind[] = ['objectType', 'object', 'objectFile'];
 const live = (kind: RecordKind) => (LIBRARY.includes(kind) ? ' WHERE deleted_at IS NULL' : '');
-/** Reihenfolge beim Übernehmen und Senden: Verweise zuerst */
+/** Reihenfolge beim Übernehmen: Verweise zuerst */
 const ORDER: RecordKind[] = ['role', 'keyword', 'user', 'force', 'taskTemplate', 'objectType', 'object', 'objectFile'];
 const TOPICS: Topic[] = ['forces', 'roles', 'users', 'taskTemplates', 'settings', 'tasks', 'library', 'cloud'];
 
-type Row = Record<string, unknown> & { id: number; uid: string | null; origin_node: string | null; origin_name: string | null };
-
-const lower = (v: unknown) => String(v ?? '').trim().toLowerCase();
-
-/** Stabile Darstellung (sortierte Schlüssel) für den Vergleich */
-function stable(v: unknown): string {
-  if (Array.isArray(v)) return `[${v.map(stable).join(',')}]`;
-  if (v && typeof v === 'object') return `{${Object.keys(v as object).sort().map((k) => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`).join(',')}}`;
-  return JSON.stringify(v ?? null);
-}
 const canon = <K extends RecordKind>(kind: K, data: unknown): RecordDataMap[K] => RECORD_SCHEMAS[kind].parse(data) as RecordDataMap[K];
 
 export class CloudSyncService {
@@ -94,6 +78,7 @@ export class CloudSyncService {
     private readonly opts: { notify: (t: Topic[]) => void; log?: { warn: (o: unknown, msg: string) => void }; intervalMs?: number; libraryDir: string },
   ) {
     cloud.onUnlink(() => this.detach());
+    cloud.onLink(() => void this.run().catch(() => undefined));
   }
 
   // --- Zustand ---
@@ -104,41 +89,23 @@ export class CloudSyncService {
   }
 
   private save(patch: Partial<SyncState>): SyncState {
-    const next = { ...this.state(), ...patch };
+    const s = this.state();
+    const next: SyncState = { cursor: s.cursor, lastRunAt: s.lastRunAt, lastSuccessAt: s.lastSuccessAt, lastError: s.lastError, notices: s.notices, ...patch };
     this.db
       .prepare("INSERT INTO settings (key, value, updated_at, updated_by) VALUES (?, ?, ?, 'system') ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
       .run(STATE_KEY, JSON.stringify(next), new Date().toISOString());
     return next;
   }
 
-  /** Eigener Knoten (aus dem letzten Abruf) */
-  ownNode(): string | null {
-    return this.state().nodeId;
-  }
-
-  /** Herkunft eines Datensatzes für die Oberfläche; null = nur lokal */
-  origin(row: { origin_node: string | null; origin_name: string | null }): CloudOrigin | null {
-    if (!row.origin_node) return null;
-    return { node: row.origin_node, name: row.origin_name ?? '', editable: row.origin_node === this.state().nodeId };
-  }
-
-  /** Darf lokal geändert werden? (Datensätze anderer Knoten nur in der Cloud) */
-  editable(kind: RecordKind, id: number): { ok: true } | { ok: false; owner: string } {
-    const r = this.db.prepare(`SELECT origin_node, origin_name FROM ${TABLE[kind]} WHERE id = ?`).get(id) as { origin_node: string | null; origin_name: string | null } | undefined;
-    if (!r?.origin_node || r.origin_node === this.state().nodeId) return { ok: true };
-    return { ok: false, owner: r.origin_name ?? r.origin_node };
-  }
-
   status(): CloudSyncStatus {
     const s = this.state();
-    const own = s.nodeId;
     const counts = Object.fromEntries(
       RECORD_KINDS.map((k) => {
         const rows = this.db.prepare(`SELECT origin_node FROM ${TABLE[k]}${live(k)}`).all() as { origin_node: string | null }[];
-        return [k, { foreign: rows.filter((r) => r.origin_node && r.origin_node !== own).length, own: rows.filter((r) => r.origin_node && r.origin_node === own).length, local: rows.filter((r) => !r.origin_node).length }];
+        return [k, { cloud: rows.filter((r) => r.origin_node).length, local: rows.filter((r) => !r.origin_node).length }];
       }),
     ) as CloudSyncStatus['counts'];
-    return { enabled: s.enabled, running: this.running !== null, lastRunAt: s.lastRunAt, lastSuccessAt: s.lastSuccessAt, lastError: s.lastError, counts, conflicts: s.conflicts };
+    return { active: this.cloud.linked(), running: this.running !== null, lastRunAt: s.lastRunAt, lastSuccessAt: s.lastSuccessAt, lastError: s.lastError, counts, notices: s.notices };
   }
 
   // --- Steuerung ---
@@ -155,54 +122,36 @@ export class CloudSyncService {
     this.timer = null;
   }
 
-  async enable(operator: string): Promise<CloudSyncStatus> {
-    if (!this.cloud.linked()) throw Object.assign(new Error('Nicht mit der Cloud verknüpft'), { statusCode: 409 });
-    this.save({ enabled: true, cursor: 0 });
-    this.audit(operator, 'enable', 'Stammdaten-Abgleich gestartet');
-    await this.run();
-    return this.status();
-  }
-
-  async disable(operator: string): Promise<CloudSyncStatus> {
-    this.save({ enabled: false });
-    this.audit(operator, 'disable', 'Stammdaten-Abgleich beendet');
-    return this.status();
-  }
-
-  /** Alles neu abholen (Cursor auf 0) */
+  /** Alles neu abholen (Cursor auf 0), z. B. nachdem ein gleichnamiger lokaler Datensatz entfernt wurde */
   async resync(operator: string): Promise<CloudSyncStatus> {
-    this.save({ cursor: 0 });
-    this.audit(operator, 'resync', 'Stammdaten neu abgeholt');
+    this.save({ cursor: 0, notices: [] });
+    this.store.addAudit({ operator, target: 'cloud', action: 'resync', params: '', success: true, message: 'Stammdaten aus der Cloud neu abgeholt' });
+    this.opts.notify(['audit', 'cloud']);
     await this.run();
     return this.status();
   }
 
-  /** Getrennt: Cloud-Datensätze bleiben als lokale stehen, der Abgleich endet */
+  /** Getrennt: Cloud-Datensätze bleiben als lokale stehen */
   private detach(): void {
     this.db.transaction(() => {
-      for (const t of Object.values(TABLE)) this.db.prepare(`UPDATE ${t} SET origin_node = NULL, origin_name = NULL`).run();
+      for (const t of Object.values(TABLE)) this.db.prepare(`UPDATE ${t} SET origin_node = NULL, origin_name = NULL WHERE origin_node IS NOT NULL`).run();
       this.db.prepare('DELETE FROM cloud_sync').run();
     })();
     this.save({ ...EMPTY });
     this.opts.notify(TOPICS);
   }
 
-  private audit(operator: string, action: string, message: string, success = true): void {
-    this.store.addAudit({ operator, target: 'cloud', action, params: '', success, message });
-    this.opts.notify(['audit', 'cloud']);
-  }
-
-  private conflict(kind: RecordKind, name: string, reason: string): void {
+  /** Hinweis für die Oberfläche und das Bedienprotokoll (gleiche nur einmal je Stunde) */
+  private notice(kind: RecordKind, name: string, reason: string): void {
     const s = this.state();
-    if (s.conflicts.some((c) => c.kind === kind && c.name === name && c.reason === reason && Date.now() - new Date(c.at).getTime() < 3600_000)) return;
-    this.save({ conflicts: [{ at: new Date().toISOString(), kind, name, reason }, ...s.conflicts].slice(0, MAX_CONFLICTS) });
-    this.store.addAudit({ operator: 'Cloud', target: 'cloud', action: 'conflict', params: kind, success: false, message: `${name}: ${reason}` });
+    if (s.notices.some((c) => c.kind === kind && c.name === name && c.reason === reason && Date.now() - new Date(c.at).getTime() < 3600_000)) return;
+    this.save({ notices: [{ at: new Date().toISOString(), kind, name, reason }, ...s.notices].slice(0, MAX_NOTICES) });
+    this.store.addAudit({ operator: 'Cloud', target: 'cloud', action: 'notice', params: kind, success: false, message: `${name}: ${reason}` });
   }
 
-  /** Ein Durchlauf: abholen, dann senden. Gleichzeitige Aufrufe teilen sich den laufenden. */
+  /** Ein Durchlauf (nur verknüpft). Gleichzeitige Aufrufe teilen sich den laufenden. */
   run(): Promise<void> {
-    const s = this.state();
-    if (!s.enabled || !this.cloud.linked()) return Promise.resolve();
+    if (!this.cloud.linked()) return Promise.resolve();
     this.running ??= this.cycle().finally(() => {
       this.running = null;
     });
@@ -215,7 +164,6 @@ export class CloudSyncService {
       let changed = false;
       for (let page = 0; page < 50; page++) {
         const res = await this.cloud.signed<SyncPull>('GET', `/v1/elws/me/cloud/sync?after=${this.state().cursor}`);
-        this.save({ nodeId: res.nodeId });
         if (res.items.length) {
           this.db.transaction(() => this.applyAll(res.items))();
           changed = true;
@@ -225,109 +173,25 @@ export class CloudSyncService {
       }
       for (const path of this.unlinkLater.splice(0)) await unlink(path).catch(() => {});
       if (await this.fetchFiles()) changed = true;
-      if (await this.push()) changed = true;
       this.save({ lastRunAt: at, lastSuccessAt: at, lastError: null });
       if (changed) this.opts.notify(TOPICS);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.save({ lastRunAt: at, lastError: msg });
-      this.opts.log?.warn({ err: msg }, 'Stammdaten-Abgleich fehlgeschlagen');
+      this.opts.log?.warn({ err: msg }, 'Stammdaten aus der Cloud nicht abgeholt');
       this.opts.notify(['cloud']);
     }
   }
 
-  // --- Lokale Datensätze ---
-
-  private rows(kind: RecordKind): Row[] {
-    return this.db.prepare(`SELECT * FROM ${TABLE[kind]}${live(kind)}`).all() as Row[];
-  }
-
-  private uidOf(kind: RecordKind, id: number): string | null {
-    return (this.db.prepare(`SELECT uid FROM ${TABLE[kind]} WHERE id = ?`).get(id) as { uid: string | null } | undefined)?.uid ?? null;
-  }
-
-  private idOf(kind: RecordKind, uid: string): number | null {
-    return (this.db.prepare(`SELECT id FROM ${TABLE[kind]} WHERE uid = ?${LIBRARY.includes(kind) ? ' AND deleted_at IS NULL' : ''}`).get(uid) as { id: number } | undefined)?.id ?? null;
-  }
-
-  /** Lokaler Datensatz in der Form der Cloud */
-  private serialize(kind: RecordKind, r: Row): unknown {
-    switch (kind) {
-      case 'force': {
-        const sign = JSON.parse(r.sign as string) as unknown;
-        const members = (this.db.prepare('SELECT m.role, f.uid FROM force_unit_members m JOIN force_units f ON f.id = m.child_id WHERE m.parent_id = ? ORDER BY m.sort').all(r.id) as { role: string; uid: string | null }[])
-          .filter((m) => m.uid)
-          .map((m) => ({ uid: m.uid!, role: m.role }));
-        return {
-          name: r.name,
-          callsign: r.callsign,
-          organization: r.organization,
-          notes: r.notes,
-          email: r.email,
-          mobile: r.mobile,
-          sign: stable(sign) === stable(DEFAULT_UNIT_SIGN) ? null : sign,
-          strength: { leaders: r.leaders, subLeaders: r.sub_leaders, crew: r.crew },
-          members,
-        };
-      }
-      case 'keyword':
-        return { name: r.name, sort: r.sort };
-      case 'role':
-        return { name: r.name, description: r.description, sort: r.sort };
-      case 'user':
-        return { firstName: r.first_name, lastName: r.last_name, isAdmin: r.is_admin === 1 };
-      case 'taskTemplate': {
-        const tpl = r.document_template_id ? (this.db.prepare('SELECT name FROM templates WHERE id = ?').get(r.document_template_id) as { name: string } | undefined) : undefined;
-        return {
-          summary: r.summary,
-          description: r.description,
-          roleUid: r.role_id ? this.uidOf('role', r.role_id as number) : null,
-          documentTemplateName: tpl?.name ?? null,
-          intervalMinutes: r.interval_minutes,
-          offsetMinutes: r.offset_minutes,
-          sort: r.sort,
-        };
-      }
-      case 'objectType':
-        return { name: r.name, icon: r.icon, color: r.color, fields: JSON.parse(r.fields as string), builtin: r.builtin ?? null, visibility: r.visibility ?? 'both', sort: r.sort };
-      case 'object':
-        return {
-          typeUid: this.uidOf('objectType', r.type_id as number),
-          name: r.name,
-          lat: r.lat,
-          lon: r.lon,
-          address: r.address,
-          notes: r.notes,
-          props: JSON.parse(r.props as string),
-          source: r.source ?? null,
-          geometry: r.geometry ? JSON.parse(r.geometry as string) : null,
-        };
-      case 'objectFile':
-        return { objectUid: this.uidOf('object', r.object_id as number), filename: r.filename, mimeType: r.mime_type, sizeBytes: r.size_bytes, sha256: r.sha256 };
-    }
-  }
-
-  /** Erkennungsmerkmal für den ersten Abgleich (gleiche Einheit, gleiche Rolle …) */
-  private naturalKey(kind: RecordKind, d: Record<string, unknown>): string {
-    switch (kind) {
-      case 'force':
-        return d.callsign ? `c:${lower(d.callsign)}` : `n:${lower(d.name)}|${lower(d.organization)}`;
-      case 'user':
-        return `${lower(d.firstName ?? d.first_name)}|${lower(d.lastName ?? d.last_name)}`;
-      case 'taskTemplate':
-        return lower(d.summary);
-      case 'objectType':
-        return d.builtin ? `b:${String(d.builtin)}` : lower(d.name);
-      case 'object':
-        return d.source ? `s:${String(d.source)}` : `${String(d.typeUid)}|${lower(d.name)}|${Number(d.lat).toFixed(5)}|${Number(d.lon).toFixed(5)}`;
-      case 'objectFile':
-        return `${String(d.objectUid)}|${lower(d.filename)}|${String(d.sha256)}`;
-      default:
-        return lower(d.name);
-    }
-  }
-
   // --- Übernehmen ---
+
+  /** Lokale ID eines Cloud-Datensatzes (lokale Datensätze haben keine Herkunft und werden nie getroffen) */
+  private idOf(kind: RecordKind, uid: string): number | null {
+    const row = this.db.prepare(`SELECT id FROM ${TABLE[kind]} WHERE uid = ? AND origin_node IS NOT NULL${LIBRARY.includes(kind) ? ' AND deleted_at IS NULL' : ''}`).get(uid) as
+      | { id: number }
+      | undefined;
+    return row?.id ?? null;
+  }
 
   private applyAll(items: SyncRecord[]): void {
     const sorted = [...items].sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind) || a.seq - b.seq);
@@ -335,7 +199,9 @@ export class CloudSyncService {
       try {
         this.apply(item);
       } catch (e) {
-        this.conflict(item.kind, item.data ? String((item.data as Record<string, unknown>).name ?? (item.data as Record<string, unknown>).summary ?? item.uid) : item.uid, `Nicht übernommen: ${e instanceof Error ? e.message : String(e)}`);
+        const d = (item.data ?? {}) as Record<string, unknown>;
+        const name = d.firstName ? `${String(d.firstName)} ${String(d.lastName ?? '')}`.trim() : String(d.name ?? d.summary ?? item.uid);
+        this.notice(item.kind, name, `Nicht übernommen: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
     // Verweise, die beim ersten Mal fehlten (Untereinheit, Rolle kam später)
@@ -348,55 +214,46 @@ export class CloudSyncService {
   private snapshot(item: SyncRecord, unresolved: boolean): void {
     this.db
       .prepare('INSERT INTO cloud_sync (uid, kind, rev, node_id, data, unresolved) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(uid) DO UPDATE SET rev = excluded.rev, node_id = excluded.node_id, data = excluded.data, unresolved = excluded.unresolved')
-      .run(item.uid, item.kind, item.rev, item.nodeId, stable(item.data), unresolved ? 1 : 0);
+      .run(item.uid, item.kind, item.rev, item.nodeId, JSON.stringify(item.data), unresolved ? 1 : 0);
+  }
+
+  /** Bleibt lokal: Herkunft weg, damit er hier wieder änderbar ist */
+  private keepLocal(kind: RecordKind, id: number, uid: string): void {
+    this.db.prepare(`UPDATE ${TABLE[kind]} SET origin_node = NULL, origin_name = NULL WHERE id = ?`).run(id);
+    this.db.prepare('DELETE FROM cloud_sync WHERE uid = ?').run(uid);
   }
 
   private apply(item: SyncRecord): void {
     const kind = item.kind;
     const table = TABLE[kind];
-    // Schon bekannt (z. B. die eigene, gerade gesendete Änderung): lokale Änderungen seitdem nicht überschreiben
-    const known = this.db.prepare('SELECT rev, data FROM cloud_sync WHERE uid = ?').get(item.uid) as { rev: number; data: string } | undefined;
+    const known = this.db.prepare('SELECT rev FROM cloud_sync WHERE uid = ?').get(item.uid) as { rev: number } | undefined;
     if (known && known.rev >= item.rev) return;
     let id = this.idOf(kind, item.uid);
-    // Eigene, noch nicht gesendete Änderung wird überschrieben: im Protokoll festhalten
-    if (id !== null && known && !item.deleted) {
-      const row = this.db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as Row;
-      let local: string | null = null;
-      try {
-        local = stable(canon(kind, this.serialize(kind, row)));
-      } catch {
-        /* lokal ungültig */
-      }
-      if (local !== null && local !== known.data && local !== stable(item.data)) this.conflict(kind, this.label(kind, id), 'Gleichzeitig in der Cloud geändert – Stand der Cloud übernommen');
-    }
 
     if (item.deleted || !item.data) {
       this.db.prepare('DELETE FROM cloud_sync WHERE uid = ?').run(item.uid);
       if (id === null) return;
-      if (kind === 'user' && this.isLastAdmin(id)) return this.conflict(kind, this.label(kind, id), 'Letzter Admin mit PIN bleibt lokal');
+      if (kind === 'user' && this.isLastAdmin(id)) {
+        this.keepLocal(kind, id, item.uid);
+        return this.notice(kind, this.label(kind, id), 'In der Cloud gelöscht – bleibt als letzter Admin mit PIN lokal');
+      }
+      if (kind === 'objectType' && this.db.prepare('SELECT 1 FROM library_objects WHERE type_id = ? AND deleted_at IS NULL').get(id)) {
+        this.keepLocal(kind, id, item.uid);
+        return this.notice(kind, this.label(kind, id), 'In der Cloud gelöscht – Typ hat hier noch Objekte und bleibt lokal');
+      }
       if (kind === 'object' || kind === 'objectFile') {
         const files = this.db.prepare(`SELECT storage_name FROM library_files WHERE ${kind === 'object' ? 'object_id' : 'id'} = ?`).all(id) as { storage_name: string }[];
         for (const f of files) this.unlinkLater.push(join(this.opts.libraryDir, f.storage_name));
-      }
-      if (kind === 'objectType' && this.db.prepare('SELECT 1 FROM library_objects WHERE type_id = ? AND deleted_at IS NULL').get(id)) {
-        return this.conflict(kind, this.label(kind, id), 'Typ hat hier noch Objekte – bleibt lokal');
       }
       this.db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
       return;
     }
 
     const data = canon(kind, item.data);
-    if (id === null) {
-      // Erster Abgleich: passenden lokalen Datensatz ohne uid übernehmen
-      const key = this.naturalKey(kind, data as Record<string, unknown>);
-      // Kandidaten: nur lokal und noch nie abgeglichen (die Objektbibliothek vergibt uids schon beim Anlegen)
-      const synced = this.db.prepare('SELECT 1 FROM cloud_sync WHERE uid = ?');
-      const match = this.rows(kind).find((r) => !r.origin_node && (!r.uid || !synced.get(r.uid)) && this.naturalKey(kind, this.serialize(kind, r) as Record<string, unknown>) === key);
-      if (match) {
-        this.db.prepare(`UPDATE ${table} SET uid = ? WHERE id = ?`).run(item.uid, match.id);
-        id = match.id;
-      }
-    }
+    // Vordefinierte Objekttypen haben überall dieselbe uid: der lokale wird zum Cloud-Typ (einmalig, nicht doppelt)
+    if (id === null && kind === 'objectType') id = (this.db.prepare('SELECT id FROM object_types WHERE uid = ? AND builtin IS NOT NULL').get(item.uid) as { id: number } | undefined)?.id ?? null;
+    // Lokaler Datensatz mit derselben uid (früher hochgeladen und danach getrennt): bleibt lokal, der aus der Cloud kommt dazu
+    if (id === null) this.db.prepare(`UPDATE ${table} SET uid = ? WHERE uid = ? AND origin_node IS NULL`).run(randomUUID(), item.uid);
     id = this.write(kind, id, data, item);
     this.db.prepare(`UPDATE ${table} SET uid = ?, origin_node = ?, origin_name = ? WHERE id = ?`).run(item.uid, item.nodeId, item.nodeName, id);
     this.snapshot(item, !this.resolve(kind, id, data));
@@ -426,14 +283,13 @@ export class CloudSyncService {
       }
       case 'role': {
         const d = data as RecordDataMap['role'];
-        const clash = this.db.prepare('SELECT id, uid FROM roles WHERE name = ? COLLATE NOCASE AND id IS NOT ?').get(d.name, id) as { id: number; uid: string | null } | undefined;
-        if (clash) throw new Error(`Rolle „${d.name}“ gibt es schon`);
+        if (this.db.prepare('SELECT 1 FROM roles WHERE name = ? COLLATE NOCASE AND id IS NOT ?').get(d.name, id)) throw new Error(`Rolle „${d.name}“ gibt es hier schon (lokal umbenennen oder löschen, dann neu abholen)`);
         return run('INSERT INTO roles (name, description, sort) VALUES (?, ?, ?)', 'UPDATE roles SET name = ?, description = ?, sort = ? WHERE id = ?', [d.name, d.description, d.sort]);
       }
       case 'user': {
         const d = data as RecordDataMap['user'];
-        const clash = this.db.prepare('SELECT id FROM users WHERE lower(first_name) = lower(?) AND lower(last_name) = lower(?) AND id IS NOT ?').get(d.firstName, d.lastName, id);
-        if (clash) throw new Error(`Benutzer ${d.firstName} ${d.lastName} gibt es schon`);
+        if (this.db.prepare('SELECT 1 FROM users WHERE lower(first_name) = lower(?) AND lower(last_name) = lower(?) AND id IS NOT ?').get(d.firstName, d.lastName, id))
+          throw new Error(`Benutzer ${d.firstName} ${d.lastName} gibt es hier schon (lokal löschen, dann neu abholen)`);
         // Der letzte Admin mit PIN bleibt Admin (sonst sperrt die Cloud die Installation aus)
         const isAdmin = d.isAdmin || (id !== null && this.isLastAdmin(id));
         if (id === null)
@@ -519,18 +375,17 @@ export class CloudSyncService {
   }
 
   private label(kind: RecordKind, id: number): string {
-    const r = this.db.prepare(`SELECT * FROM ${TABLE[kind]} WHERE id = ?`).get(id) as Row | undefined;
+    const r = this.db.prepare(`SELECT * FROM ${TABLE[kind]} WHERE id = ?`).get(id) as Record<string, unknown> | undefined;
     if (!r) return String(id);
-    const d = this.serialize(kind, r) as Record<string, unknown>;
-    return kind === 'user' ? `${d.firstName as string} ${d.lastName as string}` : String(d.name ?? d.summary ?? id);
+    if (kind === 'user') return `${String(r.first_name)} ${String(r.last_name)}`;
+    return String(r.name ?? r.summary ?? r.filename ?? id);
   }
 
   /** Inhalte von Dateien aus der Cloud holen, die hier noch fehlen (Prüfsumme muss stimmen) */
   private async fetchFiles(): Promise<boolean> {
-    const own = this.state().nodeId;
     const rows = this.db
-      .prepare('SELECT id, uid, storage_name, sha256, filename FROM library_files WHERE origin_node IS NOT NULL AND origin_node IS NOT ? AND deleted_at IS NULL')
-      .all(own) as { id: number; uid: string; storage_name: string; sha256: string; filename: string }[];
+      .prepare('SELECT id, uid, storage_name, sha256, filename FROM library_files WHERE origin_node IS NOT NULL AND deleted_at IS NULL')
+      .all() as { id: number; uid: string; storage_name: string; sha256: string; filename: string }[];
     let got = false;
     for (const r of rows) {
       const path = join(this.opts.libraryDir, r.storage_name);
@@ -541,92 +396,9 @@ export class CloudSyncService {
         await writeFile(path, bytes);
         got = true;
       } catch (e) {
-        this.conflict('objectFile', r.filename, `Datei nicht geladen: ${e instanceof Error ? e.message : String(e)}`);
+        this.notice('objectFile', r.filename, `Datei nicht geladen: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
     return got;
   }
-
-  // --- Senden ---
-
-  private async push(): Promise<boolean> {
-    const own = this.state().nodeId;
-    if (!own) return false;
-    const changes: SyncChange[] = [];
-    const names = new Map<string, string>();
-    this.db.transaction(() => {
-      for (const kind of ORDER) {
-        const table = TABLE[kind];
-        // Vordefinierte Objekttypen gehören der Wurzel (Betreiber), nie einer Installation
-        const local = this.rows(kind).filter((r) => (!r.origin_node || r.origin_node === own) && !(kind === 'objectType' && r.builtin));
-        for (const r of local) {
-          if (!r.uid) {
-            const uid = randomUUID();
-            this.db.prepare(`UPDATE ${table} SET uid = ? WHERE id = ?`).run(uid, r.id);
-            r.uid = uid;
-          }
-        }
-        for (const r of local) {
-          let data: unknown;
-          try {
-            data = canon(kind, this.serialize(kind, r));
-          } catch {
-            continue; // lokal ungültig (z. B. zu lang für die Cloud) – bleibt lokal
-          }
-          const snap = this.db.prepare('SELECT rev, data FROM cloud_sync WHERE uid = ?').get(r.uid) as { rev: number; data: string } | undefined;
-          if (snap && snap.data === stable(data)) continue;
-          changes.push({ uid: r.uid!, kind, baseRev: snap?.rev ?? 0, data });
-          names.set(r.uid!, this.label(kind, r.id));
-        }
-        // Lokal gelöscht: eigene Datensätze, die es nicht mehr gibt
-        const gone = this.db
-          .prepare(`SELECT s.uid, s.rev, s.data FROM cloud_sync s LEFT JOIN ${table} t ON t.uid = s.uid${LIBRARY.includes(kind) ? ' AND t.deleted_at IS NULL' : ''} WHERE s.kind = ? AND s.node_id = ? AND t.id IS NULL`)
-          .all(kind, own) as { uid: string; rev: number; data: string }[];
-        for (const g of gone) {
-          changes.push({ uid: g.uid, kind, baseRev: g.rev, deleted: true });
-          const d = JSON.parse(g.data) as Record<string, unknown>;
-          names.set(g.uid, String(d.name ?? d.summary ?? `${String(d.firstName ?? '')} ${String(d.lastName ?? '')}`.trim()));
-        }
-      }
-    })();
-    if (!changes.length) return false;
-
-    // Neue Dateien: erst den Inhalt hochladen, dann den Datensatz senden
-    for (const c of changes.filter((x) => x.kind === 'objectFile' && x.baseRev === 0 && !x.deleted)) {
-      const row = this.db.prepare('SELECT storage_name FROM library_files WHERE uid = ?').get(c.uid) as { storage_name: string } | undefined;
-      if (!row) continue;
-      try {
-        await this.cloud.signedRaw('PUT', `/v1/elws/me/cloud/files/${c.uid}`, await readFile(join(this.opts.libraryDir, row.storage_name)));
-      } catch (e) {
-        // 409: schon hochgeladen (z. B. ein früherer Durchlauf brach danach ab)
-        if (!(e instanceof Error && /schon/.test(e.message))) throw e;
-      }
-    }
-
-    for (let i = 0; i < changes.length; i += SYNC_MAX_CHANGES) {
-      const batch = changes.slice(i, i + SYNC_MAX_CHANGES);
-      const { results } = await this.cloud.signed<{ results: SyncResult[] }>('POST', '/v1/elws/me/cloud/sync', { changes: batch });
-      this.db.transaction(() => {
-        for (const res of results) {
-          const change = batch.find((c) => c.uid === res.uid)!;
-          if (res.status === 'ok') {
-            if (res.record.deleted) this.db.prepare('DELETE FROM cloud_sync WHERE uid = ?').run(res.uid);
-            else {
-              this.snapshot(res.record, false);
-              this.db.prepare(`UPDATE ${TABLE[change.kind]} SET origin_node = ?, origin_name = ? WHERE uid = ?`).run(res.record.nodeId, res.record.nodeName, res.uid);
-            }
-          } else if (res.status === 'conflict') {
-            // Cloud gewinnt
-            this.conflict(change.kind, names.get(res.uid) ?? res.uid, `${res.reason} – Stand der Cloud übernommen`);
-            if (res.record) this.applyAll([res.record]);
-            else if (change.baseRev > 0) this.db.prepare('DELETE FROM cloud_sync WHERE uid = ?').run(res.uid);
-          } else {
-            this.conflict(change.kind, names.get(res.uid) ?? res.uid, `Von der Cloud abgelehnt: ${res.reason}`);
-          }
-        }
-      })();
-    }
-    return true;
-  }
 }
-

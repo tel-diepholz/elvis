@@ -10,10 +10,8 @@ export function cloudRoutes(app: FastifyInstance, cloud: CloudService, sync: Clo
   app.post('/api/system/cloud/link', async (req) => cloud.requestLink(parse(cloudLinkInputSchema, req.body).name, operatorOf(req)));
   app.delete('/api/system/cloud', async (req) => cloud.unlink(operatorOf(req)));
 
-  // Stammdaten-Abgleich
+  // Stammdaten aus der Cloud (nur abholen)
   app.get('/api/system/cloud/sync', async () => sync.status());
-  app.post('/api/system/cloud/sync/enable', async (req) => sync.enable(operatorOf(req)));
-  app.post('/api/system/cloud/sync/disable', async (req) => sync.disable(operatorOf(req)));
   app.post('/api/system/cloud/sync/resync', async (req) => sync.resync(operatorOf(req)));
   app.post('/api/system/cloud/sync/run', async () => (await sync.run(), sync.status()));
 }

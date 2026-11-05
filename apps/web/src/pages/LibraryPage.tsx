@@ -156,7 +156,7 @@ function ObjectEditor({ initial, types, onDone }: { initial: LibraryObjectDetail
     <form className="form" onSubmit={submit}>
       {readOnly && (
         <p>
-          <CloudBadge cloud={existing.cloud} /> Dieses Objekt pflegt {existing.cloud?.name} in der Cloud – hier nur lesbar.
+          <CloudBadge cloud={existing.cloud} /> Quelle: Cloud{existing.cloud?.name ? ` (${existing.cloud.name})` : ''} – hier nur lesbar, Änderungen im Portal.
         </p>
       )}
       <fieldset disabled={readOnly} className="library-fieldset">

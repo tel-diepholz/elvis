@@ -98,12 +98,12 @@ export function CloudCard() {
             <button
               className="btn btn-danger"
               disabled={unlink.isPending}
-              onClick={() => window.confirm(`Von „${l.node.name}“ trennen? Stammdaten aus der Cloud bleiben als lokale erhalten, der Abgleich endet.`) && unlink.mutate()}
+              onClick={() => window.confirm(`Von „${l.node.name}“ trennen? Die Daten aus der Cloud bleiben als lokale (änderbare) erhalten, es wird nichts mehr abgeholt.`) && unlink.mutate()}
             >
               <Unlink size={16} /> Trennen
             </button>
           </div>
-          <SyncPanel area={l.node.path.join(' › ')} />
+          <SyncPanel />
         </div>
       )}
     </Card>
@@ -112,8 +112,8 @@ export function CloudCard() {
 
 const fmt = (iso: string | null) => (iso ? fmtDateTime(iso) : 'noch nie');
 
-/** Stammdaten-Abgleich: starten, Stand, Konflikte */
-function SyncPanel({ area }: { area: string }) {
+/** Stammdaten aus der Cloud: Stand, Hinweise, jetzt bzw. alles neu abholen */
+function SyncPanel() {
   const toast = useToast();
   const qc = useQueryClient();
   const { data: s } = useQuery({ queryKey: ['cloud', 'sync'], queryFn: api.cloudSync, refetchInterval: 30_000 });
@@ -127,79 +127,62 @@ function SyncPanel({ area }: { area: string }) {
   });
   if (!s) return null;
   return (
-    <section className="form cloud-sync" aria-label="Stammdaten-Abgleich">
+    <section className="form cloud-sync" aria-label="Stammdaten aus der Cloud">
       <h3>
-        <DatabaseZap size={16} /> Stammdaten-Abgleich
+        <DatabaseZap size={16} /> Stammdaten aus der Cloud
       </h3>
-      {!s.enabled ? (
-        <>
-          <p className="muted">
-            Kräfte, Einsatzstichworte, Rollen, Benutzer (ohne PIN) und Aufgabenvorlagen mit der Cloud abgleichen. Die eigenen gehen an <strong>{area}</strong>; was Bereiche
-            darüber pflegen, kommt dazu und ist hier nur lesbar. Gleiche Einträge (Funkrufname bzw. Name) werden zusammengeführt statt doppelt angelegt.
-          </p>
-          <div className="form-actions">
-            <button className="btn btn-primary" disabled={action.isPending} onClick={() => action.mutate('enable')}>
-              <DatabaseZap size={16} /> Abgleich starten
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <p>
-            {s.lastError ? <Badge tone="warn">{s.lastError}</Badge> : <Badge tone="ok">Aktiv</Badge>} <span className="muted">zuletzt erfolgreich {fmt(s.lastSuccessAt)} · jede Minute</span>
-          </p>
-          <table className="table cloud-sync-counts">
-            <thead>
-              <tr>
-                <th />
-                <th>von anderen Bereichen</th>
-                <th>eigene</th>
-                <th>nur lokal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {RECORD_KINDS.map((k) => (
-                <tr key={k}>
-                  <td>{RECORD_KIND_LABELS[k]}</td>
-                  <td>{s.counts[k].foreign}</td>
-                  <td>{s.counts[k].own}</td>
-                  <td>{s.counts[k].local}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {s.conflicts.length > 0 && (
-            <details>
-              <summary>{s.conflicts.length} Konflikte (Stand der Cloud übernommen)</summary>
-              <ul className="simple-list">
-                {s.conflicts.map((c, i) => (
-                  <li key={i}>
-                    <div className="grow">
-                      <div className="cell-title">
-                        {RECORD_KIND_LABELS[c.kind]}: {c.name}
-                      </div>
-                      <div className="cell-sub">
-                        {fmtDateTime(c.at)} · {c.reason}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-          <div className="form-actions">
-            <button className="btn" disabled={action.isPending} onClick={() => action.mutate('run')}>
-              <RefreshCw size={16} /> Jetzt abgleichen
-            </button>
-            <button className="btn" disabled={action.isPending} onClick={() => action.mutate('resync')}>
-              Alles neu laden
-            </button>
-            <button className="btn" disabled={action.isPending} onClick={() => window.confirm('Abgleich beenden? Die Daten bleiben, Änderungen gehen nicht mehr hin und her.') && action.mutate('disable')}>
-              Beenden
-            </button>
-          </div>
-        </>
+      <p className="muted">
+        Kräfte, Einsatzstichworte, Rollen, Benutzer (ohne PIN), Aufgabenvorlagen und die Objektbibliothek aus dem Portal werden hier mit „Quelle: Cloud“ angezeigt und sind
+        nur lesbar – gepflegt werden sie im Portal. Lokale Einträge bleiben lokal und gehen nicht in die Cloud.
+      </p>
+      <p>
+        {s.lastError ? <Badge tone="warn">{s.lastError}</Badge> : <Badge tone="ok">Aktiv</Badge>} <span className="muted">zuletzt erfolgreich {fmt(s.lastSuccessAt)} · jede Minute</span>
+      </p>
+      <table className="table cloud-sync-counts">
+        <thead>
+          <tr>
+            <th />
+            <th>aus der Cloud</th>
+            <th>lokal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {RECORD_KINDS.map((k) => (
+            <tr key={k}>
+              <td>{RECORD_KIND_LABELS[k]}</td>
+              <td>{s.counts[k].cloud}</td>
+              <td>{s.counts[k].local}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {s.notices.length > 0 && (
+        <details>
+          <summary>{s.notices.length} Hinweise</summary>
+          <ul className="simple-list">
+            {s.notices.map((c, i) => (
+              <li key={i}>
+                <div className="grow">
+                  <div className="cell-title">
+                    {RECORD_KIND_LABELS[c.kind]}: {c.name}
+                  </div>
+                  <div className="cell-sub">
+                    {fmtDateTime(c.at)} · {c.reason}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
+      <div className="form-actions">
+        <button className="btn" disabled={action.isPending} onClick={() => action.mutate('run')}>
+          <RefreshCw size={16} /> Jetzt abholen
+        </button>
+        <button className="btn" disabled={action.isPending} title="Alles aus der Cloud erneut abholen, z. B. nachdem ein gleichnamiger lokaler Eintrag entfernt wurde" onClick={() => action.mutate('resync')}>
+          Alles neu abholen
+        </button>
+      </div>
     </section>
   );
 }

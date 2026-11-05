@@ -78,7 +78,6 @@ import { libraryRoutes } from './routes/library.js';
 import { cloudRoutes } from './routes/cloud.js';
 import { CloudService, type CloudFetch } from './services/cloud.js';
 import { CloudSyncService } from './services/cloudsync.js';
-import { setCloudOwner } from './services/cloudOrigin.js';
 import { LibraryService } from './services/library.js';
 import { ContactService } from './services/contacts.js';
 import { phonebookRoutes } from './routes/phonebook.js';
@@ -293,8 +292,6 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const library = new LibraryService(db, store, config.dataDir, { notify: (t) => hub.invalidate(t), overpass });
   const cloud = new CloudService(db, store, relay, { dataDir: config.dataDir, portalUrl: config.app.cloudUrl, version: ELVIS_VERSION, notify: (t) => hub.invalidate(t), fetch: opts.cloudFetch });
   const cloudSync = new CloudSyncService(db, store, cloud, { notify: (t) => hub.invalidate(t), log: server.log, libraryDir: library.dir });
-  setCloudOwner(() => cloudSync.ownNode());
-  incidents.cloudNode = () => cloudSync.ownNode();
   const phonebook = new PhonebookService(db, contacts);
   const phones = new PhoneService(db, {
     contacts: () => contacts.list(),
