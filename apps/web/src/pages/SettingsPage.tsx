@@ -35,6 +35,7 @@ import {
   Workflow,
   Siren,
   Library,
+  Cloud,
 } from 'lucide-react';
 import type { DeviceId } from '@elvis/shared';
 import { api } from '../lib/api';
@@ -57,6 +58,7 @@ import { IncidentSettingsCard } from './system/IncidentSettingsCard';
 import { RequestSettingsCard } from './system/RequestSettingsCard';
 import { OverpassQueriesCard } from './system/OverpassQueriesCard';
 import { ObjectTypesCard } from './system/ObjectTypesCard';
+import { CloudCard } from './system/CloudCard';
 import { ModuleSection } from './system/ModuleSection';
 import { MonitoringCard } from './system/MonitoringCard';
 import { PhonebookCard } from './system/PhonebookCard';
@@ -179,6 +181,9 @@ export function SettingsPage() {
           </SettingsSection>
           <SettingsSection id="mail" title="E-Mail" icon={<AtSign {...ICON} />} summary="Verschlüsseltes Postfach des ELW (…@einsatzleitwagen.app)">
             <MailCard />
+          </SettingsSection>
+          <SettingsSection id="cloud" title="Cloud-Zugang" icon={<Cloud {...ICON} />} summary="Mit dem Portal für Datenpflege und Status verknüpfen">
+            <CloudCard />
           </SettingsSection>
           <SettingsSection id="cloud-messaging" title="Cloud Messaging" icon={<RadioTower {...ICON} />} summary="Fahrzeug-Chat mit anderen ELVIS-Installationen">
             <MessagingCard />

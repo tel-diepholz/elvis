@@ -49,4 +49,5 @@ export * from './phones';
 export * from './dashboard';
 export * from './damage';
 export * from './library';
+export * from './cloudrelay';
 export * from './vehiclePosition';

@@ -134,6 +134,8 @@ const configSchema = z.object({
     .object({
       /** Cloud-Relay der ELVIS-App (tel-diepholz/elvis-relay), über das Einsatzkräfte ihre Position senden; null = aus. */
       relayUrl: z.string().url().nullable().default('https://relay.einsatzleitwagen.app'),
+      /** Portal des Cloud-Zugangs (Datenpflege, Verknüpfung der Installation); läuft über dasselbe Relay */
+      cloudUrl: z.string().url().default('https://cloud.einsatzleitwagen.app'),
     })
     .default({}),
   updates: z
@@ -177,7 +179,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ElvisConfig {
     ...(env.PORT && { port: env.PORT }),
     ...(env.ELVIS_DATA_DIR && { dataDir: env.ELVIS_DATA_DIR }),
     ...(env.ELVIS_WEB_DIST && { webDist: env.ELVIS_WEB_DIST }),
-    ...(env.ELVIS_APP_RELAY_URL && { app: { ...fromFile.app, relayUrl: env.ELVIS_APP_RELAY_URL === 'off' ? null : env.ELVIS_APP_RELAY_URL } }),
+    ...((env.ELVIS_APP_RELAY_URL || env.ELVIS_CLOUD_URL) && {
+      app: {
+        ...fromFile.app,
+        ...(env.ELVIS_APP_RELAY_URL && { relayUrl: env.ELVIS_APP_RELAY_URL === 'off' ? null : env.ELVIS_APP_RELAY_URL }),
+        ...(env.ELVIS_CLOUD_URL && { cloudUrl: env.ELVIS_CLOUD_URL }),
+      },
+    }),
     ...(env.ELVIS_SCAN_PORT && { scan: { ...fromFile.scan, smtpPort: env.ELVIS_SCAN_PORT === 'off' ? null : env.ELVIS_SCAN_PORT } }),
     ...((env.ELVIS_ADDONS_DIR || env.ELVIS_ADDON_REPOSITORIES) && {
       addons: {
