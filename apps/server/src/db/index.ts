@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { BUILTIN_TYPES, objectTypeInputSchema } from '@elvis/shared';
+import { BUILTIN_TYPES, BUILTIN_TYPE_UIDS, objectTypeInputSchema } from '@elvis/shared';
 import { decodeContent } from '../devices/drivers/yeastar/protocol.js';
 
 export type Db = Database.Database;
@@ -1205,6 +1205,18 @@ const MIGRATIONS: Migration[] = [
     const keywords = r ? ((JSON.parse(r.value) as { keywords?: string[] }).keywords ?? []) : [];
     const add = db.prepare('INSERT INTO incident_keywords (name, sort) VALUES (?, ?)');
     keywords.forEach((k, i) => add.run(k, i));
+  },  // Objektbibliothek in der Cloud: Herkunft (Name des Bereichs), Sichtbarkeit je Typ, feste uid der vordefinierten Typen
+  // (gleich in jeder Installation und in der Cloud)
+  (db) => {
+    for (const table of ['object_types', 'library_objects', 'library_files']) {
+      const cols = (db.prepare(`SELECT name FROM pragma_table_info('${table}')`).all() as { name: string }[]).map((c) => c.name);
+      if (!cols.includes('origin_name')) db.exec(`ALTER TABLE ${table} ADD COLUMN origin_name TEXT`);
+      if (!cols.includes('origin_node')) db.exec(`ALTER TABLE ${table} ADD COLUMN origin_node TEXT`);
+    }
+    const cols = (db.prepare("SELECT name FROM pragma_table_info('object_types')").all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes('visibility')) db.exec("ALTER TABLE object_types ADD COLUMN visibility TEXT NOT NULL DEFAULT 'both'");
+    db.prepare("UPDATE object_types SET uid = ? WHERE builtin = 'water'").run(BUILTIN_TYPE_UIDS.water);
+    db.prepare("UPDATE object_types SET uid = ? WHERE builtin = 'site'").run(BUILTIN_TYPE_UIDS.site);
   },
 ];
 

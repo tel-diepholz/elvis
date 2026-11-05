@@ -6,11 +6,11 @@ import { HttpError } from '../errors.js';
 import { MailVault } from './mailcrypto.js';
 import { RelayError, type RelayClient } from './relay.js';
 
-export type CloudFetch = (url: string, init: { method: string; headers: Record<string, string>; body?: string; timeoutMs: number }) => Promise<{ status: number; body: string }>;
+export type CloudFetch = (url: string, init: { method: string; headers: Record<string, string>; body?: string | Buffer; timeoutMs: number }) => Promise<{ status: number; body: string | Buffer }>;
 
 const defaultFetch: CloudFetch = async (url, { method, headers, body, timeoutMs }) => {
-  const res = await fetch(url, { method, headers, body, signal: AbortSignal.timeout(timeoutMs) });
-  return { status: res.status, body: await res.text() };
+  const res = await fetch(url, { method, headers, body: typeof body === 'string' || body === undefined ? body : new Uint8Array(body), signal: AbortSignal.timeout(timeoutMs) });
+  return { status: res.status, body: Buffer.from(await res.arrayBuffer()) };
 };
 
 const KEY_KEY = 'cloud:key';
@@ -86,9 +86,14 @@ export class CloudService {
   }
 
   private async call<T>(method: string, path: string, key: StoredKey, body?: unknown): Promise<T> {
+    const res = await this.callRaw(method, path, key, body === undefined ? '' : JSON.stringify(body), 'application/json');
+    const text = res.toString('utf8');
+    return (text ? JSON.parse(text) : null) as T;
+  }
+
+  private async callRaw(method: string, path: string, key: StoredKey, raw: string | Buffer, contentType: string): Promise<Buffer> {
     if (!this.relay.url) throw new HttpError(503, 'Cloud-Anbindung ist nicht eingerichtet (app.relayUrl in config/elvis.json)');
     const { token } = await this.relay.ensureCredentials();
-    const raw = body === undefined ? '' : JSON.stringify(body);
     const t = Date.now();
     const n = randomBytes(16).toString('base64url');
     this.signer ??= webcrypto.subtle.importKey('pkcs8', this.vault.open(key.sigPrivateKey), { name: 'Ed25519' }, false, ['sign']);
@@ -99,17 +104,33 @@ export class CloudService {
       accept: 'application/json',
       'x-elvis-version': this.opts.version,
       [MAIL_SIGNATURE_HEADER]: `t=${t},n=${n},s=${sig}`,
-      ...(raw && { 'content-type': 'application/json' }),
+      ...(raw.length && { 'content-type': contentType }),
     };
-    let res: { status: number; body: string };
+    let res: { status: number; body: string | Buffer };
     try {
-      res = await (this.opts.fetch ?? defaultFetch)(`${this.relay.url.replace(/\/$/, '')}${path}`, { method, headers, body: raw || undefined, timeoutMs: TIMEOUT_MS });
+      // Dateien (bis 50 MB) brauchen länger
+      res = await (this.opts.fetch ?? defaultFetch)(`${this.relay.url.replace(/\/$/, '')}${path}`, { method, headers, body: raw.length ? raw : undefined, timeoutMs: typeof raw === 'string' ? TIMEOUT_MS : 300_000 });
     } catch (e) {
       throw new HttpError(502, `Cloud nicht erreichbar: ${e instanceof Error ? e.message : String(e)}`);
     }
-    const data = res.body ? (JSON.parse(res.body) as unknown) : null;
-    if (res.status >= 400) throw new RelayError(res.status, `Cloud: ${(data as { error?: string } | null)?.error ?? `HTTP ${res.status}`}`);
-    return data as T;
+    const body = typeof res.body === 'string' ? Buffer.from(res.body) : res.body;
+    if (res.status >= 400) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        msg = (JSON.parse(body.toString('utf8')) as { error?: string }).error ?? msg;
+      } catch {
+        /* kein JSON */
+      }
+      throw new RelayError(res.status, `Cloud: ${msg}`);
+    }
+    return body;
+  }
+
+  /** Signierter Aufruf mit Datei (hochladen) bzw. Datei als Antwort (abholen) */
+  async signedRaw(method: 'GET' | 'PUT', path: string, body?: Buffer): Promise<Buffer> {
+    const key = await this.key(false);
+    if (!key) throw new HttpError(409, 'Nicht mit der Cloud verknüpft');
+    return this.callRaw(method, path, key, body ?? '', 'application/octet-stream');
   }
 
   /** Verknüpft (zuletzt bekannter Stand) */

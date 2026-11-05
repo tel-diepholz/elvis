@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Library, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { BUILTIN_TYPES, OBJECT_FIELD_TYPES, OBJECT_FIELD_TYPE_LABELS, type ObjectFieldInput, type ObjectFieldType, type ObjectType, type ObjectTypeInput } from '@elvis/shared';
+import { BUILTIN_TYPES, OBJECT_FIELD_TYPES, OBJECT_FIELD_TYPE_LABELS, OBJECT_VISIBILITIES, OBJECT_VISIBILITY_LABELS, type ObjectFieldInput, type ObjectFieldType, type ObjectType, type ObjectTypeInput, type ObjectVisibility } from '@elvis/shared';
+import { CloudBadge, localEditable } from '../../components/CloudBadge';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Card, Field, Loading, Modal } from '../../components/ui';
@@ -34,6 +35,7 @@ function TypeForm({ initial, pending, onSubmit }: { initial?: ObjectType; pendin
   const [name, setName] = useState(initial?.name ?? '');
   const [icon, setIcon] = useState<string | null>(initial?.icon ?? 'MapPin');
   const [color, setColor] = useState(initial?.color ?? '#7c3aed');
+  const [visibility, setVisibility] = useState<ObjectVisibility>(initial?.visibility ?? 'both');
   const [fields, setFields] = useState<FieldRow[]>(() => (initial?.fields ?? []).map((f) => toRow(f, fixedKeys.includes(f.key))));
   const set = (i: number, patch: Partial<FieldRow>) => setFields((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   const add = () => setFields((fs) => [...fs, { key: '', label: '', type: 'text', options: '', unit: '', badge: false, fixed: false, isNew: true }]);
@@ -61,7 +63,7 @@ function TypeForm({ initial, pending, onSubmit }: { initial?: ObjectType; pendin
           badge: f.badge,
         };
       });
-    onSubmit({ name, icon, color, fields: out });
+    onSubmit({ name, icon, color, fields: out, visibility });
   };
   return (
     <form className="form" onSubmit={submit}>
@@ -71,6 +73,15 @@ function TypeForm({ initial, pending, onSubmit }: { initial?: ObjectType; pendin
         </Field>
         <Field label="Farbe">
           <input type="color" value={color} onChange={(e) => setColor(e.target.value)} />
+        </Field>
+        <Field label="Sichtbar beim Cloud-Abgleich für" hint="Gilt für alle Objekte dieses Typs">
+          <select value={visibility} onChange={(e) => setVisibility(e.target.value as ObjectVisibility)}>
+            {OBJECT_VISIBILITIES.map((v) => (
+              <option key={v} value={v}>
+                {OBJECT_VISIBILITY_LABELS[v]}
+              </option>
+            ))}
+          </select>
         </Field>
       </div>
       <Field label="Symbol *">
@@ -161,7 +172,9 @@ export function ObjectTypesCard() {
               <MapIcon name={t.icon} size={20} />
             </span>
             <div className="grow">
-              <div className="cell-title">{t.name}</div>
+              <div className="cell-title">
+                {t.name} <CloudBadge cloud={t.cloud} />
+              </div>
               <div className="cell-sub">
                 {t.count} {t.count === 1 ? 'Objekt' : 'Objekte'}
                 {t.fields.length > 0 && ` · ${t.fields.map((f) => f.label).join(', ')}`}
@@ -174,13 +187,13 @@ export function ObjectTypesCard() {
             <button className="btn btn-ghost btn-icon" aria-label="Nach unten" disabled={i === types.length - 1 || reorder.isPending} onClick={() => move(i, 1)}>
               <ArrowDown size={16} />
             </button>
-            <button className="btn btn-ghost btn-icon" aria-label={`${t.name} bearbeiten`} onClick={() => setEditing(t)}>
+            <button className="btn btn-ghost btn-icon" aria-label={`${t.name} bearbeiten`} disabled={!localEditable(t)} title={localEditable(t) ? undefined : `Gepflegt von ${t.cloud?.name} in der Cloud`} onClick={() => setEditing(t)}>
               <Pencil size={16} />
             </button>
             <button
               className="btn btn-ghost btn-icon"
               aria-label={`${t.name} löschen`}
-              disabled={!!t.builtin || t.count > 0}
+              disabled={!!t.builtin || t.count > 0 || !localEditable(t)}
               title={t.builtin ? 'Vorgegebener Typ' : t.count > 0 ? 'Typ hat noch Objekte' : undefined}
               onClick={() => window.confirm(`Objekttyp „${t.name}“ löschen?`) && remove.mutate(t.id)}
             >

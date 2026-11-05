@@ -9603,3 +9603,12 @@ dd .messaging-contact {
 .cloud-sync-counts th {
   text-align: right;
 }
+.library-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RECORD_SCHEMAS, type CloudSyncStatus, type ForceUnit, type IncidentSettings, type LoginCandidate, type RecordKind, type Role, type SyncChange, type SyncRecord, type SyncResult, type TaskTemplate, type User } from '@elvis/shared';
 import { buildApp, type App } from '../app.js';
@@ -12,13 +12,14 @@ import { adminCookie } from '../test-helpers.js';
 
 const OWN = 'ars:032510047047';
 const KREIS = 'ars:03251';
-const NAMES: Record<string, string> = { [OWN]: 'Weyhe', [KREIS]: 'Landkreis Diepholz' };
+const NAMES: Record<string, string> = { [OWN]: 'Weyhe', [KREIS]: 'Landkreis Diepholz', 'ars:': 'Deutschland' };
 
 /** Relay im Speicher: Stammdaten mit Revision und Änderungszähler, Schreiben nur am eigenen Knoten (wie elvis-relay) */
 class FakeRelay {
   records = new Map<string, SyncRecord>();
   seq = 0;
   pushes: SyncChange[][] = [];
+  files = new Map<string, Buffer>();
 
   put(kind: RecordKind, nodeId: string, data: unknown, uid: string = randomUUID()): SyncRecord {
     const prev = this.records.get(uid);
@@ -32,10 +33,18 @@ class FakeRelay {
     this.records.set(uid, { ...prev, rev: prev.rev + 1, deleted: true, data: null, seq: ++this.seq });
   }
 
-  fetch: CloudFetch = async (url, { method, body }) => {
+  fetch: CloudFetch = async (url, { method, body: rawBody }) => {
+    const body = rawBody === undefined ? undefined : rawBody.toString();
     const u = new URL(url);
     if (u.pathname === '/v1/elws/me/cloud') return { status: 200, body: JSON.stringify({ state: 'linked', node: { id: OWN, name: 'Weyhe', path: ['Weyhe'] }, linkedAt: '2026-11-05T10:00:00Z', linkedBy: 'a@b.de' }) };
     if (u.pathname === '/v1/elws/me/cloud/link') return { status: 201, body: JSON.stringify({ state: 'pending', code: 'ABCDEFGH', expiresAt: '2030-01-01T00:00:00Z' }) };
+    const file = /^\/v1\/elws\/me\/cloud\/files\/(.+)$/.exec(u.pathname);
+    if (file && method === 'PUT') {
+      if (this.files.has(file[1]!)) return { status: 409, body: '{"error":"Datei gibt es schon"}' };
+      this.files.set(file[1]!, Buffer.from(rawBody as Buffer));
+      return { status: 201, body: '{}' };
+    }
+    if (file) return this.files.has(file[1]!) ? { status: 200, body: this.files.get(file[1]!)! } : { status: 404, body: '{"error":"Datei nicht gefunden"}' };
     if (u.pathname !== '/v1/elws/me/cloud/sync') return { status: 404, body: '{}' };
     if (method === 'GET') {
       const after = Number(u.searchParams.get('after'));
@@ -204,5 +213,80 @@ describe('Stammdaten-Abgleich', () => {
     const [t] = (await req<TaskTemplate[]>('GET', '/api/system/task-templates')).body;
     expect(t).toMatchObject({ summary: 'Lagemeldung', roleName: 'Fernmelder', schedule: { kind: 'interval', intervalMinutes: 60, offsetMinutes: 30 }, cloud: { editable: false } });
     expect((await req('DELETE', `/api/system/task-templates/${t!.id}`)).status).toBe(409);
+  });
+});
+
+describe('Objektbibliothek im Abgleich', () => {
+  const WATER = '00000000-0000-4000-8000-000000000001';
+  const SITE = '00000000-0000-4000-8000-000000000002';
+  type LibObj = { id: number; name: string; source: string | null; cloud?: { name: string; editable: boolean } | null; files: { id: number; filename: string }[] };
+
+  async function uploadFile(objectId: number, name: string, data: string) {
+    const boundary = '----elvis' + Math.random().toString(16).slice(2);
+    const payload = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: application/pdf\r\n\r\n`),
+      Buffer.from(data),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    return app.server.inject({ method: 'POST', url: `/api/library/objects/${objectId}/files`, payload, headers: { 'content-type': `multipart/form-data; boundary=${boundary}`, cookie: admin } });
+  }
+
+  it('gleicht Typen, Objekte und Dateien in beide Richtungen ab', async () => {
+    const types = (await req<{ id: number; builtin: string | null }[]>('GET', '/api/library/types')).body;
+    const water = types.find((t) => t.builtin === 'water')!.id;
+    const site = types.find((t) => t.builtin === 'site')!.id;
+    // Lokal: Einsatzobjekt mit Plan, Hydrant aus OSM
+    const klinik = (await req<LibObj>('POST', '/api/library/objects', { typeId: site, name: 'Klinikum', lat: 52.95, lon: 8.85 })).body;
+    expect((await uploadFile(klinik.id, 'Plan.pdf', '%PDF lokal')).statusCode).toBe(201);
+    await app.server.inject({ method: 'POST', url: '/api/library/objects', payload: { typeId: water, name: 'H OSM', lat: 52.9, lon: 8.8 }, headers: { cookie: admin } });
+    const db = (app as unknown as { db?: unknown }).db;
+    void db;
+
+    // Cloud: vordefinierte Typen an der Wurzel, Kreis-Hydrant mit Datei, und derselbe OSM-Hydrant
+    relay.put('objectType', 'ars:', { name: 'Wasserentnahmestelle', icon: 'Droplet', color: '#2563eb', builtin: 'water', fields: [{ key: 'dn', label: 'DN', type: 'number', badge: true }] }, WATER);
+    relay.put('objectType', 'ars:', { name: 'Einsatzobjekt', icon: 'Building2', color: '#dc2626', builtin: 'site' }, SITE);
+    const h = relay.put('object', KREIS, { typeUid: WATER, name: 'H Kreisstraße', lat: 52.91, lon: 8.81, props: { dn: 100 } });
+    const content = Buffer.from('%PDF Kreis');
+    const fileUid = randomUUID();
+    relay.files.set(fileUid, content);
+    relay.put('objectFile', KREIS, { objectUid: h.uid, filename: 'Hydrantenplan.pdf', mimeType: 'application/pdf', sizeBytes: content.byteLength, sha256: createHash('sha256').update(content).digest('hex') }, fileUid);
+
+    expect((await link()).body.lastError).toBeNull();
+
+    const objects = (await req<LibObj[]>('GET', '/api/library/objects')).body;
+    expect(objects.map((o) => [o.name, o.cloud?.name ?? null, o.cloud?.editable ?? null])).toEqual([
+      ['H Kreisstraße', 'Landkreis Diepholz', false],
+      ['H OSM', 'Weyhe', true],
+      ['Klinikum', 'Weyhe', true],
+    ]);
+    // Datei aus der Cloud ist da
+    const hk = (await req<LibObj>('GET', `/api/library/objects/${objects[0]!.id}`)).body;
+    expect(hk.files.map((f) => f.filename)).toEqual(['Hydrantenplan.pdf']);
+    expect((await app.server.inject({ method: 'GET', url: `/api/library/files/${hk.files[0]!.id}/content` })).body).toBe('%PDF Kreis');
+    // Fremdes Objekt: hier nur lesbar, auch keine Dateien
+    expect((await req('PUT', `/api/library/objects/${hk.id}`, { typeId: water, name: 'x', lat: 1, lon: 1 })).status).toBe(409);
+    expect((await uploadFile(hk.id, 'x.pdf', 'x')).statusCode).toBe(409);
+    // Eigene Datei: erst hochgeladen, dann der Datensatz
+    const sent = relay.pushes.flat();
+    const fileChange = sent.find((c) => c.kind === 'objectFile')!;
+    expect(relay.files.get(fileChange.uid)?.toString()).toBe('%PDF lokal');
+    expect(sent.filter((c) => c.kind === 'objectType')).toEqual([]); // vordefinierte gehören der Wurzel
+
+    // Kreis löscht seinen Hydranten: Objekt und Datei verschwinden
+    relay.remove(h.uid);
+    relay.remove(fileUid);
+    await run();
+    expect((await req<LibObj[]>('GET', '/api/library/objects')).body.map((o) => o.name)).toEqual(['H OSM', 'Klinikum']);
+
+    // Lokal gelöscht → Tombstone in der Cloud
+    relay.pushes = [];
+    await req('DELETE', `/api/library/objects/${klinik.id}`);
+    await run();
+    expect(relay.pushes.flat().map((c) => [c.kind, c.deleted])).toEqual(
+      expect.arrayContaining([
+        ['object', true],
+        ['objectFile', true],
+      ]),
+    );
   });
 });

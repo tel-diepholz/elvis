@@ -28,6 +28,7 @@ import type { Db } from '../db/index.js';
 import type { Store } from '../db/store.js';
 import { HttpError } from '../errors.js';
 import { writeStream } from './files.js';
+import { assertEditable, cloudOrigin } from './cloudOrigin.js';
 import type { OverpassService } from './overpass.js';
 
 type Row = Record<string, unknown>;
@@ -40,10 +41,12 @@ const toType = (r: Row): ObjectType => ({
   icon: r.icon as string,
   color: r.color as string,
   fields: JSON.parse(r.fields as string) as ObjectField[],
+  visibility: ((r.visibility as string | undefined) ?? 'both') as ObjectType['visibility'],
   sort: r.sort as number,
   rev: r.rev as number,
   updatedAt: r.updated_at as string,
   count: (r.count as number | undefined) ?? 0,
+  cloud: cloudOrigin(r),
 });
 
 const toObject = (r: Row): LibraryObject => ({
@@ -62,6 +65,7 @@ const toObject = (r: Row): LibraryObject => ({
   updatedAt: r.updated_at as string,
   updatedBy: r.updated_by as string,
   fileCount: (r.file_count as number | undefined) ?? 0,
+  cloud: cloudOrigin(r),
 });
 
 const toFile = (r: Row): LibraryFile => ({
@@ -151,8 +155,8 @@ export class LibraryService {
     const sort = (this.db.prepare('SELECT COALESCE(MAX(sort), -1) + 1 AS n FROM object_types').get() as { n: number }).n;
     const id = Number(
       this.db
-        .prepare('INSERT INTO object_types (uid, name, icon, color, fields, sort, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(randomUUID(), t.name, t.icon, t.color, JSON.stringify(t.fields), sort, new Date().toISOString()).lastInsertRowid,
+        .prepare('INSERT INTO object_types (uid, name, icon, color, fields, visibility, sort, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(randomUUID(), t.name, t.icon, t.color, JSON.stringify(t.fields), t.visibility, sort, new Date().toISOString()).lastInsertRowid,
     );
     this.audit(operator, 'create', `Objekttyp ${t.name}`);
     return this.type(id);
@@ -161,6 +165,7 @@ export class LibraryService {
   /** Vordefinierte Typen behalten ihre Felder (Schlüssel und Art), weitere lassen sich ergänzen */
   updateType(id: number, input: ObjectTypeInput, operator: string): ObjectType {
     const old = this.type(id);
+    assertEditable(this.originOf('object_types', id), 'Diesen Typ');
     const t = objectTypeInputSchema.parse(input);
     this.checkName(t.name, id);
     if (old.builtin) {
@@ -171,8 +176,8 @@ export class LibraryService {
       }
     }
     this.db
-      .prepare('UPDATE object_types SET name = ?, icon = ?, color = ?, fields = ?, rev = rev + 1, updated_at = ? WHERE id = ?')
-      .run(t.name, t.icon, t.color, JSON.stringify(t.fields), new Date().toISOString(), id);
+      .prepare('UPDATE object_types SET name = ?, icon = ?, color = ?, fields = ?, visibility = ?, rev = rev + 1, updated_at = ? WHERE id = ?')
+      .run(t.name, t.icon, t.color, JSON.stringify(t.fields), t.visibility, new Date().toISOString(), id);
     this.audit(operator, 'update', `Objekttyp ${t.name}`);
     return this.type(id);
   }
@@ -180,6 +185,7 @@ export class LibraryService {
   /** Nur eigene Typen ohne Objekte */
   removeType(id: number, operator: string): void {
     const t = this.type(id);
+    assertEditable(this.originOf('object_types', id), 'Diesen Typ');
     if (t.builtin) throw new HttpError(409, 'Vordefinierte Typen lassen sich nicht löschen');
     if (t.count) throw new HttpError(409, `Objekttyp „${t.name}“ hat noch ${t.count} Objekte`);
     this.db.prepare('UPDATE object_types SET deleted_at = ?, rev = rev + 1, updated_at = ? WHERE id = ?').run(new Date().toISOString(), new Date().toISOString(), id);
@@ -263,8 +269,13 @@ export class LibraryService {
     );
   }
 
+  private originOf(table: string, id: number): { origin_node?: unknown; origin_name?: unknown } {
+    return (this.db.prepare(`SELECT origin_node, origin_name FROM ${table} WHERE id = ?`).get(id) as { origin_node?: unknown; origin_name?: unknown } | undefined) ?? {};
+  }
+
   updateObject(id: number, input: LibraryObjectInput, operator: string): LibraryObjectDetail {
     this.object(id);
+    assertEditable(this.originOf('library_objects', id), 'Dieses Objekt');
     const { type, props } = this.props(input.typeId, input.props ?? {});
     this.db
       .prepare(
@@ -278,6 +289,7 @@ export class LibraryService {
 
   async removeObject(id: number, operator: string): Promise<void> {
     const o = this.object(id);
+    assertEditable(this.originOf('library_objects', id), 'Dieses Objekt');
     const now = new Date().toISOString();
     this.db.transaction(() => {
       this.db.prepare('UPDATE library_files SET deleted_at = ?, rev = rev + 1 WHERE object_id = ? AND deleted_at IS NULL').run(now, id);
@@ -291,6 +303,7 @@ export class LibraryService {
 
   async uploadFile(objectId: number, file: { filename: string; mimeType: string; stream: Readable }, operator: string, maxBytes: number): Promise<LibraryFile> {
     const o = this.object(objectId);
+    assertEditable(this.originOf('library_objects', objectId), 'Dieses Objekt');
     const storageName = randomUUID();
     const path = join(this.dir, storageName);
     const size = await writeStream(path, file.stream, maxBytes);
@@ -329,6 +342,7 @@ export class LibraryService {
 
   async removeFile(id: number, operator: string): Promise<void> {
     const f = this.file(id);
+    assertEditable(this.originOf('library_objects', f.objectId), 'Dieses Objekt');
     this.db.prepare('UPDATE library_files SET deleted_at = ?, rev = rev + 1 WHERE id = ?').run(new Date().toISOString(), id);
     await this.unlinkFile(id);
     this.audit(operator, 'delete', `Datei ${f.filename}`);

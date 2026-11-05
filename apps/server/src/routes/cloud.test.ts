@@ -31,7 +31,8 @@ async function verify(method: string, path: string, headers: Record<string, stri
   return webcrypto.subtle.verify({ name: 'Ed25519' }, k, Buffer.from(parts.s!, 'base64url'), new TextEncoder().encode(payload));
 }
 
-const cloudFetch: CloudFetch = async (url, { method, headers, body = '' }) => {
+const cloudFetch: CloudFetch = async (url, { method, headers, body: rawBody = '' }) => {
+  const body = rawBody.toString();
   if (relay.down) throw new Error('ECONNREFUSED');
   const path = new URL(url).pathname;
   if (headers.authorization !== 'Bearer tok') return { status: 401, body: '{"error":"ELW nicht angemeldet"}' };

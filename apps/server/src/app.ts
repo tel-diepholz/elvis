@@ -292,7 +292,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   });
   const library = new LibraryService(db, store, config.dataDir, { notify: (t) => hub.invalidate(t), overpass });
   const cloud = new CloudService(db, store, relay, { dataDir: config.dataDir, portalUrl: config.app.cloudUrl, version: ELVIS_VERSION, notify: (t) => hub.invalidate(t), fetch: opts.cloudFetch });
-  const cloudSync = new CloudSyncService(db, store, cloud, { notify: (t) => hub.invalidate(t), log: server.log });
+  const cloudSync = new CloudSyncService(db, store, cloud, { notify: (t) => hub.invalidate(t), log: server.log, libraryDir: library.dir });
   setCloudOwner(() => cloudSync.ownNode());
   incidents.cloudNode = () => cloudSync.ownNode();
   const phonebook = new PhonebookService(db, contacts);

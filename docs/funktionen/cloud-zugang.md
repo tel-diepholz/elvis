@@ -1,7 +1,8 @@
 # Cloud-Zugang (Datenpflege)
 
 Im Portal **<https://cloud.einsatzleitwagen.app>** arbeiten Verwalter von Landkreis, Gemeinde und Ortsfeuerwehr
-zusammen. Dort pflegen sie Stammdaten (Kräfte, Einsatzstichworte, Rollen, Benutzer, Aufgabenvorlagen) und sehen den
+zusammen. Dort pflegen sie Stammdaten (Kräfte, Einsatzstichworte, Rollen, Benutzer, Aufgabenvorlagen, die
+[Objektbibliothek](objektbibliothek.md#in-der-cloud)) und sehen den
 Zustand der Cloud-Module ihrer ELVIS-Installationen. Das Portal läuft über dasselbe Cloud-Relay wie E-Mail und Cloud
 Messaging.
 
