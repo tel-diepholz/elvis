@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { Check, ChevronDown, Circle, CircleDot, CloudRain, Hexagon, RectangleHorizontal, Spline, Crosshair, Database, Loader2, Minus, Plus, Search, X, Layers, MapPin, Plane, Route, Shapes, Ship, TriangleAlert, Wind as WindIcon } from 'lucide-react';
-import { toMgrs, type MapSource, type OverpassQuery } from '@elvis/shared';
+import { Check, ChevronDown, Circle, CircleDot, CloudRain, Hexagon, RectangleHorizontal, Spline, Crosshair, Database, Loader2, Minus, Plus, Search, X, Layers, Library, MapPin, Plane, Route, Shapes, Ship, TriangleAlert, Wind as WindIcon } from 'lucide-react';
+import { toMgrs, type MapSource, type ObjectType, type OverpassQuery } from '@elvis/shared';
 import { MapIcon } from '../../components/map/mapIcons';
 import { compass, fmtOpt } from '../../lib/format';
 import { WindCompass } from '../../components/WindCompass';
-import type { TrafficLayers } from '../../components/map/traffic';
+import type { MapLayers } from '../../components/map/traffic';
 import type { ShapeKind } from './draw';
 
 /** Knopf mit ausklappbarem Menü; Klick daneben oder Esc schließt (auch in den Dokumenten: „Tools“) */
@@ -196,17 +196,20 @@ export function MapStylePicker({
   layers,
   onLayers,
   onMenuHeight,
+  libraryTypes = [],
 }: {
   sources: MapSource[];
   value: string | null;
   auto: MapSource | undefined;
   onChange: (id: string | null) => void;
   /** Ohne: nur der Kartenstil (z. B. Kartenkachel der Übersicht) */
-  layers?: TrafficLayers;
-  onLayers?: (l: TrafficLayers) => void;
+  layers?: MapLayers;
+  onLayers?: (l: MapLayers) => void;
   onMenuHeight?: (px: number) => void;
+  /** Typen der Objektbibliothek (einzeln ein- und ausblendbar) */
+  libraryTypes?: ObjectType[];
 }) {
-  const layer = (key: keyof TrafficLayers, icon: ReactNode, label: string) =>
+  const layer = (key: 'aircraft' | 'ships' | 'radar' | 'library', icon: ReactNode, label: string) =>
     layers && (
       <button key={key} type="button" role="menuitemcheckbox" aria-checked={layers[key]} className="map-dropdown-item" onClick={() => onLayers?.({ ...layers, [key]: !layers[key] })}>
         <span className="map-dropdown-check">{layers[key] && <Check size={16} />}</span> {icon} {label}
@@ -235,6 +238,28 @@ export function MapStylePicker({
                 {layer('aircraft', <Plane size={16} />, 'Flugzeuge')}
                 {layer('ships', <Ship size={16} />, 'Schiffe')}
                 {layer('radar', <CloudRain size={16} />, 'Regenradar')}
+                {layer('library', <Library size={16} />, 'Objektbibliothek')}
+                {layers.library &&
+                  libraryTypes.map((t) => {
+                    const shown = !layers.libraryHidden.includes(t.id);
+                    return (
+                      <button
+                        key={`lib${t.id}`}
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={shown}
+                        className="map-dropdown-item map-dropdown-sub"
+                        onClick={() => onLayers?.({ ...layers, libraryHidden: shown ? [...layers.libraryHidden, t.id] : layers.libraryHidden.filter((id) => id !== t.id) })}
+                      >
+                        <span className="map-dropdown-check">{shown && <Check size={16} />}</span>
+                        <span style={{ color: t.color, display: 'inline-flex' }}>
+                          <MapIcon name={t.icon} size={16} />
+                        </span>{' '}
+                        {t.name}
+                        <span className="muted">{t.count}</span>
+                      </button>
+                    );
+                  })}
               </>
             )}
           </>

@@ -1,6 +1,8 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { BUILTIN_TYPES, objectTypeInputSchema } from '@elvis/shared';
 import { decodeContent } from '../devices/drivers/yeastar/protocol.js';
 
 export type Db = Database.Database;
@@ -1108,6 +1110,67 @@ const MIGRATIONS: Migration[] = [
   (db) => {
     const cols = db.prepare("SELECT name FROM pragma_table_info('units')").all() as { name: string }[];
     if (!cols.some((c) => c.name === 'messaging_peer')) db.exec("ALTER TABLE units ADD COLUMN messaging_peer TEXT NOT NULL DEFAULT ''");
+  },  // Objektbibliothek: Typen (vordefiniert und eigene), Objekte und angehängte Dateien; uid/rev/deleted_at für den
+  // späteren Abgleich mit der Cloud (gelöschte bleiben als Tombstone stehen)
+  (db) => {
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS object_types (
+      id INTEGER PRIMARY KEY,
+      uid TEXT NOT NULL UNIQUE,
+      builtin TEXT UNIQUE CHECK (builtin IN ('water', 'site')),
+      name TEXT NOT NULL,
+      icon TEXT NOT NULL,
+      color TEXT NOT NULL,
+      fields TEXT NOT NULL DEFAULT '[]',
+      sort INTEGER NOT NULL DEFAULT 0,
+      rev INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL,
+      origin_node TEXT,
+      deleted_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS library_objects (
+      id INTEGER PRIMARY KEY,
+      uid TEXT NOT NULL UNIQUE,
+      type_id INTEGER NOT NULL REFERENCES object_types(id),
+      name TEXT NOT NULL,
+      lat REAL NOT NULL,
+      lon REAL NOT NULL,
+      address TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      props TEXT NOT NULL DEFAULT '{}',
+      source TEXT,
+      geometry TEXT,
+      rev INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL,
+      updated_by TEXT NOT NULL,
+      origin_node TEXT,
+      deleted_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS library_objects_pos ON library_objects(lat, lon);
+    CREATE INDEX IF NOT EXISTS library_objects_type ON library_objects(type_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS library_objects_source ON library_objects(source) WHERE source IS NOT NULL AND deleted_at IS NULL;
+    CREATE TABLE IF NOT EXISTS library_files (
+      id INTEGER PRIMARY KEY,
+      uid TEXT NOT NULL UNIQUE,
+      object_id INTEGER NOT NULL REFERENCES library_objects(id) ON DELETE CASCADE,
+      filename TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      storage_name TEXT NOT NULL,
+      sha256 TEXT NOT NULL,
+      uploaded_at TEXT NOT NULL,
+      uploaded_by TEXT NOT NULL,
+      rev INTEGER NOT NULL DEFAULT 1,
+      deleted_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS library_files_object ON library_files(object_id);
+    `);
+    const now = new Date().toISOString();
+    const insert = db.prepare('INSERT OR IGNORE INTO object_types (uid, builtin, name, icon, color, fields, sort, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    (['water', 'site'] as const).forEach((b, i) => {
+      const t = objectTypeInputSchema.parse(BUILTIN_TYPES[b]);
+      insert.run(randomUUID(), b, t.name, t.icon, t.color, JSON.stringify(t.fields), i, now);
+    });
   },
 ];
 

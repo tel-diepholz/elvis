@@ -2,7 +2,7 @@
 // Voraussetzung: .claude/skills/run-elvis/start.sh lief (Cookie in $ELVIS_RUN_DIR/cookie).
 //
 //   view <lat> <lon> <zoom>     Startausschnitt der Karte (vor dem ersten nav)
-//   layers <aircraft|ships|…>   Kartenebenen einschalten (vor dem ersten nav), z. B. „layers aircraft ships radar“
+//   layers <aircraft|ships|…>   Kartenebenen einschalten (vor dem ersten nav), z. B. „layers aircraft ships radar library“
 //   size <breite> <höhe>        Fenstergröße (vor dem ersten nav), Vorgabe 1400 900
 //   nav <pfad>                  z. B. /karte, /einstellungen#verkehr
 //   wait <selector>             auf ein Element warten (30 s)
@@ -74,7 +74,7 @@ async function run(line) {
       init.view = { lat: Number(rest[0]), lon: Number(rest[1]), zoom: Number(rest[2]) };
       return;
     case 'layers':
-      init.layers = { aircraft: rest.includes('aircraft'), ships: rest.includes('ships'), radar: rest.includes('radar') };
+      init.layers = { aircraft: rest.includes('aircraft'), ships: rest.includes('ships'), radar: rest.includes('radar'), library: rest.includes('library') };
       return;
     case 'size':
       init.size = { width: Number(rest[0]), height: Number(rest[1]) };

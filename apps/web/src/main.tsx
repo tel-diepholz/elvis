@@ -33,6 +33,7 @@ import { ChatPage } from './pages/ChatPage';
 import { TelefoniePage } from './pages/TelefoniePage';
 import { PhonesPage } from './pages/PhonesPage';
 import { ContactsPage } from './pages/ContactsPage';
+import { LibraryPage } from './pages/LibraryPage';
 import { ScanPage } from './pages/ScanPage';
 import { UsersPage } from './pages/UsersPage';
 import { WeatherPage } from './pages/WeatherPage';
@@ -121,6 +122,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="nachrichten" element={<RequireLogin><ChatPage /></RequireLogin>} />
                 <Route path="sms" element={<Navigate to="/nachrichten" replace />} />
                 <Route path="kontakte" element={<RequireLogin><ContactsPage /></RequireLogin>} />
+                <Route path="objekte" element={<RequireLogin><LibraryPage /></RequireLogin>} />
                 <Route path="protokoll" element={<RequireLogin admin><AuditPage /></RequireLogin>} />
                 <Route path="einstellungen" element={<RequireLogin admin><SettingsPage /></RequireLogin>} />
                 {/* alte Adresse (Lesezeichen) */}

@@ -1,3 +1,4 @@
+import type { LibraryFile, LibraryObject, LibraryObjectDetail, LibraryObjectInput, ObjectType, ObjectTypeInput } from '@elvis/shared';
 import type { DamageAccount, DamageAccountInput, DamageAccountPatch, DamageCountBooking, DamageCountInput, DamageEntry, DamageEntryInput, DamageEntryPatch } from '@elvis/shared';
 import type { ManualPosition, ManualPositionInput, VehiclePosition } from '@elvis/shared';
 import type { EnergyFlowInput, EnergyFlowSettings, UpdateStatus } from '@elvis/shared';
@@ -337,6 +338,31 @@ export const api = {
   updateChatSettings: (input: ChatSettings) => request<ChatSettings>('PUT', '/api/system/chat', input),
   calls: (hours = 24) => request<CallRecord[]>('GET', `/api/telephony/calls?hours=${hours}`),
 
+  libraryTypes: () => request<ObjectType[]>('GET', '/api/library/types'),
+  createObjectType: (input: ObjectTypeInput) => request<ObjectType>('POST', '/api/system/library/types', input),
+  updateObjectType: (id: number, input: ObjectTypeInput) => request<ObjectType>('PUT', `/api/system/library/types/${id}`, input),
+  removeObjectType: (id: number) => request<void>('DELETE', `/api/system/library/types/${id}`),
+  reorderObjectTypes: (ids: number[]) => request<ObjectType[]>('PUT', '/api/system/library/types/order', { ids }),
+  libraryObjects: (q: { bbox?: OverpassBounds; types?: number[]; q?: string } = {}) => {
+    const p = new URLSearchParams();
+    if (q.bbox) p.set('bbox', [q.bbox.s, q.bbox.w, q.bbox.n, q.bbox.e].map((v) => v.toFixed(5)).join(','));
+    if (q.types) p.set('types', q.types.join(','));
+    if (q.q) p.set('q', q.q);
+    const qs = p.toString();
+    return request<LibraryObject[]>('GET', `/api/library/objects${qs ? `?${qs}` : ''}`);
+  },
+  libraryObject: (id: number) => request<LibraryObjectDetail>('GET', `/api/library/objects/${id}`),
+  createLibraryObject: (input: LibraryObjectInput) => request<LibraryObjectDetail>('POST', '/api/library/objects', input),
+  updateLibraryObject: (id: number, input: LibraryObjectInput) => request<LibraryObjectDetail>('PUT', `/api/library/objects/${id}`, input),
+  removeLibraryObject: (id: number) => request<void>('DELETE', `/api/library/objects/${id}`),
+  uploadLibraryFile: (objectId: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<LibraryFile>('POST', `/api/library/objects/${objectId}/files`, form);
+  },
+  removeLibraryFile: (id: number) => request<void>('DELETE', `/api/library/files/${id}`),
+  libraryFileUrl: (id: number, download = false) => `/api/library/files/${id}/content${download ? '?download=1' : ''}`,
+  importOsmWater: (bounds: OverpassBounds) => request<{ added: number; skipped: number; truncated: boolean; sourceName: string }>('POST', '/api/library/import/osm-water', { bounds }),
   contacts: () => request<Contact[]>('GET', '/api/contacts'),
   createContact: (input: ContactInput) => request<Contact>('POST', '/api/contacts', input),
   updateContact: (id: number, input: ContactInput) => request<Contact>('PUT', `/api/contacts/${id}`, input),

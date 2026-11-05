@@ -11,6 +11,7 @@ import {
   FileText,
   History,
   LayoutDashboard,
+  Library,
   Mail,
   PackagePlus,
   ListChecks,
@@ -106,6 +107,7 @@ export const NAV: NavGroup[] = [
     label: 'Verwaltung',
     items: [
       { to: '/archiv', label: 'Einsatzarchiv', icon: Archive, requiresLogin: true },
+      { to: '/objekte', label: 'Objektbibliothek', icon: Library, requiresLogin: true },
       { to: '/vorlagen', label: 'Vorlagen', icon: FileStack, requiresLogin: true, requiresAdmin: true },
       { to: '/benutzer', label: 'Benutzer', icon: UserCog, requiresLogin: true },
       { to: '/addons', label: 'Addons', icon: Package, requiresDocker: true, requiresAdmin: true },

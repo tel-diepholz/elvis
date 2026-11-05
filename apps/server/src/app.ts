@@ -74,6 +74,8 @@ import { MessengerProvisions } from './devices/messaging/provisions.js';
 import { CallLogService } from './services/telephony.js';
 import { TelephonyBus } from './devices/telephony/bus.js';
 import { contactRoutes } from './routes/contacts.js';
+import { libraryRoutes } from './routes/library.js';
+import { LibraryService } from './services/library.js';
 import { ContactService } from './services/contacts.js';
 import { phonebookRoutes } from './routes/phonebook.js';
 import { PhonebookService } from './services/phonebook.js';
@@ -284,6 +286,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     // Kontakt-Tasten der Telefone zeigen Namen und Nummer des Kontakts
     phones.contactsChanged();
   });
+  const library = new LibraryService(db, store, config.dataDir, { notify: (t) => hub.invalidate(t), overpass });
   const phonebook = new PhonebookService(db, contacts);
   const phones = new PhoneService(db, {
     contacts: () => contacts.list(),
@@ -493,6 +496,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     telephonyRoutes(api, { calls });
     reportRoutes(api, { report, store, notify: (t) => hub.invalidate(t) });
     contactRoutes(api, { contacts, personnel });
+    libraryRoutes(api, library);
     phonebookRoutes(api, { phonebook, store, notify: (t) => hub.invalidate(t) });
     phoneRoutes(api, { phones, store, notify: (t) => hub.invalidate(t) });
     dashboardRoutes(api, { dashboards: new DashboardService(db, config.edition) });

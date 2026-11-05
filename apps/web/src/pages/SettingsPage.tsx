@@ -34,6 +34,7 @@ import {
   MessagesSquare,
   Workflow,
   Siren,
+  Library,
 } from 'lucide-react';
 import type { DeviceId } from '@elvis/shared';
 import { api } from '../lib/api';
@@ -55,6 +56,7 @@ import { MessageSettingsCard } from './system/MessageSettingsCard';
 import { IncidentSettingsCard } from './system/IncidentSettingsCard';
 import { RequestSettingsCard } from './system/RequestSettingsCard';
 import { OverpassQueriesCard } from './system/OverpassQueriesCard';
+import { ObjectTypesCard } from './system/ObjectTypesCard';
 import { ModuleSection } from './system/ModuleSection';
 import { MonitoringCard } from './system/MonitoringCard';
 import { PhonebookCard } from './system/PhonebookCard';
@@ -146,6 +148,9 @@ export function SettingsPage() {
           )}
           <SettingsSection id="karten" title="Kartenquellen" icon={<MapIcon {...ICON} />} summary="Kartenstile, Luftbilder (WMS)">
             <MapSourcesCard />
+          </SettingsSection>
+          <SettingsSection id="objekttypen" title="Objekttypen" icon={<Library {...ICON} />} summary="Typen und Felder der Objektbibliothek">
+            <ObjectTypesCard />
           </SettingsSection>
           <SettingsSection id="overpass" title="Overpass-Vorlagen" icon={<Database {...ICON} />} summary="OpenStreetMap-Abfragen im Menü „Objekte“ der Karte">
             <OverpassQueriesCard />

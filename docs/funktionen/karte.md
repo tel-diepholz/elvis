@@ -118,6 +118,10 @@ Gerechnet wird ausschließlich lokal mit Valhalla aus dem Addon **OSM-Daten** (`
 `GET /api/map/router`). Ohne dieses Addon ist der Menüpunkt gesperrt; einen öffentlichen Rückfall gibt es bewusst
 nicht.
 
+**Objektbibliothek:** Unter *Ebenen → Objektbibliothek* erscheinen Wasserentnahmestellen, Einsatzobjekte und
+eigene Typen aus der [Objektbibliothek](objektbibliothek.md), je Typ ein- und ausblendbar und per Klick in die Lage
+übernehmbar.
+
 **Regenradar:** Unter *Ebenen → Regenradar* liegt das Niederschlagsradar des Deutschen Wetterdienstes über der Karte
 (Open Data, 1-km-Raster, alle 5 Minuten neu). Die Leiste unten zeigt die letzten 2 Stunden und die Vorhersage für bis
 zu 2 Stunden. Man kann sie abspielen oder mit dem Regler einen Zeitpunkt wählen. „Jetzt“ springt zur letzten Messung

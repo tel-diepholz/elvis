@@ -22,12 +22,12 @@ import { actorOf, idParam, operatorOf, originOf, parse } from './util.js';
 export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 
 /** Formularfeld aus einem Multipart-Upload (Felder müssen vor der Datei stehen) */
-function field(file: MultipartFile, name: string): string | undefined {
+export function field(file: MultipartFile, name: string): string | undefined {
   const f = file.fields[name];
   return f && !Array.isArray(f) && f.type === 'field' ? String(f.value) : undefined;
 }
 
-function sendFile(reply: FastifyReply, req: FastifyRequest, f: { filename: string; mimeType: string; path: string }) {
+export function sendFile(reply: FastifyReply, req: FastifyRequest, f: { filename: string; mimeType: string; path: string }) {
   const disposition = (req.query as { download?: string }).download ? 'attachment' : 'inline';
   return reply
     .header('content-type', f.mimeType)
