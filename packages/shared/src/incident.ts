@@ -137,6 +137,8 @@ export type IncidentSettingsInput = z.input<typeof incidentSettingsSchema>;
 
 export interface IncidentSettings {
   keywords: string[];
+  /** Stichworte, die ein anderer Knoten in der Cloud pflegt (hier nur lesbar) */
+  managed: { name: string; origin: string }[];
   updatedAt: string | null;
   updatedBy: string | null;
 }

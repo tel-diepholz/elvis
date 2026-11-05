@@ -5,6 +5,7 @@ import type { RoleInfo, RoleInput } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Card, EmptyState, Field, Loading, Modal } from '../../components/ui';
+import { CloudBadge, localEditable } from '../../components/CloudBadge';
 
 function RoleForm({ initial, pending, onSubmit }: { initial?: RoleInfo; pending: boolean; onSubmit: (r: RoleInput) => void }) {
   const [name, setName] = useState(initial?.name ?? '');
@@ -70,7 +71,9 @@ export function RolesCard() {
           {roles.map((r, i) => (
             <li key={r.id}>
               <div className="grow">
-                <div className="cell-title">{r.name}</div>
+                <div className="cell-title">
+                  {r.name} <CloudBadge cloud={r.cloud} />
+                </div>
                 <div className="cell-sub">{r.holders.length ? `besetzt: ${r.holders.join(', ')}` : 'unbesetzt'}{r.description && ` · ${r.description}`}</div>
               </div>
               <button className="btn btn-ghost btn-icon" aria-label="Nach oben" disabled={i === 0 || reorder.isPending} onClick={() => move(i, -1)}>
@@ -79,16 +82,20 @@ export function RolesCard() {
               <button className="btn btn-ghost btn-icon" aria-label="Nach unten" disabled={i === roles.length - 1 || reorder.isPending} onClick={() => move(i, 1)}>
                 <ArrowDown size={16} />
               </button>
-              <button className="btn btn-ghost btn-icon" aria-label={`${r.name} bearbeiten`} onClick={() => setEditing(r)}>
-                <Pencil size={16} />
-              </button>
-              <button
-                className="btn btn-ghost btn-icon"
-                aria-label={`${r.name} löschen`}
-                onClick={() => window.confirm(`Rolle „${r.name}“ löschen? Offene Aufgaben dieser Rolle gehen an alle.`) && remove.mutate(r.id)}
-              >
-                <Trash2 size={16} />
-              </button>
+              {localEditable(r) && (
+                <>
+                <button className="btn btn-ghost btn-icon" aria-label={`${r.name} bearbeiten`} onClick={() => setEditing(r)}>
+                  <Pencil size={16} />
+                </button>
+                <button
+                  className="btn btn-ghost btn-icon"
+                  aria-label={`${r.name} löschen`}
+                  onClick={() => window.confirm(`Rolle „${r.name}“ löschen? Offene Aufgaben dieser Rolle gehen an alle.`) && remove.mutate(r.id)}
+                >
+                  <Trash2 size={16} />
+                </button>
+                </>
+              )}
             </li>
           ))}
         </ul>

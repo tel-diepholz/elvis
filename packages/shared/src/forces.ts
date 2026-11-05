@@ -1,3 +1,4 @@
+import type { CloudOrigin } from './cloudsync';
 import { z } from 'zod';
 import { tacticalSignSchema, type TacticalSign } from './tactical';
 import { mobileSchema } from './telephony';
@@ -110,6 +111,8 @@ export interface ForceUnit {
   members: ForceMember[];
   createdAt: string;
   updatedAt: string;
+  /** Herkunft beim Cloud-Abgleich; null/fehlend = nur lokal */
+  cloud?: CloudOrigin | null;
 }
 
 export const forceUnitInputSchema = z.object({

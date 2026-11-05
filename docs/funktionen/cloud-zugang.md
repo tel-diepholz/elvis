@@ -1,9 +1,9 @@
 # Cloud-Zugang (Datenpflege)
 
 Im Portal **<https://cloud.einsatzleitwagen.app>** arbeiten Verwalter von Landkreis, Gemeinde und Ortsfeuerwehr
-zusammen. Dort sehen sie den Zustand der Cloud-Module ihrer ELVIS-Installationen. Künftig pflegen sie dort auch
-Stammdaten (Kräfte, Einsatzstichworte, Rollen, Benutzer, Aufgabenvorlagen, Objektbibliothek). Das Portal läuft
-über dasselbe Cloud-Relay wie E-Mail und Cloud Messaging.
+zusammen. Dort pflegen sie Stammdaten (Kräfte, Einsatzstichworte, Rollen, Benutzer, Aufgabenvorlagen) und sehen den
+Zustand der Cloud-Module ihrer ELVIS-Installationen. Das Portal läuft über dasselbe Cloud-Relay wie E-Mail und Cloud
+Messaging.
 
 ## Baustruktur und Rollen
 
@@ -32,6 +32,38 @@ Für die Verknüpfung erzeugt ELVIS einen eigenen Ed25519-Schlüssel. Jeder Aufr
 ein Postfach braucht es dafür nicht. Der private Schlüssel liegt versiegelt in der Datenbank, die Passphrase wie beim
 Postfach in `<dataDir>/mail.secret`. Beides ist im [Backup](../backup.md) enthalten. Anfordern und Trennen stehen im
 Bedienprotokoll (Ziel `cloud`).
+
+## Stammdaten-Abgleich
+
+Ist die Installation verknüpft, startet ein Admin unter *Einstellungen → Cloud-Zugang* den **Abgleich**. Danach
+gleicht ELVIS jede Minute ab.
+
+- **Wer sieht was:**
+  - **Kräfte und Einsatzstichworte** kommen von allen Knoten darüber und darunter. Der Kreis-ELW kennt also auch die
+    Fahrzeuge der Gemeinden, der ELW Weyhe die des Kreises.
+  - **Rollen, Benutzer und Aufgabenvorlagen** kommen nur von oben. Die Rollen des Kreises gelten in jeder Gemeinde.
+- **Wer ändert was:**
+  - ELVIS ändert nur die Datensätze des **eigenen Bereichs** (Badge „Cloud“). Was ein anderer Bereich pflegt, ist
+    hier nur lesbar (Schloss mit dessen Namen). Ändern geht dann nur im Portal mit der Rolle *Pflegen*.
+  - Ausnahme: Adressen und Rufnummern, die ELVIS sich aus eingegangenen Nachrichten merkt, bleiben lokal. Das gilt,
+    solange die Cloud keine eigenen kennt.
+- **Erster Abgleich:**
+  - Alles, was nur lokal existiert, geht an den eigenen Bereich.
+  - Was es in der Cloud schon gibt, wird zusammengeführt statt doppelt angelegt. Bei Kräften zählt der Funkrufname,
+    sonst Name und Organisation, bei Benutzern Vor- und Nachname, sonst der Name.
+  - Ein zusammengeführter Datensatz eines anderen Bereichs ist danach hier nur lesbar.
+- **Konflikte:** Ändern ELVIS und Portal denselben Datensatz gleichzeitig, gilt der Stand der Cloud. Die verworfene
+  Änderung steht in der Karte unter „Konflikte“ und im Bedienprotokoll (Ziel `cloud`).
+- **Benutzer** kommen ohne PIN, nur Name und Admin-Recht kommen aus der Cloud.
+  - Solange keine PIN gesetzt ist, steht „PIN fehlt“ am Benutzer und er erscheint nicht in der Anmeldeauswahl.
+  - Ein Admin setzt die PIN unter *Benutzer → Bearbeiten*.
+  - Der letzte Admin mit PIN bleibt immer Admin und wird nie gelöscht.
+- **Aufgabenvorlagen** verweisen auf Rollen und auf Dokumentvorlagen. Dokumentvorlagen werden nicht abgeglichen.
+  ELVIS sucht sie lokal nach ihrem Namen, fehlt sie, bleibt die Aufgabe ohne Vorlage.
+- **Laufende Lagen** bleiben unberührt, sie arbeiten mit Kopien.
+- **Steuerung:** *Jetzt abgleichen* stößt einen Durchlauf an, *Alles neu laden* holt alles noch einmal ab, *Beenden*
+  stoppt den Abgleich.
+- **Trennen:** Die Daten bleiben als lokale stehen.
 
 ## Status im Portal
 

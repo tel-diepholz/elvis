@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Pencil, Search, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 import { fullName, type User } from '@elvis/shared';
+import { CloudBadge, localEditable } from '../components/CloudBadge';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { fmtDateTime } from '../lib/format';
@@ -75,6 +76,12 @@ export function UsersPage() {
                         <div className="cell-title">
                           {u.firstName} {u.lastName}
                           {me?.id === u.id && <Badge tone="info">Sie</Badge>}
+                          <CloudBadge cloud={u.cloud} />
+                          {u.pinMissing && (
+                            <span title="Aus der Cloud übernommen – kann sich erst anmelden, wenn ein Admin die PIN setzt">
+                              <Badge tone="warn">PIN fehlt</Badge>
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td>{u.isAdmin ? <Badge tone="warn"><ShieldCheck size={12} /> Admin</Badge> : <span className="muted">Benutzer</span>}</td>
@@ -89,7 +96,7 @@ export function UsersPage() {
                             <Pencil size={16} />
                           </button>
                         )}
-                        {me?.isAdmin && me.id !== u.id && (
+                        {me?.isAdmin && me.id !== u.id && localEditable(u) && (
                           <button
                             className="btn btn-ghost btn-icon"
                             onClick={() => window.confirm(`${fullName(u)} löschen? Bestehende Einträge im Einsatztagebuch bleiben erhalten.`) && remove.mutate(u)}

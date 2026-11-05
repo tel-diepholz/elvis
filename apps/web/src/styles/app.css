@@ -9588,3 +9588,18 @@ dd .messaging-contact {
   margin: 4px 0;
   user-select: all;
 }
+.cloud-sync {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.cloud-sync h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 15px;
+}
+.cloud-sync-counts td:not(:first-child),
+.cloud-sync-counts th {
+  text-align: right;
+}

@@ -1171,6 +1171,40 @@ const MIGRATIONS: Migration[] = [
       const t = objectTypeInputSchema.parse(BUILTIN_TYPES[b]);
       insert.run(randomUUID(), b, t.name, t.icon, t.color, JSON.stringify(t.fields), i, now);
     });
+  },  // Stammdaten-Abgleich mit der Cloud: uid, Revision und Herkunft (Knoten) an Benutzern, Rollen, Kräften und
+  // Aufgabenvorlagen; Einsatzstichworte als eigene Tabelle statt JSON in settings; cloud_sync hält den zuletzt
+  // abgeglichenen Stand je Datensatz (daraus erkennt ELVIS eigene Änderungen)
+  (db) => {
+    for (const table of ['users', 'roles', 'force_units', 'task_templates']) {
+      const cols = (db.prepare(`SELECT name FROM pragma_table_info('${table}')`).all() as { name: string }[]).map((c) => c.name);
+      if (!cols.includes('uid')) db.exec(`ALTER TABLE ${table} ADD COLUMN uid TEXT`);
+      if (!cols.includes('origin_node')) db.exec(`ALTER TABLE ${table} ADD COLUMN origin_node TEXT`);
+      if (!cols.includes('origin_name')) db.exec(`ALTER TABLE ${table} ADD COLUMN origin_name TEXT`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS ${table}_uid ON ${table}(uid) WHERE uid IS NOT NULL`);
+    }
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS incident_keywords (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      sort INTEGER NOT NULL,
+      uid TEXT UNIQUE,
+      origin_node TEXT,
+      origin_name TEXT
+    );
+    CREATE TABLE IF NOT EXISTS cloud_sync (
+      uid TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      rev INTEGER NOT NULL,
+      node_id TEXT NOT NULL,
+      data TEXT NOT NULL,
+      -- Verweise (Untereinheiten, Rolle), die beim Übernehmen noch fehlten
+      unresolved INTEGER NOT NULL DEFAULT 0
+    );
+    `);
+    const r = db.prepare("SELECT value FROM settings WHERE key = 'incident:settings'").get() as { value: string } | undefined;
+    const keywords = r ? ((JSON.parse(r.value) as { keywords?: string[] }).keywords ?? []) : [];
+    const add = db.prepare('INSERT INTO incident_keywords (name, sort) VALUES (?, ?)');
+    keywords.forEach((k, i) => add.run(k, i));
   },
 ];
 

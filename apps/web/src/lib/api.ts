@@ -1,4 +1,4 @@
-import type { CloudStatus } from '@elvis/shared';
+import type { CloudStatus, CloudSyncStatus } from '@elvis/shared';
 import type { LibraryFile, LibraryObject, LibraryObjectDetail, LibraryObjectInput, ObjectType, ObjectTypeInput } from '@elvis/shared';
 import type { DamageAccount, DamageAccountInput, DamageAccountPatch, DamageCountBooking, DamageCountInput, DamageEntry, DamageEntryInput, DamageEntryPatch } from '@elvis/shared';
 import type { ManualPosition, ManualPositionInput, VehiclePosition } from '@elvis/shared';
@@ -342,6 +342,8 @@ export const api = {
   cloudStatus: (refresh = false) => request<CloudStatus>('GET', `/api/system/cloud${refresh ? '?refresh=1' : ''}`),
   requestCloudLink: (name: string) => request<CloudStatus>('POST', '/api/system/cloud/link', { name }),
   unlinkCloud: () => request<CloudStatus>('DELETE', '/api/system/cloud'),
+  cloudSync: () => request<CloudSyncStatus>('GET', '/api/system/cloud/sync'),
+  cloudSyncAction: (action: 'enable' | 'disable' | 'resync' | 'run') => request<CloudSyncStatus>('POST', `/api/system/cloud/sync/${action}`),
   libraryTypes: () => request<ObjectType[]>('GET', '/api/library/types'),
   createObjectType: (input: ObjectTypeInput) => request<ObjectType>('POST', '/api/system/library/types', input),
   updateObjectType: (id: number, input: ObjectTypeInput) => request<ObjectType>('PUT', `/api/system/library/types/${id}`, input),

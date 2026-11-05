@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Cloud, ExternalLink, Link2, RefreshCw, Unlink } from 'lucide-react';
-import { formatLinkCode, type CloudStatus } from '@elvis/shared';
+import { Cloud, DatabaseZap, ExternalLink, Link2, RefreshCw, Unlink } from 'lucide-react';
+import { RECORD_KINDS, RECORD_KIND_LABELS, formatLinkCode, type CloudStatus, type CloudSyncStatus } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { fmtDateTime } from '../../lib/format';
 import { useSettings } from '../../lib/hooks';
@@ -95,12 +95,111 @@ export function CloudCard() {
             <a className="btn" href={`${s.portalUrl}/knoten/${encodeURIComponent(l.node.id)}`} target="_blank" rel="noreferrer">
               <ExternalLink size={16} /> Im Portal öffnen
             </a>
-            <button className="btn btn-danger" disabled={unlink.isPending} onClick={() => window.confirm(`Von „${l.node.name}“ trennen?`) && unlink.mutate()}>
+            <button
+              className="btn btn-danger"
+              disabled={unlink.isPending}
+              onClick={() => window.confirm(`Von „${l.node.name}“ trennen? Stammdaten aus der Cloud bleiben als lokale erhalten, der Abgleich endet.`) && unlink.mutate()}
+            >
               <Unlink size={16} /> Trennen
             </button>
           </div>
+          <SyncPanel area={l.node.path.join(' › ')} />
         </div>
       )}
     </Card>
+  );
+}
+
+const fmt = (iso: string | null) => (iso ? fmtDateTime(iso) : 'noch nie');
+
+/** Stammdaten-Abgleich: starten, Stand, Konflikte */
+function SyncPanel({ area }: { area: string }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const { data: s } = useQuery({ queryKey: ['cloud', 'sync'], queryFn: api.cloudSync, refetchInterval: 30_000 });
+  const action = useMutation({
+    mutationFn: api.cloudSyncAction,
+    onSuccess: (next: CloudSyncStatus) => {
+      qc.setQueryData(['cloud', 'sync'], next);
+      if (next.lastError) toast('error', next.lastError);
+    },
+    onError: (e: Error) => toast('error', e.message),
+  });
+  if (!s) return null;
+  return (
+    <section className="form cloud-sync" aria-label="Stammdaten-Abgleich">
+      <h3>
+        <DatabaseZap size={16} /> Stammdaten-Abgleich
+      </h3>
+      {!s.enabled ? (
+        <>
+          <p className="muted">
+            Kräfte, Einsatzstichworte, Rollen, Benutzer (ohne PIN) und Aufgabenvorlagen mit der Cloud abgleichen. Die eigenen gehen an <strong>{area}</strong>; was Bereiche
+            darüber pflegen, kommt dazu und ist hier nur lesbar. Gleiche Einträge (Funkrufname bzw. Name) werden zusammengeführt statt doppelt angelegt.
+          </p>
+          <div className="form-actions">
+            <button className="btn btn-primary" disabled={action.isPending} onClick={() => action.mutate('enable')}>
+              <DatabaseZap size={16} /> Abgleich starten
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p>
+            {s.lastError ? <Badge tone="warn">{s.lastError}</Badge> : <Badge tone="ok">Aktiv</Badge>} <span className="muted">zuletzt erfolgreich {fmt(s.lastSuccessAt)} · jede Minute</span>
+          </p>
+          <table className="table cloud-sync-counts">
+            <thead>
+              <tr>
+                <th />
+                <th>von anderen Bereichen</th>
+                <th>eigene</th>
+                <th>nur lokal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {RECORD_KINDS.map((k) => (
+                <tr key={k}>
+                  <td>{RECORD_KIND_LABELS[k]}</td>
+                  <td>{s.counts[k].foreign}</td>
+                  <td>{s.counts[k].own}</td>
+                  <td>{s.counts[k].local}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {s.conflicts.length > 0 && (
+            <details>
+              <summary>{s.conflicts.length} Konflikte (Stand der Cloud übernommen)</summary>
+              <ul className="simple-list">
+                {s.conflicts.map((c, i) => (
+                  <li key={i}>
+                    <div className="grow">
+                      <div className="cell-title">
+                        {RECORD_KIND_LABELS[c.kind]}: {c.name}
+                      </div>
+                      <div className="cell-sub">
+                        {fmtDateTime(c.at)} · {c.reason}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          <div className="form-actions">
+            <button className="btn" disabled={action.isPending} onClick={() => action.mutate('run')}>
+              <RefreshCw size={16} /> Jetzt abgleichen
+            </button>
+            <button className="btn" disabled={action.isPending} onClick={() => action.mutate('resync')}>
+              Alles neu laden
+            </button>
+            <button className="btn" disabled={action.isPending} onClick={() => window.confirm('Abgleich beenden? Die Daten bleiben, Änderungen gehen nicht mehr hin und her.') && action.mutate('disable')}>
+              Beenden
+            </button>
+          </div>
+        </>
+      )}
+    </section>
   );
 }

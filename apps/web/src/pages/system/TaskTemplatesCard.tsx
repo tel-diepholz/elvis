@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, ListTodo, Pencil, Plus, Trash2 } from 'lucide-react';
 import { fmtInterval, type TaskTemplate, type TaskTemplateInput } from '@elvis/shared';
+import { CloudBadge, localEditable } from '../../components/CloudBadge';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Badge, Card, EmptyState, Loading, Modal } from '../../components/ui';
@@ -59,7 +60,7 @@ export function TaskTemplatesCard() {
             <li key={t.id}>
               <div className="grow">
                 <div className="cell-title">
-                  {t.summary} <Badge tone={t.roleName ? 'info' : 'muted'}>{t.roleName ?? 'Alle'}</Badge>
+                  {t.summary} <Badge tone={t.roleName ? 'info' : 'muted'}>{t.roleName ?? 'Alle'}</Badge> <CloudBadge cloud={t.cloud} />
                 </div>
                 <div className="cell-sub">
                   {scheduleText(t)}
@@ -72,12 +73,16 @@ export function TaskTemplatesCard() {
               <button className="btn btn-ghost btn-icon" aria-label="Nach unten" disabled={i === templates.length - 1 || reorder.isPending} onClick={() => move(i, 1)}>
                 <ArrowDown size={16} />
               </button>
-              <button className="btn btn-ghost btn-icon" aria-label={`${t.summary} bearbeiten`} onClick={() => setEditing(t)}>
-                <Pencil size={16} />
-              </button>
-              <button className="btn btn-ghost btn-icon" aria-label={`${t.summary} löschen`} onClick={() => window.confirm(`Vorlage „${t.summary}“ löschen?`) && remove.mutate(t.id)}>
-                <Trash2 size={16} />
-              </button>
+              {localEditable(t) && (
+                <>
+                  <button className="btn btn-ghost btn-icon" aria-label={`${t.summary} bearbeiten`} onClick={() => setEditing(t)}>
+                    <Pencil size={16} />
+                  </button>
+                  <button className="btn btn-ghost btn-icon" aria-label={`${t.summary} löschen`} onClick={() => window.confirm(`Vorlage „${t.summary}“ löschen?`) && remove.mutate(t.id)}>
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              )}
             </li>
           ))}
         </ul>

@@ -1,3 +1,4 @@
+import type { CloudOrigin } from './cloudsync';
 import type { Role } from './tasks';
 
 /** Benutzerverwaltung: Anmeldung per Namensauswahl und 4-stelliger PIN. */
@@ -10,6 +11,9 @@ export interface User {
   createdAt: string;
   createdBy: string;
   lastLoginAt: string | null;
+  /** Aus der Cloud übernommen und noch ohne PIN: kann sich erst anmelden, wenn ein Admin die PIN setzt */
+  pinMissing?: boolean;
+  cloud?: CloudOrigin | null;
 }
 
 /** Öffentlich für die Namensauswahl beim Anmelden. */

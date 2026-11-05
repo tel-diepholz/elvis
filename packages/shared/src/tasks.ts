@@ -1,3 +1,4 @@
+import type { CloudOrigin } from './cloudsync';
 import { z } from 'zod';
 
 /** Rollen und Aufgaben im Einsatz. Rollen pflegen Admins; jede Sitzung kann mehrere Rollen übernehmen. */
@@ -7,6 +8,8 @@ export interface Role {
   name: string;
   description: string;
   sort: number;
+  /** Herkunft beim Cloud-Abgleich; null/fehlend = nur lokal */
+  cloud?: CloudOrigin | null;
 }
 
 /** Rolle mit den Benutzern, die sie gerade (in einer gültigen Sitzung) übernommen haben */
@@ -141,6 +144,7 @@ export interface TaskTemplate {
   roleName: string | null;
   schedule: TaskTemplateSchedule;
   sort: number;
+  cloud?: CloudOrigin | null;
 }
 
 export const idOrderSchema = z.object({ ids: z.array(z.number().int().positive()).max(500) });
