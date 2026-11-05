@@ -12,10 +12,13 @@ import {
 } from '@elvis/shared';
 import type { Db } from '../db/index.js';
 import type { Store } from '../db/store.js';
+import { assertEditable, cloudOrigin } from './cloudOrigin.js';
 import { HttpError } from '../errors.js';
 import type { ParsedImportRow } from './forceImport.js';
 
 interface ForceRow {
+  origin_node?: string | null;
+  origin_name?: string | null;
   id: number;
   name: string;
   callsign: string;
@@ -66,7 +69,13 @@ export class ForceService {
       members: members.filter((m) => m.parent_id === r.id).map((m) => ({ unitId: m.child_id, role: m.role })),
       createdAt: r.created_at,
       updatedAt: r.updated_at,
+      cloud: cloudOrigin(r),
     }));
+  }
+
+  private originOf(id: number): { origin_node?: unknown; origin_name?: unknown } {
+    this.get(id);
+    return this.db.prepare('SELECT origin_node, origin_name FROM force_units WHERE id = ?').get(id) as { origin_node: unknown; origin_name: unknown };
   }
 
   get(id: number): ForceUnit {
@@ -134,7 +143,7 @@ export class ForceService {
   }
 
   update(id: number, input: ForceUnitInput): ForceUnit {
-    this.get(id);
+    assertEditable(this.originOf(id), 'Diese Einheit');
     const parsed = forceUnitInputSchema.parse(input);
     this.checkMembers(id, parsed.members);
     this.db.transaction(() => this.write(id, parsed))();
@@ -154,6 +163,7 @@ export class ForceService {
   /** Mitgliedschaften fallen weg; Einsätze behalten ihre Kopie (source_id → NULL) */
   remove(id: number): ForceUnit {
     const unit = this.get(id);
+    assertEditable(this.originOf(id), 'Diese Einheit');
     this.db.prepare('DELETE FROM force_units WHERE id = ?').run(id);
     return unit;
   }

@@ -13,6 +13,7 @@ import {
 } from '@elvis/shared';
 import type { Db } from '../db/index.js';
 import type { Store } from '../db/store.js';
+import { assertEditable, cloudOrigin } from './cloudOrigin.js';
 import { HttpError } from '../errors.js';
 import type { RoleService } from './roles.js';
 
@@ -41,6 +42,8 @@ interface TaskRow {
 }
 
 interface TemplateRow {
+  origin_node?: string | null;
+  origin_name?: string | null;
   id: number;
   summary: string;
   description: string;
@@ -317,6 +320,7 @@ export class TaskService {
       roleName: r.role_name,
       schedule: r.interval_minutes !== null ? { kind: 'interval', intervalMinutes: r.interval_minutes, offsetMinutes: r.offset_minutes ?? r.interval_minutes } : { kind: 'once', offsetMinutes: r.offset_minutes },
       sort: r.sort,
+      cloud: cloudOrigin(r),
     };
   }
 
@@ -350,6 +354,7 @@ export class TaskService {
 
   updateTemplate(id: number, raw: TaskTemplateInput): TaskTemplate {
     this.template(id);
+    assertEditable(this.db.prepare('SELECT origin_node, origin_name FROM task_templates WHERE id = ?').get(id) as object, 'Diese Vorlage');
     const values = this.templateValues(raw);
     this.db
       .prepare('UPDATE task_templates SET summary = ?, description = ?, document_template_id = ?, role_id = ?, interval_minutes = ?, offset_minutes = ? WHERE id = ?')
@@ -360,6 +365,7 @@ export class TaskService {
 
   removeTemplate(id: number): TaskTemplate {
     const t = this.template(id);
+    assertEditable(this.db.prepare('SELECT origin_node, origin_name FROM task_templates WHERE id = ?').get(id) as object, 'Diese Vorlage');
     this.db.prepare('DELETE FROM task_templates WHERE id = ?').run(id);
     this.deps.notify(['taskTemplates']);
     return t;

@@ -2,15 +2,18 @@ import type { Role, RoleInfo, RoleInput } from '@elvis/shared';
 import type { SessionStore } from '../auth/sessions.js';
 import type { Db } from '../db/index.js';
 import { HttpError } from '../errors.js';
+import { assertEditable, cloudOrigin } from './cloudOrigin.js';
 
 interface RoleRow {
   id: number;
   name: string;
   description: string;
   sort: number;
+  origin_node?: string | null;
+  origin_name?: string | null;
 }
 
-const toRole = (r: RoleRow): Role => ({ id: r.id, name: r.name, description: r.description, sort: r.sort });
+const toRole = (r: RoleRow): Role => ({ id: r.id, name: r.name, description: r.description, sort: r.sort, cloud: cloudOrigin(r) });
 
 /**
  * Rollen in der Lage (z. B. Einsatzleiter, Führungsassistent, Funker). Admins pflegen die Liste,
@@ -63,8 +66,13 @@ export class RoleService {
     return this.get(Number(info.lastInsertRowid));
   }
 
-  update(id: number, input: RoleInput): Role {
+  private row(id: number): RoleRow {
     this.get(id);
+    return this.db.prepare('SELECT * FROM roles WHERE id = ?').get(id) as RoleRow;
+  }
+
+  update(id: number, input: RoleInput): Role {
+    assertEditable(this.row(id), 'Diese Rolle');
     this.assertUnique(input.name, id);
     this.db.prepare('UPDATE roles SET name = ?, description = ? WHERE id = ?').run(input.name, input.description, id);
     return this.get(id);
@@ -73,6 +81,7 @@ export class RoleService {
   /** Sitzungen verlieren die Rolle (ON DELETE CASCADE), Aufgaben für sie gehen an alle (ON DELETE SET NULL) */
   remove(id: number): Role {
     const role = this.get(id);
+    assertEditable(this.row(id), 'Diese Rolle');
     this.db.prepare('DELETE FROM roles WHERE id = ?').run(id);
     return role;
   }

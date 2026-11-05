@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Siren } from 'lucide-react';
+import { Lock, Siren } from 'lucide-react';
 import { api } from '../../lib/api';
 import { fmtDateTime } from '../../lib/format';
 import { useToast } from '../../lib/toast';
-import { Card, Field, Loading } from '../../components/ui';
+import { Badge, Card, Field, Loading } from '../../components/ui';
 import { useIncidentSettings } from '../incident/IncidentForm';
 
 const parse = (text: string) => [...new Set(text.split('\n').map((l) => l.trim().slice(0, 40)).filter(Boolean))];
@@ -17,7 +17,8 @@ export function IncidentSettingsCard() {
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    if (data && !dirty) setText(data.keywords.join('\n'));
+    // Bearbeitbar sind nur die eigenen; die anderer Bereiche stehen darüber
+    if (data && !dirty) setText(data.keywords.filter((k) => !data.managed.some((m) => m.name === k)).join('\n'));
   }, [data, dirty]);
 
   const save = useMutation({
@@ -34,6 +35,20 @@ export function IncidentSettingsCard() {
       <p className="muted">
         Bei Lagen der Art „Brand/Technische Hilfe“ wird das Einsatzstichwort aus dieser Liste ausgewählt. Freie Eingaben sind dort nicht möglich.
       </p>
+      {data.managed.length > 0 && (
+        <div className="form">
+          <span className="field-label">Aus der Cloud (hier nur lesbar)</span>
+          <div className="chip-row">
+            {data.managed.map((m) => (
+              <span key={m.name} title={`Gepflegt von ${m.origin}`}>
+                <Badge>
+                  <Lock size={12} /> {m.name}
+                </Badge>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       <form
         className="form"
         onSubmit={(e) => {

@@ -1,6 +1,7 @@
 import { fullName, PIN_PATTERN, type LoginCandidate, type NewUser, type User, type UserPatch } from '@elvis/shared';
 import type { Db } from '../db/index.js';
 import { HttpError } from '../errors.js';
+import { assertEditable, cloudOrigin } from '../services/cloudOrigin.js';
 import { hashPin, verifyPin } from './pin.js';
 
 interface UserRow {
@@ -12,6 +13,8 @@ interface UserRow {
   created_at: string;
   created_by: string;
   last_login_at: string | null;
+  origin_node?: string | null;
+  origin_name?: string | null;
 }
 
 const toUser = (r: UserRow): User => ({
@@ -22,6 +25,8 @@ const toUser = (r: UserRow): User => ({
   createdAt: r.created_at,
   createdBy: r.created_by,
   lastLoginAt: r.last_login_at,
+  ...(r.pin_hash === '' && { pinMissing: true }),
+  cloud: cloudOrigin(r),
 });
 
 const cleanName = (s: string) => s.trim().replace(/\s+/g, ' ');
@@ -46,7 +51,10 @@ export class UserService {
   }
 
   candidates(): LoginCandidate[] {
-    return this.list().map(({ id, firstName, lastName }) => ({ id, firstName, lastName }));
+    // Aus der Cloud übernommene Benutzer erst, wenn ein Admin die PIN gesetzt hat
+    return this.list()
+      .filter((u) => !u.pinMissing)
+      .map(({ id, firstName, lastName }) => ({ id, firstName, lastName }));
   }
 
   get(id: number): User {
@@ -65,7 +73,8 @@ export class UserService {
   }
 
   private adminCount(): number {
-    return (this.db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1').get() as { n: number }).n;
+    // Nur Admins, die sich anmelden können (aus der Cloud ohne PIN zählen nicht)
+    return (this.db.prepare("SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND pin_hash != ''").get() as { n: number }).n;
   }
 
   private assertUniqueName(first: string, last: string, exceptId?: number): void {
@@ -108,6 +117,9 @@ export class UserService {
       if (!patch.isAdmin && this.adminCount() <= 1) throw new HttpError(409, 'Der letzte Admin kann nicht herabgestuft werden');
     }
     if (patch.pin !== undefined && self && !actor.isAdmin) throw new HttpError(403, 'Die eigene PIN wird über „PIN ändern“ mit der aktuellen PIN geändert');
+    // Benutzer aus der Cloud: Name und Admin-Recht pflegt die Cloud, die PIN setzt man hier
+    const renamed = (patch.firstName !== undefined && cleanName(patch.firstName) !== current.first_name) || (patch.lastName !== undefined && cleanName(patch.lastName) !== current.last_name);
+    if (renamed || (patch.isAdmin !== undefined && patch.isAdmin !== (current.is_admin === 1))) assertEditable(current, 'Diesen Benutzer');
 
     const first = patch.firstName !== undefined ? cleanName(patch.firstName) : current.first_name;
     const last = patch.lastName !== undefined ? cleanName(patch.lastName) : current.last_name;
@@ -134,6 +146,7 @@ export class UserService {
   remove(id: number, actor: User): User {
     if (!actor.isAdmin) throw new HttpError(403, 'Nur Admins können Benutzer löschen');
     const user = this.get(id);
+    assertEditable(this.row(id), 'Diesen Benutzer');
     if (user.isAdmin && this.adminCount() <= 1) throw new HttpError(409, 'Der letzte Admin kann nicht gelöscht werden');
     this.db.prepare('DELETE FROM users WHERE id = ?').run(id);
     return user;

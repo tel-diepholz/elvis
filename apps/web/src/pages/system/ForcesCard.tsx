@@ -13,6 +13,7 @@ import {
   type ForceUnitInput,
   type TacticalSign,
 } from '@elvis/shared';
+import { CloudBadge, localEditable } from '../../components/CloudBadge';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Badge, Card, EmptyState, Field, Loading, Modal } from '../../components/ui';
@@ -193,7 +194,9 @@ export function ForcesCard() {
               <li key={u.id}>
                 <TacticalSignImage sign={u.sign} height={40} />
                 <div className="grow">
-                  <div className="cell-title">{u.name}</div>
+                  <div className="cell-title">
+                    {u.name} <CloudBadge cloud={u.cloud} />
+                  </div>
                   <div className="cell-sub">
                     {[u.callsign, u.organization, `Stärke ${formatStrength(u.members.length ? forceTotalStrength(units, u.id) : u.strength)}`].filter(Boolean).join(' · ')}
                   </div>
@@ -209,12 +212,16 @@ export function ForcesCard() {
                   )}
                   {parents.length > 0 && <div className="cell-sub">gehört zu {parents.map((p) => p.name).join(', ')}</div>}
                 </div>
-                <button className="btn btn-ghost btn-icon" onClick={() => setEditing(u)} aria-label={`${u.name} bearbeiten`}>
-                  <Pencil size={16} />
-                </button>
-                <button className="btn btn-ghost btn-icon" onClick={() => confirmRemove(u)} aria-label={`${u.name} löschen`}>
-                  <Trash2 size={16} />
-                </button>
+                {localEditable(u) && (
+                  <>
+                    <button className="btn btn-ghost btn-icon" onClick={() => setEditing(u)} aria-label={`${u.name} bearbeiten`}>
+                      <Pencil size={16} />
+                    </button>
+                    <button className="btn btn-ghost btn-icon" onClick={() => confirmRemove(u)} aria-label={`${u.name} löschen`}>
+                      <Trash2 size={16} />
+                    </button>
+                  </>
+                )}
               </li>
             );
           })}

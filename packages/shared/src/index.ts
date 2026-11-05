@@ -50,4 +50,5 @@ export * from './dashboard';
 export * from './damage';
 export * from './library';
 export * from './cloudrelay';
+export * from './cloudsync';
 export * from './vehiclePosition';

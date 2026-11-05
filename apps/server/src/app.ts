@@ -77,6 +77,8 @@ import { contactRoutes } from './routes/contacts.js';
 import { libraryRoutes } from './routes/library.js';
 import { cloudRoutes } from './routes/cloud.js';
 import { CloudService, type CloudFetch } from './services/cloud.js';
+import { CloudSyncService } from './services/cloudsync.js';
+import { setCloudOwner } from './services/cloudOrigin.js';
 import { LibraryService } from './services/library.js';
 import { ContactService } from './services/contacts.js';
 import { phonebookRoutes } from './routes/phonebook.js';
@@ -290,6 +292,9 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   });
   const library = new LibraryService(db, store, config.dataDir, { notify: (t) => hub.invalidate(t), overpass });
   const cloud = new CloudService(db, store, relay, { dataDir: config.dataDir, portalUrl: config.app.cloudUrl, version: ELVIS_VERSION, notify: (t) => hub.invalidate(t), fetch: opts.cloudFetch });
+  const cloudSync = new CloudSyncService(db, store, cloud, { notify: (t) => hub.invalidate(t), log: server.log });
+  setCloudOwner(() => cloudSync.ownNode());
+  incidents.cloudNode = () => cloudSync.ownNode();
   const phonebook = new PhonebookService(db, contacts);
   const phones = new PhoneService(db, {
     contacts: () => contacts.list(),
@@ -500,7 +505,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     reportRoutes(api, { report, store, notify: (t) => hub.invalidate(t) });
     contactRoutes(api, { contacts, personnel });
     libraryRoutes(api, library);
-    cloudRoutes(api, cloud);
+    cloudRoutes(api, cloud, cloudSync);
     phonebookRoutes(api, { phonebook, store, notify: (t) => hub.invalidate(t) });
     phoneRoutes(api, { phones, store, notify: (t) => hub.invalidate(t) });
     dashboardRoutes(api, { dashboards: new DashboardService(db, config.edition) });
@@ -569,6 +574,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       messaging.start();
       backup.start();
       reachability.start();
+      cloudSync.start();
       cleanup();
       cleanupTimer = setInterval(cleanup, 3600_000);
       if (docker) {
@@ -593,6 +599,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
       messaging.stop();
       backup.stop();
       reachability.stop();
+      cloudSync.stop();
       phones.stop();
       hooks.stop();
       if (cleanupTimer) clearInterval(cleanupTimer);

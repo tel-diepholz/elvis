@@ -37,6 +37,7 @@ export class CloudService {
   private signer: Promise<webcrypto.CryptoKey> | null = null;
   private checkedAt = 0;
   private lastError: string | null = null;
+  private readonly unlinkListeners: (() => void)[] = [];
 
   constructor(
     private readonly db: Db,
@@ -111,6 +112,23 @@ export class CloudService {
     return data as T;
   }
 
+  /** Verknüpft (zuletzt bekannter Stand) */
+  linked(): boolean {
+    return this.known().state === 'linked';
+  }
+
+  /** Signierter Aufruf beim Relay mit dem Schlüssel der Verknüpfung (Stammdaten-Abgleich) */
+  async signed<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const key = await this.key(false);
+    if (!key) throw new HttpError(409, 'Nicht mit der Cloud verknüpft');
+    return this.call<T>(method, path, key, body);
+  }
+
+  /** Beim Trennen (Abgleich beenden) */
+  onUnlink(cb: () => void): void {
+    this.unlinkListeners.push(cb);
+  }
+
   private view(link: CloudLinkStatus): CloudStatus {
     return { available: this.relay.enabled, portalUrl: this.opts.portalUrl, link, error: this.lastError, checkedAt: this.checkedAt ? new Date(this.checkedAt).toISOString() : null };
   }
@@ -159,6 +177,7 @@ export class CloudService {
     this.save(KEY_KEY, null);
     this.signer = null;
     this.remember({ state: 'none' });
+    for (const cb of this.unlinkListeners) cb();
     this.lastError = null;
     if (before.state !== 'none') {
       this.store.addAudit({ operator, target: 'cloud', action: 'unlink', params: '', success: true, message: before.state === 'linked' ? `Von ${before.node.path.join(' › ')} getrennt` : 'Verknüpfungscode zurückgezogen' });
