@@ -80,10 +80,16 @@ export type ZbeEvent =
   | { type: 'sds'; port: number | null; from: string; to: string | null; flash: boolean; text: string }
   | { type: 'status'; port: number | null; from: string; to: string | null; code: number; status: number | null }
   | { type: 'gps'; port: number | null; from: string; lat: number; lon: number }
-  /** Aufzeichnungsinfo: wer gerade spricht (TSI/ISSI); kommt vor bzw. mit SPEAK */
-  | { type: 'speaker'; port: number | null; speaker: string | null; call: string | null }
-  /** Es wird gesprochen (Sprecher aus der vorangehenden Aufzeichnungsinfo) */
-  | { type: 'speak'; port: number | null }
+  /** Sprechtaste des Anschlusses */
+  | { type: 'speak'; port: number | null; active: boolean }
+  /** Sprachaktivität auf dem Anschluss: Beginn (active) bzw. Ende */
+  | { type: 'peak'; port: number | null; active: boolean }
+  /** Aufzeichnung: Funkrufname des Sprechers (leer, solange keiner bekannt ist) */
+  | { type: 'rec'; port: number | null; name: string }
+  /** Konfiguration der Anlage: Beginn (active) bzw. Ende der Zeilenliste */
+  | { type: 'config'; active: boolean }
+  /** Ein Anschluss der Anlage (aus der Konfiguration beim Anmelden) */
+  | { type: 'line'; port: number; name: string; kind: string; short: string }
   | { type: 'event'; port: number | null; name: string; from: string | null; raw: string };
 
 const EVENT_RE = /RADIO\.EVENT\.([A-Z0-9_]+)(?:\.(-?\d+))?/;
@@ -131,6 +137,14 @@ const PAYLOAD_RE = /^([A-Z0-9_]{2,8})\|/i;
 export function parseLine(raw: string): ZbeEvent | null {
   const line = raw.replace(/\r$/, '');
   if (line.trimStart().startsWith('#')) return null;
+  const cfg = /^RADIO\.EVENT\.CONFIG(_LINE)?\.(-?\d+)[,\s](.*)$/.exec(line);
+  if (cfg) {
+    const t = tokenize(`,${cfg[3]}`);
+    if (!cfg[1]) return { type: 'config', active: t[0] === '1' };
+    // <Anschluss>,<ein>,<Nr>,<?>,"<Name>","<Art>",NULL,"",<Kürzel>,…
+    if (Number(cfg[2]) < 0 || !t[3]) return null;
+    return { type: 'line', port: Number(cfg[2]), name: t[3].trim(), kind: (t[4] ?? '').trim(), short: (t[7] ?? '').trim() };
+  }
   if (SYSTEM_RE.test(line.split(/[\s,]/)[0] ?? '')) return null;
   const m = EVENT_RE.exec(line);
   if (!m) return null;
@@ -138,19 +152,19 @@ export function parseLine(raw: string): ZbeEvent | null {
   const port = m[2] !== undefined && Number(m[2]) >= 0 ? Number(m[2]) : null;
   const tokens = tokenize(line.slice(m.index + m[0].length));
 
-  if (name === 'SPEAK') return { type: 'speak', port };
-
-  if (name === 'DOKU_REC_INFO') {
-    // drittes Feld „<Ruf>-<Sprecher>“; der Sprecher kommt als TSI oder ISSI
-    const info = tokens[2] ?? tokens.find((t) => t.includes('-')) ?? '';
-    if (info.length <= 3) return { type: 'speaker', port, speaker: null, call: null };
-    const dash = info.indexOf('-');
-    const speaker = normalizeIssi(dash >= 0 ? info.slice(dash + 1) : info);
-    const call = dash > 0 ? normalizeIssi(info.slice(0, dash)) : null;
-    return { type: 'speaker', port, speaker: /^\d{1,15}$/.test(speaker) ? speaker : null, call };
-  }
+  // SPEAK.<n>,<1|0>,<x>: Sprechtaste (1 = gedrückt); PEAK.<n>,<1|0>,<Pegel>: Sprache liegt an bzw. ist zu Ende
+  if (name === 'SPEAK') return { type: 'speak', port, active: tokens[0] === '1' };
+  if (name === 'PEAK') return { type: 'peak', port, active: tokens[0] === '1' };
+  // REC_OPTA.<n>,<ein>,<Länge>,"<Funkrufname>"
+  if (name === 'REC_OPTA') return { type: 'rec', port, name: tokens[0] === '1' ? (tokens[2] ?? '').trim() : '' };
 
   if (name === 'SM_RECEIVED') {
+    // Anlage 7.0: "<Nachrichten-ID>","<Absender>","<Ziel>","<Funkrufname des Absenders><Text>",<?>,<?>,""
+    if (!tokens.some((t) => PAYLOAD_RE.test(t)) && tokens.length >= 4 && /^\d+$/.test(tokens[1]!) && /^\d*$/.test(tokens[2]!)) {
+      const text = tokens[3]!;
+      if (!text.trim()) return null;
+      return { type: 'sds', port, from: normalizeIssi(tokens[1]!), to: tokens[2] ? normalizeIssi(tokens[2]) : null, flash: false, text };
+    }
     // …, "<Absender>", "<Ziel>", "<Typ>|<Inhalt>" – der Absender steht zwei Felder vor der Nutzlast
     let p = tokens.findIndex((t) => PAYLOAD_RE.test(t));
     if (p < 0) p = Math.min(2, tokens.length - 1);
@@ -206,4 +220,13 @@ export class LineSplitter {
     if (this.buffer.length > 64_000) this.buffer = '';
     return parts.map((p) => p.replace(/\r$/, '')).filter((p) => p.length > 0);
   }
+}
+
+/** Dem SDS-Text stellt die Anlage den Funkrufnamen des Absenders voran; bekannte Namen werden abgeschnitten. */
+export function stripCaller(text: string, names: Iterable<string>): string {
+  let best = '';
+  for (const n of names) if (n.length > best.length && text.startsWith(n)) best = n;
+  const rest = text.slice(best.length);
+  // aufgefüllte Namen („NIFW DH 83-12ELW2     21“) sind 24 Zeichen lang
+  return (best ? rest : text).trim();
 }

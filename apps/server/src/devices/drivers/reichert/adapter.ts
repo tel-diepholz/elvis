@@ -1,23 +1,14 @@
 import { Socket } from 'node:net';
-import type { RadioDevice, RadioState, RadioType } from '@elvis/shared';
+import type { RadioDevice, RadioState } from '@elvis/shared';
 import { BaseAdapter, type AdapterContext, type Command } from '../../adapter.js';
 import { activity } from '../../radio/activity.js';
-import { LineSplitter, MAX_PORTS, PING, loginLines, parseLine, type ZbeEvent, type ZbeStyle } from './protocol.js';
+import { LineSplitter, PING, loginLines, parseLine, stripCaller, type ZbeEvent, type ZbeStyle } from './protocol.js';
 
-/** Sprecher aus der Aufzeichnungsinfo gilt so lange für das nächste SPEAK */
-const SPEAKER_VALID_MS = 10_000;
-/** Kommt die Aufzeichnungsinfo kurz nach SPEAK, wird der Sprecher nachgetragen */
-const SPEAKER_LATE_MS = 3_000;
 /** Lebenszeichen an die ZBE */
 const PING_MS = 30_000;
-
-export interface ZbeRadio {
-  /** Anschluss an der ZBE wie in deren Einstellungen (1–20); im Telegramm ab 0 gezählt */
-  port: number;
-  type: RadioType;
-  name: string;
-  issi: string;
-}
+/** Drückt jemand die Sprechtaste kurz vor Beginn der Sprache, ist es eigenes Senden */
+const PTT_BEFORE_PEAK_MS = 2_000;
+const MAX_CALLERS = 200;
 
 export interface ReichertOptions {
   host: string;
@@ -27,41 +18,25 @@ export interface ReichertOptions {
   clientNumber: number;
   /** Trennzeichen beim Senden (Anmeldung); empfangen wird beides */
   style: ZbeStyle;
-  radios: ZbeRadio[];
   reconnectMs: number;
 }
 
-/** Eintrag je Funkgerät: „Anschluss:Typ:Name[:ISSI]“, mehrere durch Semikolon getrennt */
-export const RADIOS_PATTERN =
-  '^\\s*(\\d{1,3}\\s*:\\s*(MRT|FRT|HRT)\\s*:[^:;]+(:\\s*\\d{1,8}\\s*)?)?(\\s*;\\s*\\d{1,3}\\s*:\\s*(MRT|FRT|HRT)\\s*:[^:;]+(:\\s*\\d{1,8}\\s*)?)*\\s*;?\\s*$';
-
-export function parseRadios(spec: string): ZbeRadio[] {
-  const radios: ZbeRadio[] = [];
-  for (const part of spec.split(';')) {
-    const [port, type, name, issi] = part.split(':').map((s) => s.trim());
-    if (!port || !type || !name) continue;
-    if (!/^\d+$/.test(port) || !['MRT', 'FRT', 'HRT'].includes(type)) throw new Error(`Funkgerät „${part.trim()}“: erwartet Anschluss:Typ:Name[:ISSI]`);
-    if (Number(port) < 1 || Number(port) > MAX_PORTS) throw new Error(`Anschluss ${port}: die ZBE hat die Anschlüsse 1 bis ${MAX_PORTS}`);
-    if (radios.some((r) => r.port === Number(port))) throw new Error(`Anschluss ${port} ist doppelt eingetragen`);
-    radios.push({
-      port: Number(port),
-      type: type as RadioType,
-      name,
-      issi: issi ?? '',
-    });
-  }
-  return radios;
+/**
+ * Funkgeräte stehen in der Konfiguration der ZBE (TETRA- und Analogfunk). ELA, DAB und Intercom sind keine Funkgeräte.
+ */
+export function isRadioLine(kind: string, short: string): boolean {
+  return /^(TETRA|ANALOG|DMR)/i.test(kind) && short.toUpperCase() !== 'IC';
 }
 
 const deviceId = (port: number) => `anschluss-${port}`;
 
-function radioDevice(r: ZbeRadio, online: boolean): RadioDevice {
+function radioDevice(port: number, name: string, online: boolean): RadioDevice {
   return {
-    id: deviceId(r.port),
-    name: r.name,
-    type: r.type,
-    workplace: `Anschluss ${r.port}`,
-    issi: r.issi,
+    id: deviceId(port),
+    name,
+    type: 'FRT',
+    workplace: `Anschluss ${port}`,
+    issi: '',
     mode: 'TMO',
     talkgroupId: '',
     rssiDbm: null,
@@ -84,17 +59,23 @@ export class ReichertZbeAdapter extends BaseAdapter<'radio'> {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private pruneTimer: NodeJS.Timeout | null = null;
   private pingTimer: NodeJS.Timeout | null = null;
-  /** Zuletzt gemeldeter Sprecher je Anschluss (Aufzeichnungsinfo), bis zum nächsten SPEAK */
-  private readonly speakers = new Map<number, { issi: string | null; at: number }>();
-  /** Letztes SPEAK je Anschluss – für einen nachträglich gemeldeten Sprecher */
-  private readonly lastSpeak = new Map<number, { activityId: string; at: number }>();
+  /** Sprechtaste zuletzt gedrückt je Anschluss (Suffix ab 0) */
+  private readonly lastPtt = new Map<number, number>();
+  /** Anschlüsse, die laufende Sprache haben (Suffix ab 0) */
+  private readonly speaking = new Set<number>();
+  /** Anschlüsse, die keine Funkgeräte sind (ELA, DAB, Intercom) */
+  private readonly ignoredPorts = new Set<number>();
+  /** Beim Lesen der Konfiguration gesehene Anschlüsse */
+  private configPorts: Set<number> | null = null;
+  /** Funkrufnamen aus den Aufzeichnungsinfos – im SDS-Text stehen sie vor dem eigentlichen Text */
+  private readonly callers = new Set<string>();
   private stopped = false;
   private readonly seenEvents = new Set<string>();
 
   constructor(private readonly opts: ReichertOptions) {
     super('radio', 'reichert-zbe', {
       talkgroups: [],
-      devices: opts.radios.map((r) => radioDevice(r, false)),
+      devices: [],
       activity: [],
       capabilities: { talkgroupSwitch: false, statusSet: false },
       link: {
@@ -171,29 +152,59 @@ export class ReichertZbeAdapter extends BaseAdapter<'radio'> {
 
   private setLink(connected: boolean, error: string | null): void {
     this.online = connected;
+    if (!connected) this.speaking.clear();
     const now = new Date();
     this.update((s) => {
       s.link = { ...s.link!, connected, error };
       for (const d of s.devices) {
         d.online = connected;
-        if (!connected) activity.end(s.activity, d.id, now);
+        if (!connected) {
+          activity.end(s.activity, d.id, now);
+          d.transmitting = d.receiving = false;
+        }
       }
     });
   }
 
   /**
-   * Gerät zum Anschluss (Telegramm-Suffix ab 0 → Anschluss ab 1). Nicht eingetragene Anschlüsse werden ergänzt,
-   * Ereignisse ohne Anschluss gehen an das erste Gerät.
+   * Gerät zum Anschluss (Telegramm-Suffix ab 0 → Anschluss ab 1). Anschlüsse, die die Konfiguration noch nicht
+   * gemeldet hat, werden ergänzt; null für Anschlüsse ohne Funkgerät. Ereignisse ohne Anschluss gehen an das erste Gerät.
    */
-  private resolveDevice(s: RadioState, portIndex: number | null): RadioDevice {
-    if (portIndex === null && s.devices[0]) return s.devices[0];
-    const port = (portIndex ?? 0) + 1;
+  private resolveDevice(s: RadioState, portIndex: number | null): RadioDevice | null {
+    if (portIndex === null) return s.devices[0] ?? null;
+    if (this.ignoredPorts.has(portIndex)) return null;
+    const port = portIndex + 1;
     let d = s.devices.find((x) => x.id === deviceId(port));
     if (!d) {
-      d = radioDevice({ port, type: 'FRT', name: `Anschluss ${port}`, issi: '' }, true);
+      d = radioDevice(port, `Anschluss ${port}`, true);
       s.devices.push(d);
+      s.devices.sort((x, y) => x.id.localeCompare(y.id, 'de', { numeric: true }));
     }
     return d;
+  }
+
+  private applyConfig(ev: Extract<ZbeEvent, { type: 'config' | 'line' }>, iso: string): void {
+    if (ev.type === 'config') {
+      if (ev.active) this.configPorts = new Set();
+      else if (this.configPorts?.size) {
+        const keep = this.configPorts;
+        this.update((s) => void (s.devices = s.devices.filter((d) => keep.has(Number(d.id.slice('anschluss-'.length)) - 1))));
+        this.configPorts = null;
+      }
+      return;
+    }
+    this.configPorts?.add(ev.port);
+    this.update((s) => {
+      s.link = { ...s.link!, lastTelegramAt: iso };
+      if (!isRadioLine(ev.kind, ev.short)) {
+        this.ignoredPorts.add(ev.port);
+        s.devices = s.devices.filter((d) => d.id !== deviceId(ev.port + 1));
+        return;
+      }
+      this.ignoredPorts.delete(ev.port);
+      const d = this.resolveDevice(s, ev.port)!;
+      d.name = ev.name;
+    });
   }
 
   handle(line: string): void {
@@ -210,44 +221,60 @@ export class ReichertZbeAdapter extends BaseAdapter<'radio'> {
       this.update((s) => void (s.link = { ...s.link!, lastTelegramAt: iso }));
       return;
     }
-    const key = ev.port ?? -1;
-    if (ev.type === 'speaker') {
-      // Sprecher merken; kam SPEAK gerade eben ohne Sprecher, dort nachtragen
-      const late = this.lastSpeak.get(key);
-      if (ev.speaker && late && now.getTime() - late.at < SPEAKER_LATE_MS) {
-        this.lastSpeak.delete(key);
-        this.update((s) => {
-          s.link = { ...s.link!, lastTelegramAt: iso };
-          const a = s.activity.find((x) => x.id === late.activityId);
-          if (a && !a.peer) a.peer = ev.speaker;
-        });
-      } else {
-        this.speakers.set(key, { issi: ev.speaker, at: now.getTime() });
-        this.update((s) => void (s.link = { ...s.link!, lastTelegramAt: iso }));
-      }
-      return;
+    if (ev.type === 'config' || ev.type === 'line') return this.applyConfig(ev, iso);
+    if (ev.type === 'rec' && ev.name) {
+      this.callers.add(ev.name);
+      if (this.callers.size > MAX_CALLERS) this.callers.delete(this.callers.values().next().value!);
     }
     if (ev.type === 'event' && !this.seenEvents.has(ev.name)) {
       this.seenEvents.add(ev.name);
       this.ctx.log.info(`Reichert ZBE: noch nicht ausgewertetes Ereignis ${ev.name}: ${ev.raw}`);
     }
+    const key = ev.port ?? -1;
     this.update((s) => {
       s.link = { ...s.link!, lastTelegramAt: iso };
       const d = this.resolveDevice(s, ev.port);
-      d.lastActivity = iso;
+      if (!d) return;
       switch (ev.type) {
-        case 'speak': {
-          const sp = this.speakers.get(key);
-          this.speakers.delete(key);
-          const speaker = sp && now.getTime() - sp.at < SPEAKER_VALID_MS ? sp.issi : null;
-          activity.point(s.activity, d.id, 'rx', now, speaker);
-          this.lastSpeak.set(key, { activityId: s.activity[s.activity.length - 1]!.id, at: now.getTime() });
+        case 'speak':
+          // Sprechtaste: läuft die Sprache schon, war es eigenes Senden
+          if (!ev.active) break;
+          this.lastPtt.set(key, now.getTime());
+          if (this.speaking.has(key)) {
+            const open = s.activity.find((a) => a.deviceId === d.id && a.end === null && a.kind === 'rx');
+            if (open) open.kind = 'tx';
+            d.transmitting = true;
+            d.receiving = false;
+          }
+          break;
+        case 'peak': {
+          if (ev.active) {
+            if (this.speaking.has(key)) break;
+            this.speaking.add(key);
+            const tx = now.getTime() - (this.lastPtt.get(key) ?? 0) < PTT_BEFORE_PEAK_MS;
+            activity.begin(s.activity, d.id, tx ? 'tx' : 'rx', now);
+            d.transmitting = tx;
+            d.receiving = !tx;
+            d.lastActivity = iso;
+          } else {
+            this.speaking.delete(key);
+            activity.end(s.activity, d.id, now);
+            d.transmitting = d.receiving = false;
+          }
+          break;
+        }
+        case 'rec': {
+          // Funkrufname des Sprechers, solange gesprochen wird
+          const open = ev.name ? s.activity.find((a) => a.deviceId === d.id && a.end === null && a.kind === 'rx') : undefined;
+          if (open) open.text = ev.name;
           break;
         }
         case 'sds':
-          activity.point(s.activity, d.id, 'sds', now, ev.from, ev.flash ? `Flash: ${ev.text}` : ev.text);
+          d.lastActivity = iso;
+          activity.point(s.activity, d.id, 'sds', now, ev.from, ev.flash ? `Flash: ${stripCaller(ev.text, this.callers)}` : stripCaller(ev.text, this.callers));
           break;
         case 'status':
+          d.lastActivity = iso;
           activity.point(
             s.activity,
             d.id,
@@ -258,9 +285,11 @@ export class ReichertZbeAdapter extends BaseAdapter<'radio'> {
           );
           break;
         case 'gps':
+          d.lastActivity = iso;
           activity.point(s.activity, d.id, 'gps', now, ev.from, `${ev.lat.toFixed(5)}, ${ev.lon.toFixed(5)}`);
           break;
         case 'event':
+          d.lastActivity = iso;
           activity.point(s.activity, d.id, 'event', now, ev.from, ev.name);
           break;
       }
