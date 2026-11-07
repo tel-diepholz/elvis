@@ -15,7 +15,7 @@ Gespräch ist mit „spricht …“ markiert.
 
 **Absender:** Ist die ISSI im laufenden Einsatz einer Kraft zugeordnet, steht dort deren Funkrufname und Name
 (z. B. „Florian Diepholz 1/46-1 · HLF 1“). Sonst steht dort die ISSI mit dem Zusatz „unbekannt“. Eigene Funkgeräte
-erscheinen mit ihrem Namen. Konnte die Anlage den Sprecher nicht melden, steht dort „Sprecher unbekannt“. Auch dann lässt sich eine Meldung
+erscheinen mit ihrem Namen. Bei Sprache meldet die Anlage nur den Funkrufnamen, keine ISSI. Dann steht dort „Sprecher unbekannt“. Auch dann lässt sich eine Meldung
 erstellen, der Absender bleibt leer.
 
 **Meldung erstellen:** Eingehende Funksprüche (Sprache, SDS, Status) haben einen Button „Meldung erstellen“. Er
@@ -49,22 +49,24 @@ Fernmelder-Rolle (Einstellungen → Meldungen), für alle anderen ist er ausgegr
 | Treiber | Inhalt |
 | --- | --- |
 | Simulation | Acht Geräte (MRT, FRT, HRT) mit Rufgruppen und Pegel. Auf den Rufgruppen sprechen wechselnde Gegenstellen (ISSI), manchmal ein eigenes Gerät. Dazu kommen gelegentliche SDS und Status. Rufgruppe und Fahrzeugstatus lassen sich schalten. |
-| Reichert ZBE | Funkgeräte an den Anschlüssen einer Reichert ZBE. ELVIS meldet sich per TCP als Client an und wertet Sprache (mit Sprecher), SDS, Status und Positionsmeldungen aus. Nur lesend. |
+| Reichert ZBE | Funkgeräte an den Anschlüssen einer Reichert ZBE. ELVIS meldet sich per TCP als Client an, übernimmt die Funkgeräte aus der Konfiguration der ZBE und wertet Sprache, SDS, Status und Positionsmeldungen aus. Nur lesend. |
 
 ### Einstellungen „Reichert ZBE“
 
-Die ZBE (Zentrale Bedieneinheit) verbindet bis zu 20 Funkgeräte, TETRA und analog. In ihren Einstellungen ist jedem
-Anschluss 1–20 eine Geräteart zugeordnet.
+Die ZBE (Zentrale Bedieneinheit) verbindet bis zu 20 Funkgeräte, TETRA und analog. Die Anschlüsse 1–20 sind in
+ihren Einstellungen eingerichtet.
 
 | Einstellung | Standard | Bedeutung |
 | --- | --- | --- |
 | Adresse der ZBE / Port | 127.0.0.1 / 9001 | Reichert-Server im Fahrzeugnetz |
 | Benutzer / Passwort | leer | Leer = Standardzugang der ZBE (`api` / `api`) |
 | Clientnummer | 1 | `context client <n>` bei der Anmeldung |
-| Funkgeräte | `1:MRT:MRT Fahrzeug; 2:FRT:Funkplatz 1; 3:FRT:Funkplatz 2` | Je Gerät `Anschluss:Typ:Name[:ISSI]` mit dem Anschluss wie an der ZBE (1–20), getrennt durch Semikolon. Meldet die ZBE einen anderen Anschluss, legt ELVIS ihn als „Anschluss <Nummer>“ an. |
 | Schreibweise der Telegramme | Komma-getrennt | Gilt für die Anmeldung. Nur umstellen, wenn nach dem Verbinden keine Ereignisse kommen. Empfangen werden beide Schreibweisen. |
 | Neuer Verbindungsversuch nach | 10 s | Nach Verbindungsabbruch |
 
+- **Funkgeräte:** ELVIS liest sie nach der Anmeldung aus der Konfiguration der ZBE. Name und Anschluss stehen dort.
+  Die ZBE meldet auch ELA, DAB und den Intercom. Das sind keine Funkgeräte, ELVIS blendet sie aus. Alle übernommenen
+  Funkgeräte erscheinen als Funkplatz, die ISSI des Geräts meldet die ZBE nicht.
 - Ohne Verbindung zur ZBE meldet ELVIS „Funk nicht erreichbar“.
 - Alle 30 s sendet ELVIS ein Lebenszeichen (`ping`).
 - Ereignisse, die ELVIS noch nicht auswertet, erscheinen in der Timeline unter „Alles“ als „Ereignis“. Jeder neue
@@ -80,7 +82,7 @@ docker exec -it elvis node apps/server/dist/tools/zbe-sim.js 9001 1,2,3   # im C
 
 Der Simulator nimmt jede Anmeldung an. Alle paar Sekunden schickt er auf den angegebenen Anschlüssen zufällig:
 
-- Funksprüche mit Sprecher
+- Funksprüche mit Funkrufname
 - Status
 - SDS
 - Positionen
@@ -89,10 +91,9 @@ Dazu kommen Lebenszeichen der Anlage. In ELVIS dann den Treiber „Reichert ZBE�
 
 ## Protokoll
 
-Das Protokoll ist nicht öffentlich dokumentiert. Die Beschreibung ist aus dem Verhalten zweier bestehender Clients
-rekonstruiert und noch nicht an einer echten Anlage mitgeschnitten. Die beiden Clients schreiben die Felder
-unterschiedlich: der eine mit Komma, der andere mit Leerzeichen. ELVIS liest beides. Mit `?` markierte Stellen sind
-unsicher.
+Das Protokoll ist nicht öffentlich dokumentiert. Die Beschreibung stammt aus einem Mitschnitt an einer echten Anlage
+(IOE Command-Interface 7.0.10D) und aus dem Verhalten bestehender Clients. Mit `?` markierte Stellen sind unsicher.
+Ältere Anlagen schreiben die Felder teils mit Leerzeichen statt Komma. ELVIS liest beides.
 
 **Grundsätzliches**
 
@@ -100,7 +101,7 @@ unsicher.
 - zeilenbasiert, UTF-8, Zeilenende CRLF
 - Felder in Anführungszeichen dürfen Komma und Leerzeichen enthalten.
 - Der Anschluss steht als Suffix am Telegramm, **ab 0 gezählt**: `.0` = Anschluss 1 … `.19` = Anschluss 20.
-- Absender kommen meist als TSI (`262 1001 0…`, 15 Stellen). ELVIS kürzt sie auf die ISSI.
+- Zeilen mit `#` sind Kommentare der Anlage, zum Beispiel die Begrüßung.
 
 **Anmeldung (Client → ZBE)**
 
@@ -108,14 +109,15 @@ unsicher.
 login <Benutzer> <Passwort>          (Standard: login api api)
 context client <Clientnummer>
 main.action.login.-1,1               (andere Schreibweise: main.action.login 0)
-ping                                  (Lebenszeichen, danach regelmäßig)
+ping                                  (Lebenszeichen, die Anlage antwortet mit PONG)
 ```
 
-**Aktionen (Client → ZBE).** ELVIS sendet sie noch nicht.
+Danach schickt die Anlage ihre Konfiguration, den Zustand aller Anschlüsse und fortlaufend `MAIN.EVENT.WATCHDOG`.
+
+**Aktionen (Client → ZBE).** ELVIS sendet sie noch nicht und sie sind an der Anlage 7.0 nicht geprüft.
 
 ```
 RADIO.ACTION.SM_SEND.<Anschluss-1>,"<ISSI>","TEXT|<Text>"      (FLASH|, STATUS|<Code>, CALLOUT|… analog)
-RADIO.ACTION.SM_SEND.<Anschluss-1>,"","ZVEI|<Schleife>"         (analog: FMS|…, POCSAG|A:…)
 RADIO.ACTION.GPS_REQUEST.<Anschluss-1>,0,"<ISSI>"
 ```
 
@@ -123,23 +125,22 @@ RADIO.ACTION.GPS_REQUEST.<Anschluss-1>,0,"<ISSI>"
 
 | Telegramm | Felder nach dem Namen | Bedeutung |
 | --- | --- | --- |
-| `RADIO.EVENT.SM_RECEIVED.<n>` | `<?>, "<Absender>", "<Ziel>", "<Typ>\|<Inhalt>"` | SDS. Typ `TEXT`, `FLASH`, `STATUS` (TETRA-Code dezimal, z. B. 32771 = 0x8003 = Status 1, oder hexadezimal mit `$`/`&H`/`0x`), `FMS`, `POCSAG` |
-| `RADIO.EVENT.GPS_DATA.<n>` | `"<ISSI>", <?>, <Breite>, <Länge>` | Position (Dezimalpunkt) |
-| `RADIO.EVENT.DOKU_REC_INFO.<n>` | `<?>, <?>, "<Ruf?>-<Sprecher>"` | Aufzeichnungsinfo: Der Teil nach dem `-` ist die TSI des Sprechers |
-| `RADIO.EVENT.SPEAK.<n>` | – | Es wird gesprochen; der Sprecher stammt aus der Aufzeichnungsinfo davor |
+| `RADIO.EVENT.CONFIG.-1,<1\|0>` | – | Beginn und Ende der Konfiguration |
+| `RADIO.EVENT.CONFIG_LINE.<n>` | `1, <Nr>, 0, "<Name>", "<Art>", NULL, "", "<Kürzel>", …` | Ein Anschluss. Art `TETRA/MOTOROLA-PEI` mit Kürzel `DF` ist ein Funkgerät. `ELA`, `DAB` und Kürzel `IC` (Intercom, `ANALOG/BOSCH`) sind keine Funkgeräte. |
+| `RADIO.EVENT.PEAK.<n>` | `<1\|0>, <Pegel>` | Sprache liegt an (1) bzw. ist zu Ende (0). ELVIS zeigt daraus einen Funkspruch mit Dauer. |
+| `RADIO.EVENT.SPEAK.<n>` | `<1\|0>, <?>` | Sprechtaste (1 = gedrückt). Wird sie kurz vor `PEAK` gedrückt, zeigt ELVIS „Gesendet“. `?` |
+| `RADIO.EVENT.REC_OPTA.<n>` | `<1\|0>, <Länge>, "<Funkrufname>"` | Aufzeichnung mit dem Funkrufnamen des Sprechers. Nach der Anmeldung steht dort der Name des letzten Sprechers. ELVIS übernimmt den Namen nur, solange `PEAK` läuft. |
+| `RADIO.EVENT.SM_RECEIVED.<n>` | `"<ID>", "<Absender>", "<Ziel>", "<Funkrufname><Text>", <?>, <?>, ""` | SDS. Die Anlage stellt dem Text den Funkrufnamen des Absenders voran, ohne Trennzeichen. ELVIS schneidet bekannte Namen aus `REC_OPTA` ab. |
+| `RADIO.EVENT.GPS_DATA.<n>` | `"<ISSI>", <?>, <Breite>, <Länge>` | Position (Dezimalpunkt) `?` |
 
-Zur Sprache:
-
-- ELVIS zeigt jedes `SPEAK` als Funkspruch „Sprache“ mit dem Sprecher aus der letzten Aufzeichnungsinfo des
-  Anschlusses. Die Aufzeichnungsinfo gilt höchstens 10 s.
-- Kommt sie erst kurz nach `SPEAK` (bis 3 s), trägt ELVIS den Sprecher nach.
-- Eine Dauer liefert die ZBE nicht. Ein Ende-Telegramm ist nicht bekannt.
+Nicht an der Anlage 7.0 gesehen, nur von älteren Clients bekannt: SDS im Format `"<Typ>|<Inhalt>"` mit Typ `TEXT`,
+`FLASH`, `STATUS` (TETRA-Code dezimal, z. B. 32771 = 0x8003 = Status 1, oder hexadezimal mit `$`/`&H`/`0x`), `FMS`
+oder `POCSAG`. ELVIS liest dieses Format weiter. Statustelegramme der Anlage 7.0 sind noch nicht mitgeschnitten.
 
 ELVIS ignoriert diese Meldungen der Anlage selbst:
 
-- Konfiguration und Lebenszeichen: `.CONFIG_LINE.`, `STATION.`, `.WATCHDOG.`, `.BUSY.`, `.FACTORY_INFO.`,
-  `.RUNTIME_INFO.`, `.CSPTSS.`
+- Konfiguration und Lebenszeichen: `STATION.`, `.WATCHDOG.`, `.BUSY.`, `.FACTORY_INFO.`, `.RUNTIME_INFO.`, `.CSPTSS.`
 - Bedienteil: `.E2EE.`, `.VOLUME.`, `.SELECT.`, `.ACTIVATE.`, `.CHECKIN_CNF.`, `.EVENT.DISPLAY.`
-- Zeilen, die mit `#` beginnen
+- Ereignisse von ELA, DAB und Intercom
 
-`REC_OPTA` und andere unbekannte Ereignisse erscheinen als „Ereignis“.
+Andere Ereignisse erscheinen als „Ereignis“.

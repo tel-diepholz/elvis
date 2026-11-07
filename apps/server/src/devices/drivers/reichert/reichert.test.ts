@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RadioState } from '@elvis/shared';
 import { evaluateAlerts } from '../../../alerts.js';
-import { RADIOS_PATTERN, ReichertZbeAdapter, parseRadios } from './adapter.js';
-import { LineSplitter, gpsRequestLine, loginLines, normalizeIssi, parseLine, sdsLine, tokenize } from './protocol.js';
+import { ReichertZbeAdapter, isRadioLine } from './adapter.js';
+import { LineSplitter, gpsRequestLine, loginLines, normalizeIssi, parseLine, sdsLine, stripCaller, tokenize } from './protocol.js';
 import { ZbeSimulator } from './simulator.js';
 
 describe('Reichert ZBE: Protokoll', () => {
@@ -48,15 +48,37 @@ describe('Reichert ZBE: Protokoll', () => {
     expect(parseLine('RADIO.EVENT.GPS_DATA.2 "262100106122101" 1 52.612345 8.371234 0')).toEqual(gps);
   });
 
-  it('erkennt Sprache: Aufzeichnungsinfo mit Sprecher, dann SPEAK', () => {
-    expect(parseLine('RADIO.EVENT.DOKU_REC_INFO.0,5,1,"262100100001001-262100106122101"')).toEqual({
-      type: 'speaker',
-      port: 0,
-      speaker: '6122101',
-      call: '1001',
+  it('liest Sprache, Sprechtaste und Funkrufname der Anlage 7.0 (echter Mitschnitt)', () => {
+    expect(parseLine('RADIO.EVENT.PEAK.2,1,203')).toEqual({ type: 'peak', port: 2, active: true });
+    expect(parseLine('RADIO.EVENT.PEAK.2,0,203')).toEqual({ type: 'peak', port: 2, active: false });
+    expect(parseLine('RADIO.EVENT.SPEAK.5,1,2')).toEqual({ type: 'speak', port: 5, active: true });
+    expect(parseLine('RADIO.EVENT.SPEAK.2,0,-1')).toEqual({ type: 'speak', port: 2, active: false });
+    expect(parseLine('RADIO.EVENT.REC_OPTA.2,1,24,"NIFW DH 83-12ELW2     21"')).toEqual({ type: 'rec', port: 2, name: 'NIFW DH 83-12ELW2     21' });
+    expect(parseLine('RADIO.EVENT.REC_OPTA.2,0,0,""')).toEqual({ type: 'rec', port: 2, name: '' });
+  });
+
+  it('liest die Konfiguration der Anlage', () => {
+    expect(parseLine('RADIO.EVENT.CONFIG.-1,1')).toEqual({ type: 'config', active: true });
+    expect(parseLine('RADIO.EVENT.CONFIG.-1,0')).toEqual({ type: 'config', active: false });
+    expect(parseLine('RADIO.EVENT.CONFIG_LINE.1,1,1,0,"DF 2","TETRA/MOTOROLA-PEI",NULL,"","DF",1,125953871,-1,""')).toEqual({
+      type: 'line',
+      port: 1,
+      name: 'DF 2',
+      kind: 'TETRA/MOTOROLA-PEI',
+      short: 'DF',
     });
-    expect(parseLine('RADIO.EVENT.DOKU_REC_INFO.0,5,1,""')).toEqual({ type: 'speaker', port: 0, speaker: null, call: null });
-    expect(parseLine('RADIO.EVENT.SPEAK.0')).toEqual({ type: 'speak', port: 0 });
+    expect(parseLine('RADIO.EVENT.CONFIG_LINE.8,1,8,0,"Intercom-Fahrer","ANALOG/BOSCH",NULL,"","IC",8,6291595,-1,""')).toMatchObject({ kind: 'ANALOG/BOSCH', short: 'IC' });
+    expect(isRadioLine('TETRA/MOTOROLA-PEI', 'DF')).toBe(true);
+    expect(isRadioLine('ANALOG/BOSCH', 'IC')).toBe(false);
+    expect(isRadioLine('ELA', 'ELA')).toBe(false);
+    expect(isRadioLine('DAB', 'DAB')).toBe(false);
+  });
+
+  it('liest die SDS der Anlage 7.0 (echter Mitschnitt) und schneidet den Funkrufnamen ab', () => {
+    const ev = parseLine('RADIO.EVENT.SM_RECEIVED.2,"bc10eed2-da3f-11f1-809b-000000000000","4221526","4228237","NIFW DH 83-12ELW2     21Hi",9,5,""');
+    expect(ev).toEqual({ type: 'sds', port: 2, from: '4221526', to: '4228237', flash: false, text: 'NIFW DH 83-12ELW2     21Hi' });
+    expect(stripCaller('NIFW DH 83-12ELW2     21Hi', ['KLS Diepholz', 'NIFW DH 83-12ELW2     21'])).toBe('Hi');
+    expect(stripCaller('Hi', ['KLS Diepholz'])).toBe('Hi');
   });
 
   it('ignoriert Anlagenmeldungen und Kommentare, meldet Unbekanntes als Ereignis', () => {
@@ -70,19 +92,6 @@ describe('Reichert ZBE: Protokoll', () => {
     const s = new LineSplitter();
     expect(s.push('RADIO.EVENT.A\r\nRADIO.EV')).toEqual(['RADIO.EVENT.A']);
     expect(s.push('ENT.B\r\n\r\n')).toEqual(['RADIO.EVENT.B']);
-  });
-
-  it('liest die Geräteliste mit den Anschlüssen 1–20', () => {
-    expect(parseRadios('1:MRT:MRT Fahrzeug:6123401; 2 : FRT : Funkplatz 1;')).toEqual([
-      { port: 1, type: 'MRT', name: 'MRT Fahrzeug', issi: '6123401' },
-      { port: 2, type: 'FRT', name: 'Funkplatz 1', issi: '' },
-    ]);
-    expect(parseRadios('')).toEqual([]);
-    expect(() => parseRadios('1:MRT:A;1:FRT:B')).toThrow(/doppelt/);
-    expect(() => parseRadios('21:MRT:A')).toThrow(/1 bis 20/);
-    const re = new RegExp(RADIOS_PATTERN);
-    expect(re.test('1:MRT:MRT Fahrzeug:6123401; 2:FRT:Funkplatz 1')).toBe(true);
-    expect(re.test('1:XYZ:Falsch')).toBe(false);
   });
 });
 
@@ -105,7 +114,6 @@ describe('Reichert ZBE: Treiber gegen Simulator', () => {
       password: '',
       clientNumber: 2,
       style,
-      radios: parseRadios('1:MRT:MRT Fahrzeug:6123401; 2:FRT:Funkplatz 1'),
       reconnectMs: 100,
     });
     await adapter.start({ log, getState: () => undefined });
@@ -115,7 +123,7 @@ describe('Reichert ZBE: Treiber gegen Simulator', () => {
   const state = () => adapter!.getState() as RadioState;
 
   it.each(['comma', 'space'] as const)('meldet sich an und ordnet Ereignisse den Anschlüssen zu (%s)', async (style) => {
-    sim = new ZbeSimulator({ auto: false, username: 'api', password: 'api', style });
+    sim = new ZbeSimulator({ auto: false, ports: [1, 2], username: 'api', password: 'api', style });
     const port = await sim.listen(0, '127.0.0.1');
     await connect(port, style);
     await vi.waitFor(() => expect(state().link?.connected).toBe(true));
@@ -129,7 +137,10 @@ describe('Reichert ZBE: Treiber gegen Simulator', () => {
     );
     expect(state().devices.every((d) => d.online)).toBe(true);
 
-    sim.sds(2, '6122101', 'Lage unverändert');
+    // Funkgeräte kommen aus der Konfiguration der Anlage, ELA/DAB/Intercom fehlen
+    await vi.waitFor(() => expect(state().devices.map((d) => d.name)).toEqual(['DF 1', 'DF 2']));
+
+    sim.sds(2, '4221526', 'Lage unverändert', 'NIFW DH 83-12ELW2     21');
     sim.status(1, '6125001', 3);
     sim.gps(1, '6122102', 52.61, 8.37);
     sim.emit('main.event.WATCHDOG.-1,1');
@@ -137,38 +148,51 @@ describe('Reichert ZBE: Treiber gegen Simulator', () => {
     await vi.waitFor(() => expect(state().activity).toHaveLength(4));
 
     const [sds, status, gps, ev] = state().activity;
-    expect(sds).toMatchObject({ deviceId: 'anschluss-2', kind: 'sds', peer: '6122101', text: 'Lage unverändert' });
+    expect(sds).toMatchObject({ deviceId: 'anschluss-2', kind: 'sds', peer: '4221526' });
+    expect(sds!.text).toMatch(/Lage unverändert$/);
     expect(status).toMatchObject({ deviceId: 'anschluss-1', kind: 'status', peer: '6125001', text: 'Status 3' });
     expect(gps).toMatchObject({ deviceId: 'anschluss-1', kind: 'gps', text: '52.61000, 8.37000' });
-    // nicht eingetragener Anschluss (Suffix 6 = Anschluss 7) wird ergänzt
+    // Anschluss ohne Konfiguration (Suffix 6 = Anschluss 7) wird als Gerät ergänzt
     expect(ev).toMatchObject({ deviceId: 'anschluss-7', kind: 'event', text: 'CALL_SETUP' });
-    expect(state().devices.map((d) => d.name)).toEqual(['MRT Fahrzeug', 'Funkplatz 1', 'Anschluss 7']);
   });
 
-  it('zeigt Sprache mit Sprecher aus der Aufzeichnungsinfo, auch wenn sie erst nach SPEAK kommt', async () => {
-    sim = new ZbeSimulator({ auto: false });
+  it('ignoriert Ereignisse von ELA, DAB und Intercom', async () => {
+    sim = new ZbeSimulator({ auto: false, ports: [1, 2] });
     const port = await sim.listen(0, '127.0.0.1');
     await connect(port);
-    await vi.waitFor(() => expect(state().link?.connected).toBe(true));
-
-    sim.speak(1, '6122101');
+    await vi.waitFor(() => expect(state().devices).toHaveLength(2));
+    sim.emit('RADIO.EVENT.PEAK.1,1,203'); // DF 2
+    sim.emit('RADIO.EVENT.PEAK.2,1,203'); // ELA
+    sim.emit('RADIO.EVENT.PEAK.4,1,203'); // Intercom
     await vi.waitFor(() => expect(state().activity).toHaveLength(1));
-    expect(state().activity[0]).toMatchObject({ deviceId: 'anschluss-1', kind: 'rx', peer: '6122101' });
+    expect(state().devices.map((d) => d.name)).toEqual(['DF 1', 'DF 2']);
+  });
 
-    // ohne Sprecher, dann nachgereicht
-    sim.speak(2, null);
+  it('zeigt Sprache als Zeitspanne mit Funkrufname, eigenes Senden über die Sprechtaste', async () => {
+    sim = new ZbeSimulator({ auto: false, ports: [1, 2] });
+    const port = await sim.listen(0, '127.0.0.1');
+    await connect(port);
+    await vi.waitFor(() => expect(state().devices).toHaveLength(2));
+
+    sim.speakStart(2, 'NIFW DH 83-12ELW2     21');
+    await vi.waitFor(() => expect(state().activity[0]?.text).toBe('NIFW DH 83-12ELW2     21'));
+    expect(state().activity[0]).toMatchObject({ deviceId: 'anschluss-2', kind: 'rx', end: null });
+    expect(state().devices[1]).toMatchObject({ receiving: true, transmitting: false });
+    sim.speakEnd(2);
+    await vi.waitFor(() => expect(state().activity[0]?.end).not.toBeNull());
+    expect(state().devices[1]).toMatchObject({ receiving: false });
+
+    // Sprechtaste gedrückt: eigenes Senden
+    sim.speakStart(1, null, true);
     await vi.waitFor(() => expect(state().activity).toHaveLength(2));
-    expect(state().activity[1]).toMatchObject({ deviceId: 'anschluss-2', kind: 'rx', peer: null });
-    sim.emit('RADIO.EVENT.DOKU_REC_INFO.1,9,1,"262100100001001-262100106125001"');
-    await vi.waitFor(() => expect(state().activity[1]?.peer).toBe('6125001'));
-    // der gemerkte Sprecher gilt nicht für einen späteren Funkspruch
-    sim.speak(2, null);
-    await vi.waitFor(() => expect(state().activity).toHaveLength(3));
-    expect(state().activity[2]?.peer).toBeNull();
+    expect(state().activity[1]).toMatchObject({ deviceId: 'anschluss-1', kind: 'tx', end: null });
+    expect(state().devices[0]).toMatchObject({ transmitting: true });
+    sim.speakEnd(1, true);
+    await vi.waitFor(() => expect(state().activity[1]?.end).not.toBeNull());
   });
 
   it('meldet eine gestörte Verbindung und verbindet sich neu', async () => {
-    sim = new ZbeSimulator({ auto: false });
+    sim = new ZbeSimulator({ auto: false, ports: [1, 2] });
     const port = await sim.listen(0, '127.0.0.1');
     await connect(port);
     await vi.waitFor(() => expect(state().link?.connected).toBe(true));
@@ -181,7 +205,7 @@ describe('Reichert ZBE: Treiber gegen Simulator', () => {
     const alerts = evaluateAlerts((id) => (id === 'radio' ? state() : undefined) as never, ['radio'], { stormWarnMs: 17 }).map((a) => a.id);
     expect(alerts).toEqual(['offline:radio']);
 
-    sim = new ZbeSimulator({ auto: false });
+    sim = new ZbeSimulator({ auto: false, ports: [1, 2] });
     await sim.listen(port, '127.0.0.1');
     await vi.waitFor(() => expect(state().link?.connected).toBe(true), { timeout: 3000 });
   });

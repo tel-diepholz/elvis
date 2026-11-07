@@ -16,8 +16,8 @@ export interface ZbeSimulatorOptions {
 }
 
 const tsi = (issi: string) => `2621001${issi.padStart(8, '0')}`;
+const CALLSIGNS = ['KLS Diepholz', 'NIRD DH 80-83RTW      3A', 'NIFW DH 83-12ELW2     21', 'NIFW DH 83-46HLF20     9'];
 const PEERS = ['6122101', '6122102', '6122203', '6125001', '6125002', '6123411', '6123412'];
-const TALKGROUPS = ['1001', '1002', '2307'];
 const TEXTS = ['Lage unverändert', 'Benötigen weitere Atemschutzgeräteträger', 'Wasserversorgung steht', 'Personal vollzählig', 'Bitte Rückruf Einsatzleiter'];
 const pick = <T>(a: T[]) => a[Math.floor(Math.random() * a.length)]!;
 
@@ -78,8 +78,10 @@ export class ZbeSimulator {
     this.emit(`RADIO.EVENT.${name}.${port - 1}${sep}${fields.join(sep)}`);
   }
 
-  sds(port: number, from: string, text: string, flash = false): void {
-    this.event('SM_RECEIVED', port, [String(++this.ref), `"${tsi(from)}"`, '""', `"${flash ? 'FLASH' : 'TEXT'}|${text}"`]);
+  /** SDS im Format der Anlage: Absender, Ziel, Funkrufname des Absenders direkt vor dem Text */
+  sds(port: number, from: string, text: string, callsign = ''): void {
+    const sep = this.opts.style === 'comma' ? ',' : ' ';
+    this.emit(`RADIO.EVENT.SM_RECEIVED.${port - 1}${sep}"${crypto.randomUUID()}"${sep}"${from}"${sep}"4228237"${sep}"${callsign}${text}"${sep}9${sep}5${sep}""`);
   }
 
   status(port: number, from: string, status: number): void {
@@ -90,10 +92,38 @@ export class ZbeSimulator {
     this.event('GPS_DATA', port, [`"${tsi(from)}"`, '1', lat.toFixed(6), lon.toFixed(6)]);
   }
 
-  /** Funkspruch: Aufzeichnungsinfo mit Sprecher, dann „es spricht“ */
-  speak(port: number, from: string | null, talkgroup = '1001'): void {
-    if (from) this.event('DOKU_REC_INFO', port, [String(++this.ref), '1', `"${tsi(talkgroup)}-${tsi(from)}"`]);
-    this.event('SPEAK', port, []);
+  /** Sprache beginnt (Pegel an); der Funkrufname des Sprechers folgt kurz danach */
+  speakStart(port: number, callsign: string | null = null, ptt = false): void {
+    if (ptt) this.event('SPEAK', port, ['1', '2']);
+    this.event('REC_OPTA', port, ['1', '0', '""']);
+    this.event('PEAK', port, ['1', '203']);
+    if (callsign) this.event('REC_OPTA', port, ['1', String(callsign.length), `"${callsign}"`]);
+  }
+
+  speakEnd(port: number, ptt = false): void {
+    if (ptt) this.event('SPEAK', port, ['0', '2']);
+    this.event('REC_OPTA', port, ['0', '0', '""']);
+    this.event('PEAK', port, ['0', '203']);
+  }
+
+  /** Funkspruch mit Anfang und Ende nach `durationMs` */
+  speak(port: number, callsign: string | null, durationMs = 2000, ptt = false): void {
+    this.speakStart(port, callsign, ptt);
+    setTimeout(() => this.speakEnd(port, ptt), durationMs).unref();
+  }
+
+  /** Konfiguration, die die Anlage nach der Anmeldung schickt: die Funkgeräte, dazu ELA, DAB und Intercom */
+  private sendConfig(socket: Socket): void {
+    const line = (i: number, name: string, kind: string, short: string) =>
+      socket.write(`RADIO.EVENT.CONFIG_LINE.${i},1,${i},0,"${name}","${kind}",NULL,"",${short === 'DF' ? '"DF"' : `"${short}"`},${i},125953871,-1,""\r\n`);
+    socket.write('RADIO.EVENT.CONFIG.-1,1\r\n');
+    const ports = [...this.opts.ports].sort((a, b) => a - b);
+    for (const p of ports) line(p - 1, `DF ${p}`, 'TETRA/MOTOROLA-PEI', 'DF');
+    const next = Math.max(...ports, 0);
+    line(next, 'ELA', 'ELA', 'ELA');
+    line(next + 1, 'DAB', 'DAB', 'DAB');
+    line(next + 2, 'Intercom-Fahrer', 'ANALOG/BOSCH', 'IC');
+    socket.write('RADIO.EVENT.CONFIG.-1,0\r\n');
   }
 
   private accept(socket: Socket): void {
@@ -114,6 +144,7 @@ export class ZbeSimulator {
           }
           s.loggedIn = true;
           socket.write('main.event.login_ok\r\n');
+          this.sendConfig(socket);
         }
       }
     });
@@ -132,9 +163,9 @@ export class ZbeSimulator {
   private randomEvent(): void {
     const port = pick(this.opts.ports);
     const r = Math.random();
-    if (r < 0.45) this.speak(port, Math.random() < 0.9 ? pick(PEERS) : null, pick(TALKGROUPS));
+    if (r < 0.45) this.speak(port, Math.random() < 0.9 ? pick(CALLSIGNS) : null, 1000 + Math.random() * 4000, Math.random() < 0.1);
     else if (r < 0.7) this.status(port, pick(PEERS), pick([1, 2, 3, 4, 6, 7, 8]));
-    else if (r < 0.88) this.sds(port, pick(PEERS), pick(TEXTS), Math.random() < 0.1);
+    else if (r < 0.88) this.sds(port, pick(PEERS), pick(TEXTS), pick(CALLSIGNS));
     else this.gps(port, pick(PEERS), 52.6 + Math.random() * 0.1, 8.3 + Math.random() * 0.2);
   }
 }
