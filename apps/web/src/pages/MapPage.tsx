@@ -4,8 +4,8 @@ import L, { type LatLngBoundsExpression, type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Check, Flag, History, ListPlus, MapPin, PenTool, Plane, Printer, Ship, Trash2, Undo2, X } from 'lucide-react';
-import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type OverpassFeature, type TacticalSign, type TrackedData, type TrafficHit, type Unit, type DamageAccount } from '@elvis/shared';
+import { Check, Flag, History, ListPlus, MapPin, MapPinOff, PenTool, Plane, Printer, Ship, Trash2, Undo2, X } from 'lucide-react';
+import { DEFAULT_GAUSS, DEFAULT_VEHICLE_SIGN, LIBRARY_MAP_MAX_OBJECTS, hasOutline, isTracked, toMgrs, type GeocodeResult, type MapObject, type NewMapObject, type OverpassFeature, type TacticalSign, type TrackedData, type TrafficHit, type Unit, type DamageAccount } from '@elvis/shared';
 import { api } from '../lib/api';
 import { useActiveIncident, useNow, useSettings, useVehiclePosition } from '../lib/hooks';
 import { fmtDateTime } from '../lib/format';
@@ -28,7 +28,7 @@ import { AircraftLayer, ShipLayer, readLayers, saveLayers, trafficObject, type M
 import { PrintDialog } from './map/PrintDialog';
 import { MapSearch } from './map/search';
 import { ObjectList } from './map/objectlist';
-import { LibraryLayer, useLibraryTypes } from '../components/map/library';
+import { LibraryLayer, useLibraryTypes, type LibraryStatus } from '../components/map/library';
 import { MapStylePicker, ObjectMenu, WindTile, ZoomControl, CursorPosition, type PlaceKind } from './map/toolbar';
 import { TrafficSearch } from './map/trafficSearch';
 import { TimelineBar, useSettled } from './map/timeline';
@@ -200,6 +200,7 @@ export function MapPage() {
   const chooseLayers = (l: MapLayers) => (setLayers(l), saveLayers(l));
   const { data: libraryTypes = [] } = useLibraryTypes(layers.library);
   const [aircraftStatus, setAircraftStatus] = useState<TrafficStatus | null>(null);
+  const [libraryStatus, setLibraryStatus] = useState<LibraryStatus | null>(null);
   const radar = useRadar(layers.radar);
   const [shipStatus, setShipStatus] = useState<TrafficStatus | null>(null);
   /** Offenes Kartenstil-Menü schiebt die Objektliste nach unten */
@@ -440,7 +441,7 @@ export function MapPage() {
         {layers.radar && <RadarLayer radar={radar} />}
         {layers.aircraft && !historyAt && <AircraftLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setAircraftStatus} />}
         {layers.ships && !historyAt && <ShipLayer tracked={tracked} onAdd={canEdit ? addTraffic : undefined} onStatus={setShipStatus} />}
-        {layers.library && !historyAt && <LibraryLayer hidden={layers.libraryHidden} onAdopt={canEdit ? (o) => addObject.mutate(o) : undefined} />}
+        {layers.library && !historyAt && <LibraryLayer hidden={layers.libraryHidden} onStatus={setLibraryStatus} onAdopt={canEdit ? (o) => addObject.mutate(o) : undefined} />}
         <MapObjectsLayer objects={shapeEdit ? objects.filter((o) => o.id !== shapeEdit.id) : objects} wind={wind} now={now} links />
         {overpassHits && <OverpassLayer hits={overpassHits} taken={takenOsm} adding={addObject.isPending} onAdd={canEdit ? addFeature : undefined} />}
         <UnitsLayer units={units} movable={placingUnit && 'status' in placingUnit ? placingUnit.id : null} onMove={canEdit ? (unit, lat, lon) => place(unit, lat, lon) : undefined} />
@@ -687,8 +688,14 @@ export function MapPage() {
         <TimelineBar startedAt={incident.startedAt} now={now} at={historyAt} loading={!!historyAt && historyQuery.isFetching} onChange={travel} onClose={() => (setTimeline(false), travel(null))} />
       )}
 
-      {(layers.aircraft || layers.ships) && !historyAt && (
+      {(layers.aircraft || layers.ships || (layers.library && libraryStatus?.limited)) && !historyAt && (
         <div className={`map-overlay map-traffic-status ${layers.radar ? 'above-radar' : ''}`} role="status">
+          {layers.library && libraryStatus?.limited && (
+            <span className="library-limit" title="Angezeigt werden die Objekte nahe der Kartenmitte">
+              <MapPinOff size={15} />
+              Es werden maximal {LIBRARY_MAP_MAX_OBJECTS} Objekte angezeigt – zum Reduzieren hineinzoomen
+            </span>
+          )}
           {layers.aircraft && aircraftStatus && (
             <span title={aircraftStatus.problem ?? undefined}>
               <Plane size={15} />

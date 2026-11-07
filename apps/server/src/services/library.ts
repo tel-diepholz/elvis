@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import {
   BUILTIN_TYPES,
+  LIBRARY_MAP_MAX_OBJECTS,
   LIBRARY_MAX_OBJECTS,
   OSM_WATER_QL,
   cleanProps,
@@ -205,9 +206,10 @@ export class LibraryService {
   objects(query: ObjectQuery = {}): LibraryObject[] {
     const where = ['o.deleted_at IS NULL'];
     const params: unknown[] = [];
-    if (query.bbox) {
+    const box = query.bbox;
+    if (box) {
       where.push('o.lat BETWEEN ? AND ? AND o.lon BETWEEN ? AND ?');
-      params.push(query.bbox.s, query.bbox.n, query.bbox.w, query.bbox.e);
+      params.push(box.s, box.n, box.w, box.e);
     }
     if (query.typeIds) {
       if (!query.typeIds.length) return [];
@@ -218,6 +220,18 @@ export class LibraryService {
       const like = `%${query.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
       where.push(`(o.name LIKE ? ESCAPE '\\' OR o.address LIKE ? ESCAPE '\\' OR o.notes LIKE ? ESCAPE '\\' OR o.props LIKE ? ESCAPE '\\')`);
       params.push(like, like, like, like);
+    }
+    if (box) {
+      // Kartenausschnitt: die zur Mitte nächsten (Länge mit cos der Breite gewichtet), damit bei vielen Objekten die Mitte voll ist
+      const lat = (box.s + box.n) / 2;
+      const lon = (box.w + box.e) / 2;
+      const k = Math.cos((lat * Math.PI) / 180);
+      const order = '(o.lat - ?) * (o.lat - ?) + (o.lon - ?) * (o.lon - ?) * ?';
+      return (
+        this.db
+          .prepare(`SELECT ${OBJECT_COLUMNS} FROM library_objects o WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ${LIBRARY_MAP_MAX_OBJECTS}`)
+          .all(...params, lat, lat, lon, lon, k * k) as Row[]
+      ).map(toObject);
     }
     return (
       this.db.prepare(`SELECT ${OBJECT_COLUMNS} FROM library_objects o WHERE ${where.join(' AND ')} ORDER BY o.name COLLATE NOCASE LIMIT ${LIBRARY_MAX_OBJECTS}`).all(...params) as Row[]

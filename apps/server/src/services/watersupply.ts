@@ -1,4 +1,4 @@
-import { WATER_SUPPLY_MAX_RADIUS_M, distanceM, type WaterSupplyCandidate, type WaterSupplyRequest, type WaterSupplyResult } from '@elvis/shared';
+import { WATER_SUPPLY_MAX_RADIUS_M, distanceM, radiusBox, type WaterSupplyCandidate, type WaterSupplyRequest, type WaterSupplyResult } from '@elvis/shared';
 import { HttpError } from '../errors.js';
 import type { LibraryService } from './library.js';
 import type { RouterService } from './router.js';
@@ -26,9 +26,7 @@ export class WaterSupplyService {
     if (!typeIds.length) return [];
     let found: { object: WaterSupplyCandidate['object']; airDistanceM: number }[] = [];
     for (const r of RADII_M) {
-      const dLat = r / 111_195;
-      const dLon = r / (111_195 * Math.cos((origin.lat * Math.PI) / 180));
-      const bbox = { s: origin.lat - dLat, n: origin.lat + dLat, w: origin.lon - dLon, e: origin.lon + dLon };
+      const bbox = radiusBox(origin, r);
       found = this.library
         .objects({ bbox, typeIds })
         .map((object) => ({ object, airDistanceM: Math.round(distanceM(origin, object)) }))

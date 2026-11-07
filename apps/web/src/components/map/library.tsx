@@ -1,16 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CircleMarker, GeoJSON, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import L from 'leaflet';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { FileText, ListPlus, Pencil } from 'lucide-react';
-import { formatProp, objectBadge, toMgrs, type LibraryObject, type NewMapObject, type ObjectType, type OverpassBounds } from '@elvis/shared';
+import { LIBRARY_MAP_MAX_OBJECTS, formatProp, objectBadge, toMgrs, type LibraryObject, type NewMapObject, type ObjectType, type OverpassBounds } from '@elvis/shared';
 import { api } from '../../lib/api';
 import { pointIcon, pointSymbol } from './objects';
 import { useMapIcons } from './mapIcons';
 
-/** Darunter lädt die Ebene nichts (zu viele Objekte für einen Überblick) */
-export const LIBRARY_MIN_ZOOM = 11;
+/** Was die Ebene gerade zeigt (für die Statuszeile der Karte) */
+export interface LibraryStatus {
+  /** Limit erreicht: im Ausschnitt gibt es mehr Objekte, als angezeigt werden */
+  limited: boolean;
+}
 /** Ab hier Symbole mit Schild statt einfacher Punkte */
 const SYMBOL_ZOOM = 15;
 
@@ -79,16 +82,25 @@ function ObjectPopup({ object: o, type, onAdopt }: { object: LibraryObject; type
 
 /**
  * Objektbibliothek als Kartenebene: lädt die Objekte im (etwas vergrößerten) Ausschnitt, ab Zoom 15 mit Symbol und
- * Schild, darunter als Punkte auf dem Canvas (schnell auch bei vielen Hydranten).
+ * Schild, darunter als Punkte auf dem Canvas (schnell auch bei vielen Hydranten). Höchstens LIBRARY_MAP_MAX_OBJECTS
+ * (die zur Mitte nächsten); ist das Limit erreicht, meldet die Karte das.
  */
-export function LibraryLayer({ hidden, onAdopt }: { hidden: number[]; onAdopt?: (o: NewMapObject) => void }) {
+export function LibraryLayer({
+  hidden,
+  onAdopt,
+  onStatus,
+}: {
+  hidden: number[];
+  onAdopt?: (o: NewMapObject) => void;
+  onStatus?: (s: LibraryStatus) => void;
+}) {
   const map = useMap();
   const [view, setView] = useState(() => ({ zoom: map.getZoom(), bbox: padded(map.getBounds()) }));
   useMapEvents({ moveend: () => setView({ zoom: map.getZoom(), bbox: padded(map.getBounds()) }) });
   const { data: types = [] } = useLibraryTypes();
   const shown = types.filter((t) => !hidden.includes(t.id));
   const typeIds = shown.map((t) => t.id);
-  const active = view.zoom >= LIBRARY_MIN_ZOOM && typeIds.length > 0;
+  const active = typeIds.length > 0;
   const { data: objects = [] } = useQuery({
     queryKey: ['library', 'map', view.bbox, typeIds],
     queryFn: () => api.libraryObjects({ bbox: view.bbox, types: typeIds }),
@@ -96,6 +108,8 @@ export function LibraryLayer({ hidden, onAdopt }: { hidden: number[]; onAdopt?: 
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
+  const limited = active && objects.length >= LIBRARY_MAP_MAX_OBJECTS;
+  useEffect(() => onStatus?.({ limited }), [onStatus, limited]);
   const byId = useMemo(() => new Map(types.map((t) => [t.id, t])), [types]);
   const renderer = useMemo(() => L.canvas({ padding: 0.5 }), []);
   const icons = useMapIcons(view.zoom >= SYMBOL_ZOOM);
