@@ -67,8 +67,12 @@ function group(entries: RadioActivity[]): TimelineItem[] {
   for (const a of sorted) {
     const t = new Date(a.start).getTime();
     const same =
-      a.kind === 'rx' ? items.find((i) => i.kind === 'rx' && i.peer === a.peer && Math.abs(new Date(i.start).getTime() - t) < SAME_CALL_MS) : undefined;
+      a.kind === 'rx'
+        ? items.find((i) => i.kind === 'rx' && i.peer === a.peer && (!i.text || !a.text || i.text === a.text) && Math.abs(new Date(i.start).getTime() - t) < SAME_CALL_MS)
+        : undefined;
     if (same) {
+      // Funkrufname (z. B. von der Reichert ZBE), sobald ein Gerät ihn kennt
+      if (!same.text && a.text) same.text = a.text;
       if (!same.deviceIds.includes(a.deviceId)) same.deviceIds.push(a.deviceId);
       if (a.end === null) same.end = null;
       else if (same.end !== null && a.end > same.end) same.end = a.end;
@@ -181,7 +185,7 @@ export function RadioTimeline({ devices, live }: { devices: RadioDevice[]; live:
                     {item.talkgroup ? ` · ${item.talkgroup}` : ''}
                     {dur ? ` · ${dur}` : ''}
                   </div>
-                  {item.text && <div className="timeline-text">{item.text}</div>}
+                  {item.text && item.kind !== 'rx' && <div className="timeline-text">{item.text}</div>}
                 </div>
                 {canMessage && openIncident && user && (
                   <div className="timeline-actions">
@@ -232,6 +236,13 @@ export function RadioTimeline({ devices, live }: { devices: RadioDevice[]; live:
 
 function Sender({ item, known, own }: { item: TimelineItem; known?: RadioIdentity; own?: RadioDevice }) {
   if (item.kind === 'tx') return <strong>Eigenes Funkgerät</strong>;
+  // Ohne ISSI nennt die Funkanlage nur den Funkrufnamen des Sprechers (bei Sprache steht er im Text)
+  if (!item.peer && item.kind === 'rx' && item.text)
+    return (
+      <span>
+        <strong>{item.text}</strong> <span className="muted">(ISSI unbekannt)</span>
+      </span>
+    );
   if (!item.peer) return item.kind === 'rx' ? <strong className="muted">Sprecher unbekannt</strong> : <strong>Eigenes Funkgerät</strong>;
   if (own) return <strong>{own.name} (eigenes Gerät)</strong>;
   if (known)
@@ -240,6 +251,12 @@ function Sender({ item, known, own }: { item: TimelineItem; known?: RadioIdentit
         <strong>{known.callsign || known.name}</strong>
         {known.callsign && known.callsign !== known.name ? <span className="muted"> · {known.name}</span> : null}
         <span className="muted"> · ISSI {item.peer}</span>
+      </span>
+    );
+  if (item.kind === 'rx' && item.text)
+    return (
+      <span>
+        <strong>{item.text}</strong> <span className="muted">({item.peer})</span>
       </span>
     );
   return (
@@ -263,7 +280,7 @@ function RadioToMessage({ incident, item, known, onDone }: { incident: Incident;
       ? { unitId: known.unitId, text: known.name }
       : known?.forceUnitId
         ? { forceUnitId: known.forceUnitId, text: known.name }
-        : { text: '' },
+        : { text: item.kind === 'rx' && !item.peer ? (item.text ?? '') : '' },
     radio: item.peer ? { issi: item.peer } : undefined,
     body: item.kind === 'rx' ? '' : (item.text ?? ''),
   };

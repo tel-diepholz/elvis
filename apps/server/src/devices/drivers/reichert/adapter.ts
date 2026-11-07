@@ -3,7 +3,7 @@ import type { RadioDevice, RadioState } from '@elvis/shared';
 import { z } from 'zod';
 import { BaseAdapter, CommandError, command, type AdapterContext, type Command } from '../../adapter.js';
 import { activity } from '../../radio/activity.js';
-import { LineSplitter, PING, loginLines, parseLine, sdsLine, stripCaller, type ZbeEvent, type ZbeStyle } from './protocol.js';
+import { LineSplitter, PING, loginLines, findCaller, parseLine, sdsLine, stripCaller, type ZbeEvent, type ZbeStyle } from './protocol.js';
 
 /** Lebenszeichen an die ZBE */
 const PING_MS = 30_000;
@@ -89,6 +89,8 @@ export class ReichertZbeAdapter extends BaseAdapter<'radio'> {
   private configPorts: Set<number> | null = null;
   /** Funkrufnamen aus den Aufzeichnungsinfos – im SDS-Text stehen sie vor dem eigentlichen Text */
   private readonly callers = new Set<string>();
+  /** ISSI zum Funkrufnamen, gelernt aus SDS (bei Sprache meldet die Anlage nur den Namen) */
+  private readonly callerIssi = new Map<string, string>();
   private stopped = false;
   private readonly seenEvents = new Set<string>();
 
@@ -286,13 +288,19 @@ export class ReichertZbeAdapter extends BaseAdapter<'radio'> {
         case 'rec': {
           // Funkrufname des Sprechers, solange gesprochen wird
           const open = ev.name ? s.activity.find((a) => a.deviceId === d.id && a.end === null && a.kind === 'rx') : undefined;
-          if (open) open.text = ev.name;
+          if (open) {
+            open.text = ev.name;
+            open.peer = this.callerIssi.get(ev.name) ?? null;
+          }
           break;
         }
-        case 'sds':
+        case 'sds': {
+          const caller = findCaller(ev.text, this.callers);
+          if (caller) this.callerIssi.set(caller, ev.from);
           d.lastActivity = iso;
           activity.point(s.activity, d.id, 'sds', now, ev.from, ev.flash ? `Flash: ${stripCaller(ev.text, this.callers)}` : stripCaller(ev.text, this.callers));
           break;
+        }
         case 'status':
           d.lastActivity = iso;
           activity.point(
