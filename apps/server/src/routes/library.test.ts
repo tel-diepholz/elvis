@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { objectBadge, waterPropsFromOsm, type LibraryFile, type LibraryObject, type LibraryObjectDetail, type ObjectType } from '@elvis/shared';
+import { LIBRARY_MAP_MAX_OBJECTS, objectBadge, waterPropsFromOsm, type LibraryFile, type LibraryObject, type LibraryObjectDetail, type ObjectType } from '@elvis/shared';
 import { buildApp, type App } from '../app.js';
 import { parseConfig } from '../config.js';
 import type { OverpassFetch } from '../services/overpass.js';
@@ -144,5 +144,28 @@ describe('Objektbibliothek', () => {
       props: { art: 'Hydrant Unterflur', dn: 80, leistung: 800 },
     });
     expect(waterPropsFromOsm({ emergency: 'fire_water_pond', name: 'Teich Mühle', volume: '200' }).props).toEqual({ art: 'Löschteich', volumen: 200 });
+  });
+
+  it('Kartenausschnitt: höchstens LIBRARY_MAP_MAX_OBJECTS, die zur Mitte nächsten', async () => {
+    // Raster um 52.9 / 8.7 genau bis zum Limit, dazu eins weiter draußen; das fällt heraus
+    const side = Math.ceil(Math.sqrt(LIBRARY_MAP_MAX_OBJECTS));
+    const elements = Array.from({ length: LIBRARY_MAP_MAX_OBJECTS }, (_, i) => ({
+      type: 'node',
+      id: i + 1,
+      lat: 52.9 + (Math.floor(i / side) - side / 2) * 0.001,
+      lon: 8.7 + ((i % side) - side / 2) * 0.001,
+      tags: { emergency: 'fire_hydrant' },
+    }));
+    answer = () => ({ elements });
+    expect((await req('POST', '/api/library/import/osm-water', { bounds: { s: 52.8, w: 8.6, n: 53, e: 8.8 } })).body).toMatchObject({ added: LIBRARY_MAP_MAX_OBJECTS });
+    const water = (await types()).find((t) => t.builtin === 'water')!;
+    expect((await req('POST', '/api/library/objects', { typeId: water.id, name: 'Weit draußen', lat: 52.99, lon: 8.79, props: {} })).status).toBe(201);
+    const inView = (await req<LibraryObject[]>('GET', `/api/library/objects?bbox=52.8,8.6,53,8.8&types=${water.id}`)).body;
+    expect(inView).toHaveLength(LIBRARY_MAP_MAX_OBJECTS);
+    expect(inView.some((o) => o.name === 'Weit draußen')).toBe(false);
+    // Ausschnitt um das äußere Objekt: jetzt ist es dabei
+    expect((await req<LibraryObject[]>('GET', `/api/library/objects?bbox=52.98,8.78,53,8.8&types=${water.id}`)).body.map((o) => o.name)).toContain('Weit draußen');
+    // Ohne Ausschnitt (Liste der Bibliothek) gilt das größere Limit
+    expect((await req<LibraryObject[]>('GET', `/api/library/objects?types=${water.id}`)).body).toHaveLength(LIBRARY_MAP_MAX_OBJECTS + 1);
   });
 });

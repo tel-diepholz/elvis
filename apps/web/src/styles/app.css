@@ -7033,6 +7033,19 @@ select.auto-width {
   align-items: center;
   gap: 6px;
 }
+/* Limit der Objektbibliothek erreicht: rot hinterlegt, allein füllt die Meldung die ganze Leiste */
+.map-traffic-status .library-limit {
+  background: #ef4444;
+  color: #000000;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+.map-traffic-status .library-limit:only-child {
+  margin: -6px -12px;
+  padding: 6px 12px;
+  border-radius: inherit;
+}
 .traffic-hits {
   list-style: none;
   margin: 8px 0 0;

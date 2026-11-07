@@ -104,6 +104,13 @@ export function distanceM(a: { lat: number; lon: number }, b: { lat: number; lon
   return 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+/** Rechteck um einen Punkt, das den Umkreis `radiusM` sicher enthält */
+export function radiusBox(center: { lat: number; lon: number }, radiusM: number): { s: number; w: number; n: number; e: number } {
+  const dLat = radiusM / 111_195;
+  const dLon = radiusM / (111_195 * Math.max(0.01, Math.cos((center.lat * Math.PI) / 180)));
+  return { s: center.lat - dLat, n: center.lat + dLat, w: center.lon - dLon, e: center.lon + dLon };
+}
+
 /** Melden, wenn noch nichts gesendet wurde, die Person sich ≥ 10 m bewegt hat oder 10 min vergangen sind */
 export function shouldSendPosition(last: { lat: number; lon: number; sentAt: number } | null, next: { lat: number; lon: number }, now: number): boolean {
   if (!last) return true;

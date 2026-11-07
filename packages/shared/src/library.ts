@@ -181,6 +181,8 @@ export const libraryBboxSchema = z
 
 /** Höchstens so viele Objekte je Abfrage der Kartenebene */
 export const LIBRARY_MAX_OBJECTS = 5000;
+/** Höchstens so viele Objekte je Ausschnitt der Kartenebene (die zur Mitte nächsten); ist das Limit erreicht, zeigt die Karte einen Hinweis */
+export const LIBRARY_MAP_MAX_OBJECTS = 2000;
 
 /** Bereinigte Eigenschaften (nur bekannte Felder, passender Typ) oder Fehlertexte */
 export function cleanProps(fields: ObjectField[], props: Record<string, unknown>): { props: ObjectProps; errors: string[] } {
