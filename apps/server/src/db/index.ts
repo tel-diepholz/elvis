@@ -1225,6 +1225,13 @@ const MIGRATIONS: Migration[] = [
   CREATE UNIQUE INDEX library_objects_source ON library_objects(source) WHERE source IS NOT NULL AND deleted_at IS NULL AND origin_node IS NULL;
   UPDATE settings SET value = json_set(value, '$.cursor', 0, '$.notices', json('[]')) WHERE key = 'cloud:sync';
   `,
+  // LOGO: Bezeichnungen, Meldungsregeln und Taster-Verknüpfungen als ein JSON-Dokument
+  `
+  CREATE TABLE logo_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    data TEXT NOT NULL
+  );
+  `,
 ];
 
 /** Aktuelle Schemaversion (Anzahl der Migrationen). */

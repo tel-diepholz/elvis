@@ -9854,3 +9854,14 @@ dd .messaging-contact {
   margin: 0;
   min-width: 0;
 }
+
+/* LOGO */
+.logo-links { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.logo-link { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.logo-link-name { flex: 1 1 10rem; display: grid; min-width: 0; }
+.logo-group { border-top: 1px solid var(--border, rgba(127, 127, 127, 0.25)); padding: 0.5rem 0; }
+.logo-group > summary { cursor: pointer; padding: 0.25rem 0; }
+.logo-table td { padding-block: 0.15rem; }
+.logo-id { width: 4.5rem; white-space: nowrap; }
+.logo-value { width: 6rem; text-align: right; }
+.logo-label-input { width: 100%; }

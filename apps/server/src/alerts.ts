@@ -1,4 +1,4 @@
-import { MESSENGER_IDS, VICTRON_STATE_LABELS, inverterAlarms, type Alert, type AlertSeverity, type DeviceId, type DeviceStateMap } from '@elvis/shared';
+import { MESSENGER_IDS, evaluateLogoRules, VICTRON_STATE_LABELS, inverterAlarms, type Alert, type AlertSeverity, type DeviceId, type DeviceStateMap } from '@elvis/shared';
 import type { ElvisConfig } from './config.js';
 import { DEVICE_DEFINITIONS } from './devices/drivers.js';
 
@@ -75,6 +75,11 @@ export function evaluateAlerts(get: StateGetter, offline: DeviceId[], limits: El
         add({ id: `monitoring:${t.id}:${m.id}`, severity: m.severity, system: 'comms', title: `${t.name}: ${m.label}`, detail: m.problem && m.problem !== m.text ? `${m.text} – ${m.problem}` : m.text });
       }
     }
+  }
+
+  const logo = get('logo');
+  if (logo && !offline.includes('logo')) {
+    for (const a of evaluateLogoRules(logo)) add({ ...a, system: 'vehicle' });
   }
 
   const bluetooth = get('bluetooth');

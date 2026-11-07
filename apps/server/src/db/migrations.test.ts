@@ -36,6 +36,7 @@ describe('Migrationen', () => {
       // Stand einer Entwicklungsdatenbank: alle Migrationen bis v4, aber addons ohne manifest
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec('DROP TABLE logo_config'); // jüngste Migration
       legacy.exec('ALTER TABLE addons DROP COLUMN manifest');
       // v19: Rollen und Aufgaben (Spalten mit Fremdschlüssel lassen sich nicht einzeln entfernen)
       legacy.exec(UNDO_DAMAGE);
@@ -87,6 +88,7 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec('DROP TABLE logo_config'); // jüngste Migration
       legacy.exec(UNDO_DAMAGE);
       legacy.exec(UNDO_TELEPHONY);
       legacy.exec('DROP TABLE radio_ids; DROP TABLE user_last_roles');
@@ -119,6 +121,7 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec('DROP TABLE logo_config'); // jüngste Migration
       legacy.exec(UNDO_DAMAGE);
       legacy.exec('ALTER TABLE cameras DROP COLUMN bells; DROP TABLE user_dashboards; DROP TABLE phone_key_overrides; DROP TABLE phones; DROP TABLE chat_reachability; DROP TABLE chat_messages; DROP TABLE chat_files');
       legacy.exec(`CREATE TABLE sms_messages (id INTEGER PRIMARY KEY, folder TEXT NOT NULL, port INTEGER, number TEXT NOT NULL, text TEXT NOT NULL,
@@ -126,7 +129,7 @@ describe('Migrationen', () => {
       legacy.exec(`INSERT INTO sms_messages VALUES (7, 'inbox', 1, '+491711234567', 'Hallo', 'received', NULL, 0, 't1', 'Gateway'),
         (9, 'sent', 2, '+491609999999', 'Rückruf', 'failed', 'Netz', 1, 't2', 'Max Müller')`);
       // Stand vor der SMS-Migration (danach: Signal-Kennungen neu prüfen)
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 15}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 16}`);
       legacy.close();
 
       const db = openDb(dir);
@@ -146,11 +149,12 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec('DROP TABLE logo_config'); // jüngste Migration
       legacy.exec(UNDO_DAMAGE);
       legacy.exec('ALTER TABLE cameras DROP COLUMN bells; DROP TABLE user_dashboards; DROP TABLE phone_key_overrides; DROP TABLE phones');
       legacy.exec(`INSERT INTO chat_reachability VALUES ('signal', '+491711234567', 1, '+491711234567', '2099-01-01'),
         ('signal', '+491609999999', 1, 'uuid-x', '2099-01-01'), ('threema', '+491711234567', 1, 'ABCD1234', '2099-01-01')`);
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 14}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 15}`);
       legacy.close();
 
       const db = openDb(dir);
@@ -170,6 +174,7 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec('DROP TABLE logo_config'); // jüngste Migration
       legacy.exec(UNDO_DAMAGE);
       legacy.exec("INSERT INTO incidents (id, title, started_at, closed_at) VALUES (1, 'Brand', 't0', 't9'), (2, 'Sturm', 't10', NULL)");
       const unit = legacy.prepare(
@@ -182,7 +187,7 @@ describe('Migrationen', () => {
         [2, 'RW', 'EA Ost', 't12'],
         [2, 'DLK', 'EA Süd', 't13'],
       ] as const) unit.run(inc, name, section, at, at);
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 10}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 11}`);
       legacy.close();
 
       const db = openDb(dir);
@@ -211,9 +216,10 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec('DROP TABLE logo_config'); // jüngste Migration
       legacy.exec('ALTER TABLE incidents DROP COLUMN kind');
       legacy.exec("INSERT INTO incidents (title, started_at, closed_at, procurement_mode) VALUES ('alt', 'a', 'b', 'staff'), ('neu', 'a', 'b', 'self')");
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 7}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 8}`);
       legacy.close();
 
       const db = openDb(dir);
@@ -232,10 +238,11 @@ describe('Migrationen', () => {
     try {
       openDb(dir).close();
       const legacy = new Database(join(dir, 'elvis.sqlite'));
+      legacy.exec('DROP TABLE logo_config'); // jüngste Migration
       legacy.exec('DROP TABLE incident_keywords; DROP TABLE cloud_sync');
       for (const t of ['users', 'roles', 'force_units', 'task_templates']) legacy.exec(`DROP INDEX ${t}_uid; ALTER TABLE ${t} DROP COLUMN uid; ALTER TABLE ${t} DROP COLUMN origin_node; ALTER TABLE ${t} DROP COLUMN origin_name`);
       legacy.exec(`INSERT INTO settings (key, value, updated_at, updated_by) VALUES ('incident:settings', '{"keywords":["B 2","TH 1"]}', 'x', 'y')`);
-      legacy.pragma(`user_version = ${SCHEMA_VERSION - 3}`);
+      legacy.pragma(`user_version = ${SCHEMA_VERSION - 4}`);
       legacy.close();
 
       const db = openDb(dir);

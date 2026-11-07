@@ -38,6 +38,7 @@ Läuft ELVIS im Container, muss das USB-Gerät durchgereicht werden (`devices:` 
 | Türstation 2N (Kamerabild) | [kameras-2n.md](kameras-2n.md) |
 | WLAN (OpenWrt-Accesspoints) | [wlan-openwrt.md](wlan-openwrt.md) |
 | Monitoring (SNMP, Node Exporter) | [monitoring.md](monitoring.md) |
+| Steuerung (Siemens LOGO!, S7) | [logo.md](logo.md) |
 
 Das NDI-Gateway ist ein Addon: [NDI-Gateway](../addons/ndi-gateway.md). Bildschirme stehen unter
 [Funktionen → Bildschirme](../funktionen/bildschirme.md).

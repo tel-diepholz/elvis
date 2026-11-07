@@ -40,6 +40,7 @@ import { WeatherPage } from './pages/WeatherPage';
 import { AuditPage } from './pages/AuditPage';
 import { EnergyPage } from './pages/EnergyPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { LogoPage } from './pages/LogoPage';
 import { MonitoringPage } from './pages/MonitoringPage';
 import './styles/app.css';
 
@@ -80,6 +81,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="wetter" element={<WeatherPage />} />
                 <Route path="energie" element={<EnergyPage />} />
                 <Route path="monitoring" element={<MonitoringPage />} />
+                <Route path="logo" element={<LogoPage />} />
                 <Route path="netzwerk" element={<ViewOnlyUnlessLoggedIn><CommsPage /></ViewOnlyUnlessLoggedIn>} />
                 <Route path="funk" element={<ViewOnlyUnlessLoggedIn><FunkPage /></ViewOnlyUnlessLoggedIn>} />
                 <Route path="telefonie" element={<ViewOnlyUnlessLoggedIn><TelefoniePage /></ViewOnlyUnlessLoggedIn>} />

@@ -101,8 +101,10 @@ import type { UbusHttp } from './services/openwrt.js';
 import { WifiService } from './services/wifi.js';
 import { wifiRoutes } from './routes/wifi.js';
 import { bluetoothRoutes } from './routes/bluetooth.js';
+import { logoRoutes } from './routes/logo.js';
 import { monitoringRoutes } from './routes/monitoring.js';
 import { BluetoothService } from './services/bluetooth.js';
+import { LogoService } from './services/logo.js';
 import { MonitoringService } from './services/monitoring.js';
 import type { ProbeDeps } from './services/monitoring-probes.js';
 import { documentRoutes } from './routes/documents.js';
@@ -170,6 +172,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     http: opts.wifiHttp,
   });
   const monitoring = new MonitoringService(db, () => hub.invalidate(['monitoring']), opts.monitoringProbes);
+  const logo = new LogoService(db, () => hub.invalidate(['logo']));
   const bluetooth = new BluetoothService(db, () => hub.invalidate(['bluetooth']));
   // Telefonie- und Messenger-Treiber → Nachrichten und Anrufliste (die Dienste entstehen erst nach den Fahrzeugmodulen)
   const telephonyBus = new TelephonyBus();
@@ -178,7 +181,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
   const relay = new RelayClient(db, config.app.relayUrl, opts.relayFetch);
   const hooks = new HookService(db, relay, server.log);
   const messengerServices = new MessengerProvisions();
-  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices, config.edition), { cameras, wifi, monitoring, bluetooth, telephony: telephonyBus, messenger: messengerBus, vault: dbVault(db), hooks, messengerServices });
+  const devices = new DeviceManager(config, server.log, new DeviceConfigStore(db, config.devices, config.edition), { cameras, wifi, monitoring, logo, bluetooth, telephony: telephonyBus, messenger: messengerBus, vault: dbVault(db), hooks, messengerServices });
   const settings = new SettingsService(db, { vehicle: config.vehicle });
   const hub = new LiveHub(devices, () => settings.get().vehicle);
   // Fahrzeugstandort: GPS der Wetterstation, ohne GPS-Fix von Hand in der Karte gesetzt
@@ -485,6 +488,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     cameraRoutes(api, { cameras, presets: cameraPresets, devices, incidents, store, notify: (t) => hub.invalidate(t) });
     wifiRoutes(api, { wifi, store, notify: (t) => hub.invalidate(t) });
     monitoringRoutes(api, { monitoring, store, notify: (t) => hub.invalidate(t) });
+    logoRoutes(api, { logo, store, notify: (t) => hub.invalidate(t) });
     bluetoothRoutes(api, { bluetooth, store, notify: (t) => hub.invalidate(t) });
     vehiclePositionRoutes(api, { position: vehiclePos, store, notify: (t) => hub.invalidate(t) });
     mapRoutes(api, tiles, store, settings, (t) => hub.invalidate(t), geocoder, overpass, router, radar, (id, z, x, y) => georef.tile(id, z, x, y));

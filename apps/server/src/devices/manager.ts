@@ -51,6 +51,7 @@ export class DeviceManager {
       cameras: { list: () => [], onChange: () => () => {} },
       wifi: { list: () => [], onChange: () => () => {}, storeClients: () => {}, clearClients: () => {} },
       monitoring: { list: () => [], onChange: () => () => {} },
+      logo: { get: () => ({ labels: {}, rules: [], links: [] }), onChange: () => () => {} },
       bluetooth: { list: () => [], onChange: () => () => {} },
       telephony: new TelephonyBus(),
       messenger: new MessengerBus(),
