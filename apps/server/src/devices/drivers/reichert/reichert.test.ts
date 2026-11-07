@@ -182,13 +182,21 @@ describe('Reichert ZBE: Treiber gegen Simulator', () => {
     await vi.waitFor(() => expect(state().activity[0]?.end).not.toBeNull());
     expect(state().devices[1]).toMatchObject({ receiving: false });
 
+    // Eine SDS lehrt die ISSI zum Funkrufnamen; spätere Sprache trägt sie als Gegenstelle
+    sim.sds(2, '4221526', 'Hallo', 'NIFW DH 83-12ELW2     21');
+    await vi.waitFor(() => expect(state().activity.some((a) => a.kind === 'sds')).toBe(true));
+    sim.speakStart(2, 'NIFW DH 83-12ELW2     21');
+    await vi.waitFor(() => expect(state().activity.find((a) => a.kind === 'rx' && a.end === null)?.peer).toBe('4221526'));
+    sim.speakEnd(2);
+    await vi.waitFor(() => expect(state().activity.every((a) => a.end !== null)).toBe(true));
+
     // Sprechtaste gedrückt: eigenes Senden
     sim.speakStart(1, null, true);
-    await vi.waitFor(() => expect(state().activity).toHaveLength(2));
-    expect(state().activity[1]).toMatchObject({ deviceId: 'anschluss-1', kind: 'tx', end: null });
+    await vi.waitFor(() => expect(state().activity.some((a) => a.kind === 'tx')).toBe(true));
+    expect(state().activity.find((a) => a.kind === 'tx')).toMatchObject({ deviceId: 'anschluss-1', end: null });
     expect(state().devices[0]).toMatchObject({ transmitting: true });
     sim.speakEnd(1, true);
-    await vi.waitFor(() => expect(state().activity[1]?.end).not.toBeNull());
+    await vi.waitFor(() => expect(state().activity.find((a) => a.kind === 'tx')?.end).not.toBeNull());
   });
 
   it('sendet eine SDS über ein Funkgerät und prüft die Eingaben', async () => {

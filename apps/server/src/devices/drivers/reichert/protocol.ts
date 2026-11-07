@@ -222,11 +222,15 @@ export class LineSplitter {
   }
 }
 
-/** Dem SDS-Text stellt die Anlage den Funkrufnamen des Absenders voran; bekannte Namen werden abgeschnitten. */
-export function stripCaller(text: string, names: Iterable<string>): string {
+/** Längster bekannter Funkrufname, mit dem der SDS-Text beginnt */
+export function findCaller(text: string, names: Iterable<string>): string | null {
   let best = '';
   for (const n of names) if (n.length > best.length && text.startsWith(n)) best = n;
-  const rest = text.slice(best.length);
-  // aufgefüllte Namen („NIFW DH 83-12ELW2     21“) sind 24 Zeichen lang
-  return (best ? rest : text).trim();
+  return best || null;
+}
+
+/** Dem SDS-Text stellt die Anlage den Funkrufnamen des Absenders voran; bekannte Namen werden abgeschnitten. */
+export function stripCaller(text: string, names: Iterable<string>): string {
+  const name = findCaller(text, names);
+  return (name ? text.slice(name.length) : text).trim();
 }
