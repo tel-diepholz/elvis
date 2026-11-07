@@ -50,6 +50,7 @@ import {
   type ShapeKind,
 } from './map/draw';
 import { RouteLayer, RoutePanel, RoutePrintDialog, routeObject, useRoute, type RouteCandidate, type RoutePlan } from './map/routing';
+import { WaterLayer, WaterPanel, WaterPrintDialog, useWaterSupply } from './map/water';
 import { OverpassLayer, OverpassPanel, featureObject, overpassResultText, useOverpassRun, type OverpassHits } from './map/overpass';
 
 const VIEW_KEY = 'elvis.map.view';
@@ -172,18 +173,21 @@ export function MapPage() {
   const [routePrinting, setRoutePrinting] = useState(false);
   const route = useRoute(routePlan);
   const { data: router } = useQuery({ queryKey: ['router'], queryFn: api.routerStatus, staleTime: 60_000, enabled: !!user });
+  /** Wasserversorgung (Menü „Objekte“): nächste Entnahmestellen, Schlauchweg, Höhenschnitt und Pumpen */
+  const [waterOpen, setWaterOpen] = useState(false);
+  const [waterPrinting, setWaterPrinting] = useState(false);
   /** Höhe der Werkzeugleiste: die Routenbox steht direkt darunter (die Leiste bricht schmal um) */
   const toolsRef = useRef<HTMLDivElement>(null);
   const [toolsBottom, setToolsBottom] = useState(62);
   useEffect(() => {
     const el = toolsRef.current;
-    if (!el || !routePlan) return;
+    if (!el || (!routePlan && !waterOpen)) return;
     const update = () => setToolsBottom(el.offsetTop + el.offsetHeight + 8);
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [!!routePlan]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [!!routePlan || waterOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const [searchingTraffic, setSearchingTraffic] = useState(false);
   /** Auswahl eines Lagezeichens offen; das gewählte Zeichen wird danach in die Karte getippt */
   const [choosingSign, setChoosingSign] = useState(false);
@@ -273,6 +277,7 @@ export function MapPage() {
   const placeVehicle = () => (setPlacingUnit(null), setDrawing(null), setShapeEdit(null), setPlacing('vehicle'));
   /** Mitte Deutschlands, falls weder Einsatzort noch Fahrzeugposition bekannt sind. */
   const fallback: [number, number] = [51.1657, 10.4515];
+  const water = useWaterSupply(origin, waterOpen);
   const iPos: [number, number] | null = origin ? [origin.lat, origin.lon] : null;
   const fly = (pos: LatLngExpression, extra: Omit<FlyTarget, 'pos' | 'n'> = {}) => setFlyTarget((t) => ({ pos, ...extra, n: (t?.n ?? 0) + 1 }));
   // /karte?lat=…&lon=…&name=… (z. B. ein Standort aus den Nachrichten) zeigt den Punkt wie einen Suchtreffer
@@ -324,7 +329,8 @@ export function MapPage() {
   /** Halt ans Ende der Route anhängen (das bisherige Ziel wird Zwischenziel) */
   const addRouteStop = (stop: { lat: number; lon: number; name: string }) =>
     setRoutePlan((p) => p && { ...p, stops: [...p.stops, { ...stop, name: stop.name.slice(0, 120) || `${stop.lat.toFixed(5)}, ${stop.lon.toFixed(5)}` }] });
-  const openRoute = () => setRoutePlan((p) => p ?? { profile: 'auto', stops: vPos ? [{ lat: vPos[0], lon: vPos[1], name: vehicleName }] : [] });
+  const openRoute = () => (setWaterOpen(false), setRoutePlan((p) => p ?? { profile: 'auto', stops: vPos ? [{ lat: vPos[0], lon: vPos[1], name: vehicleName }] : [] }));
+  const openWater = () => (setRoutePlan(null), setWaterOpen(true));
 
   // Im Einsatz lässt sich das eigene Fahrzeug in der Objektliste ausblenden
   // Im Verlauf fehlt seine Position (das GPS wird nicht mitgeschrieben)
@@ -527,6 +533,7 @@ export function MapPage() {
             </Popup>
           </Marker>
         )}
+        {waterOpen && <WaterLayer ws={water} />}
         {routePlan && <RouteLayer stops={routePlan.stops} route={routePlan.stops.length >= 2 ? route.data : undefined} />}
         {shapeEdit && <EditLayer edit={shapeEdit} onChange={setShapeEdit} />}
         {drawing && <DrawLayer drawing={drawing} onPoint={addDrawPoint} onFinish={() => canFinish(drawing) && finishDrawing(drawing)} />}
@@ -555,6 +562,11 @@ export function MapPage() {
           onClearOverpass={() => setOverpassHits(null)}
           routing={router?.available ? { open: !!routePlan } : null}
           onRoute={openRoute}
+          water={{
+            open: waterOpen,
+            reason: !router?.available ? 'Wasserversorgung braucht das Routing (Addon „OSM-Daten“ oder öffentlicher Server)' : !origin ? 'Erst den Einsatzort setzen' : null,
+          }}
+          onWater={openWater}
         />
         {incident && (
           <button
@@ -591,6 +603,7 @@ export function MapPage() {
         />
       )}
 
+      {waterOpen && <WaterPanel ws={water} top={toolsBottom} onPrint={() => setWaterPrinting(true)} onClose={() => (setWaterOpen(false), setWaterPrinting(false))} />}
       <OverpassPanel
         open={overpassOpen}
         onClose={closeOverpass}
@@ -737,6 +750,17 @@ export function MapPage() {
         {searchingTraffic && <TrafficSearch tracked={tracked} onPick={addTraffic} />}
       </Modal>
 
+      <Modal open={waterPrinting} title="Wasserversorgung drucken" onClose={() => setWaterPrinting(false)}>
+        {waterPrinting && source && water.chosen && (
+          <WaterPrintDialog
+            ws={water}
+            sources={sources}
+            initialSourceId={printSource(sources, source)!.id}
+            incidentName={[incident?.keyword, incident?.location || incident?.title].filter(Boolean).join(' · ') || 'Einsatzort'}
+            onDone={() => setWaterPrinting(false)}
+          />
+        )}
+      </Modal>
       <Modal open={routePrinting} title="Route drucken" onClose={() => setRoutePrinting(false)}>
         {routePrinting && source && routePlan && route.data && (
           <RoutePrintDialog sources={sources} initialSourceId={printSource(sources, source)!.id} stops={routePlan.stops} route={route.data} onDone={() => setRoutePrinting(false)} />

@@ -2769,6 +2769,248 @@ input[type='checkbox'] {
 .map-marker.route-stop.end span {
   background: #c62828;
 }
+
+/* Wasserversorgung: Box wie die Routenplanung, etwas breiter für Höhenschnitt und Pumpentabelle */
+.map-water {
+  width: 420px;
+}
+/* Die Box scrollt selbst: Inhalte nicht stauchen (sonst schrumpft der Höhenschnitt auf null) */
+.map-water > * {
+  flex-shrink: 0;
+}
+.water-count {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+.water-count input {
+  width: 100%;
+}
+.water-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.water-list.stale {
+  opacity: 0.6;
+}
+.water-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.water-list button:hover:not(:disabled) {
+  background: var(--muted-bg);
+}
+.water-list button.active {
+  border-color: #0277bd;
+  background: rgba(2, 119, 189, 0.12);
+}
+.water-list button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.water-rank {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #5c8fc4;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+.water-list button.active .water-rank {
+  background: #0277bd;
+}
+.water-name,
+.water-dist {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.water-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.water-dist {
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.water-name .muted,
+.water-dist .muted {
+  font-size: 12px;
+}
+.water-params {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+}
+.water-num {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.water-num-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.water-num-input input {
+  width: 100%;
+  min-width: 0;
+}
+.water-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+.water-facts dt {
+  color: var(--text-muted);
+}
+.water-facts dd {
+  margin: 0;
+}
+.water-facts .water-facts-warn {
+  grid-column: 1 / -1;
+}
+.water-warnings {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+.water-pumps {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.water-pumps th,
+.water-pumps td {
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+.water-pumps th:first-child,
+.water-pumps td:first-child {
+  text-align: left;
+}
+.water-pumps th {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.water-pumps tbody tr:hover {
+  background: var(--muted-bg);
+}
+.water-pumps-end td {
+  font-weight: 700;
+}
+/* Höhenschnitt: Gelände als Fläche, Druck als Linie, Mindesteingangsdruck gestrichelt */
+.water-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+}
+.water-chart-terrain {
+  fill: #a1887f;
+  fill-opacity: 0.35;
+  stroke: #8d6e63;
+  stroke-width: 1;
+}
+.water-chart-pressure {
+  fill: none;
+  stroke: #0277bd;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.water-chart-min {
+  stroke: #c62828;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.water-chart-zero {
+  stroke: var(--text-muted);
+  stroke-width: 0.5;
+}
+.water-chart-pump {
+  stroke: #2e7d32;
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+.water-chart-pump-label {
+  fill: #2e7d32;
+  font-size: 9px;
+  font-weight: 700;
+}
+.water-chart-axis {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+}
+.water-chart-tick {
+  fill: var(--text-muted);
+  font-size: 9px;
+}
+.water-chart-tick.pressure {
+  fill: #0277bd;
+}
+.water-chart-tick.min {
+  fill: #c62828;
+}
+.water-chart-hover line {
+  stroke: var(--text);
+  stroke-width: 0.75;
+}
+.water-chart-hover circle {
+  fill: #0277bd;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.water-chart-hover text {
+  fill: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--bg-card);
+  stroke-width: 3px;
+}
+/* Entnahmestellen nach Rang (gewählte größer) und Verstärkerpumpen (rot: Eingangsdruck zu niedrig) */
+.map-marker.water-source span {
+  background: #5c8fc4;
+  border-radius: 50%;
+}
+.map-marker.water-source.chosen span {
+  background: #0277bd;
+}
+.map-marker.water-pump {
+  cursor: grab;
+}
+.map-marker.water-pump span {
+  background: #2e7d32;
+  border-radius: 6px;
+}
+.map-marker.water-pump.bad span {
+  background: #c62828;
+}
 .leaflet-container {
   font-family: var(--font);
 }

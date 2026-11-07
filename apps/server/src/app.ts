@@ -43,6 +43,9 @@ import { SettingsService } from './services/settings.js';
 import { GeocoderService, type GeocodeFetch } from './services/geocoder.js';
 import { OverpassService, type OverpassFetch } from './services/overpass.js';
 import { RouterService, type RouterFetch } from './services/router.js';
+import { ElevationService, type ElevationFetch } from './services/elevation.js';
+import { WaterSupplyService } from './services/watersupply.js';
+import { waterSupplyRoutes } from './routes/watersupply.js';
 import { RadarService, type RadarFetch } from './services/radar.js';
 import { WeatherAlertWatch, WeatherService, type WeatherFetch } from './services/weather.js';
 import { weatherRoutes } from './routes/weather.js';
@@ -148,7 +151,7 @@ export interface App {
   close(): Promise<void>;
 }
 
-export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; officeConvert?: OfficeConverter | null; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; messagingFetch?: MessagingFetch; cloudFetch?: CloudFetch; messagingSocket?: SocketFactory; updateFetch?: UpdateFetch; phoneFetch?: PhoneFetch; phonePushDelayMs?: number; restart?: () => void } = {}): Promise<App> {
+export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; dockerFactory?: DockerFactory; geocodeFetch?: GeocodeFetch; overpassFetch?: OverpassFetch; overpassRetryDelaysMs?: number[]; routerFetch?: RouterFetch; elevationFetch?: ElevationFetch; radarFetch?: RadarFetch; weatherFetch?: WeatherFetch; trafficFetch?: TrafficFetch; trafficRequestGapMs?: number; aisSocket?: AisSocketFactory; wifiHttp?: UbusHttp; officeFetch?: DiscoveryFetch; officeConvert?: OfficeConverter | null; ippTransport?: IppTransport; officeDownload?: OfficeDownload; monitoringProbes?: ProbeDeps; relayFetch?: RelayFetch; mailFetch?: MailFetch; wkdFetch?: WkdFetch; backupFetch?: BackupFetch; messagingFetch?: MessagingFetch; cloudFetch?: CloudFetch; messagingSocket?: SocketFactory; updateFetch?: UpdateFetch; phoneFetch?: PhoneFetch; phonePushDelayMs?: number; restart?: () => void } = {}): Promise<App> {
   const server = Fastify({ logger: opts.logger ?? true });
 
   const db = openDb(config.dataDir);
@@ -246,7 +249,8 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     opts.geocodeFetch,
   );
   const overpass = new OverpassService({ onlineUrl: config.map.overpassUrl, userAgent: config.map.userAgent, retryDelaysMs: opts.overpassRetryDelaysMs }, db, opts.overpassFetch);
-  const router = new RouterService(opts.routerFetch);
+  const router = new RouterService(opts.routerFetch, { onlineUrl: config.map.routerUrl, userAgent: config.map.userAgent });
+  const elevation = new ElevationService({ url: config.map.elevationUrl, userAgent: config.map.userAgent }, opts.elevationFetch);
   const radar = new RadarService({ ...config.map.radar, userAgent: config.map.userAgent }, opts.radarFetch);
   const weather = new WeatherService(
     { ...config.weather, userAgent: config.map.userAgent, cacheFile: config.dataDir === ':memory:' ? null : join(config.dataDir, 'weather-cache.json') },
@@ -502,6 +506,7 @@ export async function buildApp(config: ElvisConfig, opts: { logger?: boolean; do
     reportRoutes(api, { report, store, notify: (t) => hub.invalidate(t) });
     contactRoutes(api, { contacts, personnel });
     libraryRoutes(api, library);
+    waterSupplyRoutes(api, { water: new WaterSupplyService(library, router), elevation, tiles, settings, store, notify: (t) => hub.invalidate(t) });
     cloudRoutes(api, cloud, cloudSync);
     phonebookRoutes(api, { phonebook, store, notify: (t) => hub.invalidate(t) });
     phoneRoutes(api, { phones, store, notify: (t) => hub.invalidate(t) });

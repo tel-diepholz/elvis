@@ -114,9 +114,44 @@ Ziel rot), dazu Strecke und Fahrzeit.
   Fahrhinweise als Text, jeder mit einem kleinen Kartenausschnitt um die Stelle und einem Pfeil in die neue
   Fahrtrichtung.
 
-Gerechnet wird ausschließlich lokal mit Valhalla aus dem Addon **OSM-Daten** (`POST /api/map/route`, Status unter
-`GET /api/map/router`). Ohne dieses Addon ist der Menüpunkt gesperrt; einen öffentlichen Rückfall gibt es bewusst
-nicht.
+Gerechnet wird mit Valhalla aus dem Addon **OSM-Daten** (`POST /api/map/route`, Status unter `GET /api/map/router`).
+Läuft das Addon nicht oder fällt es aus, fragt ELVIS den öffentlichen Valhalla-Server der FOSSGIS
+(`valhalla1.openstreetmap.de`, einstellbar über `"map": { "routerUrl": "…" }`, `null` = nur lokal). Das gilt für Route
+und Wasserversorgung. Der öffentliche Server ist für faire Nutzung gedacht: Die Wasserversorgung fragt dort höchstens
+zwei Wege gleichzeitig ab. Ohne Addon und mit `routerUrl: null` sind beide Menüpunkte gesperrt.
+
+**Wasserversorgung:** *Objekte → Wasserversorgung …* hilft bei der Wasserförderung über lange Wegstrecke. Der
+Menüpunkt braucht einen Einsatzort und das Routing (Addon OSM-Daten oder öffentlicher Server).
+- ELVIS nimmt die nächsten Wasserentnahmestellen zum Einsatzort aus der [Objektbibliothek](objektbibliothek.md)
+  (Typ „Wasserentnahmestelle“, lokal und aus der Cloud, bis 10 km Luftlinie). Wie viele, stellt der Schieberegler
+  ein (1–10, Vorgabe 5).
+- Für jede Entnahmestelle wird der Weg **zu Fuß** zum Einsatzort berechnet: Valhalla-Profil `pedestrian`, ohne
+  Einbahnstraßen und auch über Feld- und Fußwege, also so, wie Schläuche verlegt werden. Die Liste ist nach
+  Schlauchweg sortiert.
+- Alle Wege erscheinen auf der Karte, der gewählte kräftig. Ein Klick auf einen anderen Weg oder eine andere
+  Entnahmestelle wählt ihn aus.
+- Für den gewählten Weg zeigt die Box den **Höhenschnitt** mit dem Druckverlauf. Einstellbar sind:
+  - Schlauch: B (Vorgabe), A oder F
+  - Fördermenge
+  - Pumpenausgangsdruck (Vorgabe 8 bar)
+  - Mindesteingangsdruck an Verstärkerpumpen (1,5 bar)
+  - Mindestdruck am Einsatzort (1,5 bar)
+- Rechenannahmen:
+  - Reibung nach Tabellenwerten: B 800 l/min ≈ 1,0 bar, A 800 l/min ≈ 0,17 bar, F 2000 l/min ≈ 0,25 bar je
+    100 m, quadratisch mit der Fördermenge
+  - Höhe: 1 bar je 10 m
+  - Schlauchbedarf: 20-m-Schläuche plus 10 % Reserve
+- **Verstärkerpumpen** schlägt ELVIS dort vor, wo der Druck auf den Mindesteingangsdruck gefallen ist. Die Pumpen
+  P2 … lassen sich auf der Karte entlang des Wegs ziehen, der Druckverlauf rechnet dabei sofort mit. Pumpen lassen
+  sich hinzufügen und entfernen; „Neu vorschlagen“ verwirft die eigenen Positionen. Rote Pumpen bekommen zu wenig
+  Eingangsdruck.
+- **Drucken** öffnet den ELVIS-Druckdialog (wie bei Route und Wetterbericht): Ausgabe an einen Drucker des
+  Druckservers oder als PDF (`POST /api/print/water-supply`), A4 quer. Seite 1 zeigt die Karte mit Weg, Entnahmestelle,
+  Einsatzort und Pumpen, Seite 2 Kennzahlen, Pumpentabelle und Höhenschnitt mit Druckverlauf.
+
+Die Höhen kommen vorerst **online** von Open-Meteo (Copernicus-DEM, ca. 90 m Raster; `"map": { "elevationUrl": … }`,
+`null` = aus). Ohne Internet bleiben Wege und Rangliste nutzbar; die Rechnung läuft dann nur mit Reibung, und die Box
+weist darauf hin. Schnittstellen: `POST /api/map/water-supply`, `POST /api/map/elevation` und `POST /api/print/water-supply`.
 
 **Objektbibliothek:** Unter *Ebenen → Objektbibliothek* erscheinen Wasserentnahmestellen, Einsatzobjekte und
 eigene Typen aus der [Objektbibliothek](objektbibliothek.md), je Typ ein- und ausblendbar und per Klick in die Lage
