@@ -16,6 +16,7 @@ export * from './geocode';
 export * from './mapobjects';
 export * from './wifi';
 export * from './monitoring';
+export * from './logo';
 export * from './bluetooth';
 export * from './inverter';
 export * from './energyflow';

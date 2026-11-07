@@ -40,6 +40,7 @@
 - [Türstation 2N (Kamerabild)](fahrzeugmodule/kameras-2n.md)
 - [WLAN (OpenWrt-Accesspoints)](fahrzeugmodule/wlan-openwrt.md)
 - [Monitoring (SNMP, Node Exporter)](fahrzeugmodule/monitoring.md)
+- [Siemens LOGO! (S7)](fahrzeugmodule/logo.md)
 
 ## Addons
 

@@ -1,5 +1,6 @@
 import {
   Activity,
+  ToggleRight,
   Archive,
   AtSign,
   BatteryCharging,
@@ -81,6 +82,7 @@ export const NAV: NavGroup[] = [
       { to: '/telefone', label: 'Telefone', icon: PhoneCall, requiresLogin: true, requiresVehicle: true },
       { to: '/netzwerk', label: 'Netzwerk', icon: Network, requiresVehicle: true },
       { to: '/monitoring', label: 'Monitoring', icon: Activity, requiresVehicle: true },
+      { to: '/logo', label: 'LOGO', icon: ToggleRight, requiresVehicle: true },
       { to: '/kameras', label: 'Kameras', icon: Cctv, requiresVehicle: true },
       { to: '/bildschirme', label: 'Bildschirme', icon: MonitorSmartphone, requiresVehicle: true },
       { to: '/drucken', label: 'Drucken', icon: Printer, requiresPrinting: true },

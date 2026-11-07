@@ -4,6 +4,9 @@ import { BluezScanner } from './bluetooth/bluez.js';
 import { AirmarAdapter } from './drivers/airmar.js';
 import { BluetoothAdapter, SimScanner, type BluetoothSource } from './drivers/bluetooth.js';
 import { CamerasAdapter, type CameraSource } from './drivers/cameras.js';
+import { LogoAdapter, type LogoSource } from './drivers/logo.js';
+import { SimLogoClient } from './logo/sim.js';
+import { s7ClientFactory } from './logo/s7.js';
 import { MonitoringAdapter, type MonitoringSource } from './drivers/monitoring.js';
 import { OpenWrtWifiAdapter, type WifiSource } from './drivers/openwrt.js';
 import { ReichertZbeAdapter } from './drivers/reichert/adapter.js';
@@ -43,6 +46,8 @@ export interface DriverDeps {
   wifi: WifiSource;
   /** Ziele des Monitorings aus den Einstellungen */
   monitoring: MonitoringSource;
+  /** Bezeichnungen, Regeln und Taster der LOGO */
+  logo: LogoSource;
   /** Bluetooth-Geräte aus den Einstellungen */
   bluetooth: BluetoothSource;
   /** Eingehende SMS und beendete Gespräche an SMS-Postfach und Anrufliste */
@@ -171,6 +176,43 @@ export const DEVICE_DEFINITIONS: { [K in DeviceId]: DeviceDefinition<K> } = {
           pollSeconds: { type: 'int', label: 'Abfrageintervall (Sekunden)', required: false, default: 30, min: 10, max: 600 },
         },
         create: (o, deps) => new MonitoringAdapter(deps.monitoring, Number(o.pollSeconds || 30) * 1000),
+      },
+    },
+  },
+  logo: {
+    name: 'Siemens LOGO',
+    system: 'vehicle',
+    drivers: {
+      sim: {
+        label: 'Simulation',
+        description: 'Simulierte LOGO: ein Taster-Impuls auf NIn schaltet den Ausgang Qn um, AI1 schwankt.',
+        options: {},
+        create: (_o, deps) => {
+          const client = new SimLogoClient();
+          return new LogoAdapter('sim', deps.logo, () => client, { host: 'sim', port: 102, localTsap: 0x0100, remoteTsap: 0x0200, pollMs: 2000, pulseMs: 100 });
+        },
+      },
+      s7: {
+        label: 'Siemens LOGO! 8 (S7)',
+        description:
+          'Liest eine LOGO! 8 (0BA8 und neuer) per S7 über Ethernet: Ein- und Ausgänge, Merker und Netzwerksignale. In LOGO Soft Comfort muss der Zugriff „Put/Get“ bzw. die Server-Verbindung mit passenden TSAP-Werten freigegeben sein. Taster (NI) schaltet ELVIS nur für die unter „LOGO“ angelegten Verknüpfungen.',
+        options: {
+          host: { type: 'string', label: 'Adresse der LOGO', required: true, default: '192.168.0.3', help: 'IP-Adresse oder Hostname im Fahrzeugnetz.' },
+          port: { type: 'int', label: 'Port', required: false, default: 102, min: 1, max: 65535 },
+          localTsap: { type: 'string', label: 'TSAP von ELVIS (hex)', required: true, default: '0100', pattern: '^[0-9a-fA-F]{4}$', maxLength: 4, help: 'Muss zum „Client-TSAP“ in der LOGO passen (z. B. 0100 für 01.00).' },
+          remoteTsap: { type: 'string', label: 'TSAP der LOGO (hex)', required: true, default: '0200', pattern: '^[0-9a-fA-F]{4}$', maxLength: 4, help: 'Muss zum „Server-TSAP“ der LOGO passen (z. B. 0200 für 02.00).' },
+          pollSeconds: { type: 'int', label: 'Abfrageintervall (Sekunden)', required: false, default: 2, min: 1, max: 60 },
+          pulseMs: { type: 'int', label: 'Dauer des Taster-Impulses (ms)', required: false, default: 300, min: 50, max: 2000, help: 'So lange bleibt der Netzwerk-Eingang auf 1. Muss länger sein als ein Programmzyklus der LOGO.' },
+        },
+        create: (o, deps) =>
+          new LogoAdapter('s7', deps.logo, s7ClientFactory, {
+            host: String(o.host),
+            port: Number(o.port || 102),
+            localTsap: parseInt(String(o.localTsap || '0100'), 16),
+            remoteTsap: parseInt(String(o.remoteTsap || '0200'), 16),
+            pollMs: Number(o.pollSeconds || 2) * 1000,
+            pulseMs: Number(o.pulseMs || 300),
+          }),
       },
     },
   },

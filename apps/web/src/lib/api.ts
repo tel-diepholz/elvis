@@ -1,4 +1,5 @@
 import type { CloudStatus, CloudSyncStatus } from '@elvis/shared';
+import type { LogoLink, LogoLinkInput, LogoRule, LogoRuleInput } from '@elvis/shared';
 import type { LibraryFile, LibraryObject, LibraryObjectDetail, LibraryObjectInput, ObjectType, ObjectTypeInput } from '@elvis/shared';
 import type { DamageAccount, DamageAccountInput, DamageAccountPatch, DamageCountBooking, DamageCountInput, DamageEntry, DamageEntryInput, DamageEntryPatch } from '@elvis/shared';
 import type { ManualPosition, ManualPositionInput, VehiclePosition } from '@elvis/shared';
@@ -622,6 +623,13 @@ export const api = {
   removeMonitoringTarget: (id: string) => request<void>('DELETE', `/api/system/monitoring/${id}`),
   reorderMonitoringTargets: (ids: string[]) => request<MonitoringTargetConfig[]>('PUT', '/api/system/monitoring/order', { ids }),
   testMonitoringTarget: (input: MonitoringTargetInput) => request<MonitoringTestResult>('POST', '/api/system/monitoring/test', input),
+  setLogoLabel: (signal: string, label: string) => request<{ label: string }>('PUT', `/api/logo/labels/${signal}`, { label }),
+  createLogoRule: (input: LogoRuleInput) => request<LogoRule>('POST', '/api/logo/rules', input),
+  updateLogoRule: (id: string, input: LogoRuleInput) => request<LogoRule>('PUT', `/api/logo/rules/${id}`, input),
+  removeLogoRule: (id: string) => request<void>('DELETE', `/api/logo/rules/${id}`),
+  createLogoLink: (input: LogoLinkInput) => request<LogoLink>('POST', '/api/logo/links', input),
+  updateLogoLink: (id: string, input: LogoLinkInput) => request<LogoLink>('PUT', `/api/logo/links/${id}`, input),
+  removeLogoLink: (id: string) => request<void>('DELETE', `/api/logo/links/${id}`),
   bluetoothDevices: () => request<BluetoothDeviceConfig[]>('GET', '/api/system/bluetooth'),
   createBluetoothDevice: (input: BluetoothDeviceInput) => request<BluetoothDeviceConfig>('POST', '/api/system/bluetooth', input),
   updateBluetoothDevice: (id: string, input: BluetoothDeviceInput) => request<BluetoothDeviceConfig>('PUT', `/api/system/bluetooth/${id}`, input),
