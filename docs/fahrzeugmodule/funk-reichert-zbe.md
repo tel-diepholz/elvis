@@ -74,6 +74,16 @@ ihren Einstellungen eingerichtet.
   Ereignisname wird einmal im Server-Log notiert (`Reichert ZBE: noch nicht ausgewertetes Ereignis …`). So lassen
   sich an der echten Anlage weitere Telegramme erkennen.
 
+### SDS senden
+
+Auf der Seite Funk gibt es mit dem Treiber „Reichert ZBE“ das Formular **SDS senden**: Funkgerät, Empfänger (ISSI,
+1 bis 8 Ziffern) und Text (bis 160 Zeichen). Ein Anführungszeichen im Text wird durch ein Leerzeichen ersetzt.
+
+- Die ZBE meldet weder Zustellung noch Fehler zurück. „Gesendet“ heißt nur, dass ELVIS die SDS an die Anlage übergeben
+  hat. An der echten Anlage kam eine SDS an eine erreichbare ISSI an. Was bei einer nicht erreichbaren ISSI geschieht,
+  ist nicht belegt.
+- Gesendete SDS erscheinen nicht in der Timeline.
+
 ### Ohne Anlage testen
 
 ```bash
@@ -115,7 +125,7 @@ ping                                  (Lebenszeichen, die Anlage antwortet mit P
 
 Danach schickt die Anlage ihre Konfiguration, den Zustand aller Anschlüsse und fortlaufend `MAIN.EVENT.WATCHDOG`.
 
-**Aktionen (Client → ZBE).** ELVIS sendet sie noch nicht und sie sind an der Anlage 7.0 nicht geprüft.
+**Aktionen (Client → ZBE).** `SM_SEND` mit `TEXT|` sendet ELVIS und ist an der Anlage 7.0 geprüft. Die Anlage antwortet nicht darauf. Die übrigen Aktionen sendet ELVIS nicht und sie sind nicht geprüft.
 
 ```
 RADIO.ACTION.SM_SEND.<Anschluss-1>,"<ISSI>","TEXT|<Text>"      (FLASH|, STATUS|<Code>, CALLOUT|… analog)

@@ -79,7 +79,7 @@ export class RadioSim extends SimAdapter<'radio'> {
         dev({ id: 'hrt-4', name: 'HRT 4', type: 'HRT', issi: '6123414', talkgroupId: 'tg-fw-1' }),
       ],
       activity: [],
-      capabilities: { talkgroupSwitch: true, statusSet: true },
+      capabilities: { talkgroupSwitch: true, statusSet: true, sdsSend: false },
       link: null,
     } satisfies RadioState);
   }

@@ -1,9 +1,10 @@
-import { History, Radio } from 'lucide-react';
+import { History, Radio, Send } from 'lucide-react';
 import { useDevice } from '../lib/live';
 import { ModuleDisabled } from '../components/ModuleDisabled';
 import { Badge, Card, PageHeader } from '../components/ui';
 import { RadioTable } from './funk/RadioTable';
 import { RadioTimeline } from './funk/RadioTimeline';
+import { SdsForm } from './funk/SdsForm';
 
 export function FunkPage() {
   const radio = useDevice('radio');
@@ -32,6 +33,11 @@ export function FunkPage() {
         <Card title="Funkverkehr" icon={<History size={18} />} className="span-3">
           <RadioTimeline devices={devices} live={activity} />
         </Card>
+        {radio.state.capabilities.sdsSend && (
+          <Card title="SDS senden" icon={<Send size={18} />} className="span-3">
+            <SdsForm devices={devices} />
+          </Card>
+        )}
         <Card title="Funkgeräte" icon={<Radio size={18} />} className="span-3">
           <RadioTable radio={radio} />
         </Card>
