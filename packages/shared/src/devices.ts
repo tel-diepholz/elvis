@@ -80,7 +80,7 @@ export interface RadioState {
   /** Aktivität der letzten Minuten, älteste zuerst (begrenzt) */
   activity: RadioActivity[];
   /** Was der Treiber kann – die Oberfläche blendet nicht unterstützte Bedienelemente aus. */
-  capabilities: { talkgroupSwitch: boolean; statusSet: boolean };
+  capabilities: { talkgroupSwitch: boolean; statusSet: boolean; sdsSend: boolean };
   /** Verbindung zur Funkvermittlung (z. B. Reichert ZBE); null beim Simulator */
   link: { connected: boolean; target: string; error: string | null; lastTelegramAt: string | null } | null;
 }

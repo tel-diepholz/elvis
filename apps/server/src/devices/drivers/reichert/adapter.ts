@@ -1,8 +1,9 @@
 import { Socket } from 'node:net';
 import type { RadioDevice, RadioState } from '@elvis/shared';
-import { BaseAdapter, type AdapterContext, type Command } from '../../adapter.js';
+import { z } from 'zod';
+import { BaseAdapter, CommandError, command, type AdapterContext, type Command } from '../../adapter.js';
 import { activity } from '../../radio/activity.js';
-import { LineSplitter, PING, loginLines, parseLine, stripCaller, type ZbeEvent, type ZbeStyle } from './protocol.js';
+import { LineSplitter, PING, loginLines, parseLine, sdsLine, stripCaller, type ZbeEvent, type ZbeStyle } from './protocol.js';
 
 /** Lebenszeichen an die ZBE */
 const PING_MS = 30_000;
@@ -54,7 +55,26 @@ function radioDevice(port: number, name: string, online: boolean): RadioDevice {
  * damit sich weitere Telegramme an der echten Anlage erkennen lassen. Nur lesend.
  */
 export class ReichertZbeAdapter extends BaseAdapter<'radio'> {
-  protected readonly commands: Record<string, Command<any>> = {};
+  protected readonly commands: Record<string, Command<any>> = {
+    // Die ZBE meldet weder Zustellung noch Fehler zurück – „gesendet“ heißt nur: an die Anlage übergeben
+    'sds.send': command(
+      z.object({
+        deviceId: z.string(),
+        issi: z.string().regex(/^\d{1,8}$/, 'Die ISSI besteht aus 1 bis 8 Ziffern'),
+        text: z.string().trim().min(1, 'Text fehlt').max(160, 'Text ist länger als 160 Zeichen'),
+      }),
+      ({ deviceId, issi, text }) => {
+        const d = this.state.devices.find((x) => x.id === deviceId);
+        if (!d) throw new CommandError('Unbekanntes Funkgerät', 404);
+        const socket = this.socket;
+        if (!d.online || !socket?.writable) throw new CommandError('Funk nicht erreichbar');
+        const port = Number(deviceId.slice('anschluss-'.length));
+        socket.write(`${sdsLine(port - 1, issi, text, false, this.opts.style)}\r\n`);
+        this.ctx.log.info(`Reichert ZBE: SDS an ${issi} über ${d.name} gesendet`);
+        return `SDS an ${issi} über ${d.name} an die Funkanlage übergeben. Ob sie zugestellt wurde, meldet die Anlage nicht.`;
+      },
+    ),
+  };
   private socket: Socket | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private pruneTimer: NodeJS.Timeout | null = null;
@@ -77,7 +97,7 @@ export class ReichertZbeAdapter extends BaseAdapter<'radio'> {
       talkgroups: [],
       devices: [],
       activity: [],
-      capabilities: { talkgroupSwitch: false, statusSet: false },
+      capabilities: { talkgroupSwitch: false, statusSet: false, sdsSend: true },
       link: {
         connected: false,
         target: `${opts.host}:${opts.port}`,

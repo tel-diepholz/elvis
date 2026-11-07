@@ -191,6 +191,21 @@ describe('Reichert ZBE: Treiber gegen Simulator', () => {
     await vi.waitFor(() => expect(state().activity[1]?.end).not.toBeNull());
   });
 
+  it('sendet eine SDS über ein Funkgerät und prüft die Eingaben', async () => {
+    sim = new ZbeSimulator({ auto: false, ports: [1, 2, 3] });
+    const port = await sim.listen(0, '127.0.0.1');
+    await connect(port);
+    await vi.waitFor(() => expect(state().devices).toHaveLength(3));
+    expect(state().capabilities.sdsSend).toBe(true);
+
+    await adapter!.execute('sds.send', { deviceId: 'anschluss-3', issi: '4221526', text: 'Test "ELVIS"' });
+    await vi.waitFor(() => expect(sim!.received).toContain('RADIO.ACTION.SM_SEND.2,"4221526","TEXT|Test  ELVIS "'));
+
+    await expect(adapter!.execute('sds.send', { deviceId: 'anschluss-3', issi: '42x', text: 'a' })).rejects.toThrow(/ISSI/);
+    await expect(adapter!.execute('sds.send', { deviceId: 'anschluss-3', issi: '4221526', text: ' ' })).rejects.toThrow(/Text/);
+    await expect(adapter!.execute('sds.send', { deviceId: 'anschluss-9', issi: '4221526', text: 'a' })).rejects.toThrow(/Unbekannt/);
+  });
+
   it('meldet eine gestörte Verbindung und verbindet sich neu', async () => {
     sim = new ZbeSimulator({ auto: false, ports: [1, 2] });
     const port = await sim.listen(0, '127.0.0.1');
